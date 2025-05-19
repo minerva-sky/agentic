@@ -27,7 +27,7 @@ module Agentic
 
     def initialize(*args)
       super
-      @formatter = SimpleFormatter < ::Logger::Formatter
+      @formatter = SimpleFormatter.new
     end
 
     def self.info(message)
