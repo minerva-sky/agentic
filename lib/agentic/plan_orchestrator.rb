@@ -6,6 +6,8 @@ require "async"
 require "async/barrier"
 require "async/semaphore"
 require_relative "task_failure"
+require_relative "task_execution_result"
+require_relative "plan_execution_result"
 
 module Agentic
   # Orchestrates the execution of tasks in a plan, handling dependencies and concurrency
@@ -66,7 +68,7 @@ module Agentic
     
     # Executes the plan, respecting task dependencies and concurrency limits
     # @param agent_provider [Object] An object that provides agents for task execution
-    # @return [Hash] The execution results
+    # @return [PlanExecutionResult] The structured execution results
     def execute_plan(agent_provider)
       @reactor = Async do |reactor|
         @barrier = Async::Barrier.new
@@ -99,14 +101,14 @@ module Agentic
         )
       end
       
-      # Return execution results
-      {
+      # Create and return a PlanExecutionResult
+      PlanExecutionResult.new(
         plan_id: @plan_id,
         status: overall_status,
         execution_time: @execution_end_time - @execution_start_time,
         tasks: @tasks.transform_values(&:to_h),
         results: @results
-      }
+      )
     end
     
     # Cancels execution of a specific task
@@ -410,10 +412,7 @@ module Agentic
     # @return [void]
     def record_task_success(task_id, output)
       transition_task_state(task_id, from: :in_progress, to: :completed)
-      @results[task_id] = { 
-        status: :completed,
-        output: output
-      }
+      @results[task_id] = TaskExecutionResult.success(output)
     end
     
     # Records a task failure with proper state transition and result storage
@@ -422,10 +421,7 @@ module Agentic
     # @return [void]
     def record_task_failure(task_id, failure)
       transition_task_state(task_id, from: :in_progress, to: :failed)
-      @results[task_id] = {
-        status: :failed,
-        failure: failure&.to_h
-      }
+      @results[task_id] = TaskExecutionResult.failure(failure)
     end
     
     # Transitions a task from one state to another

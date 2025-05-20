@@ -120,8 +120,9 @@ RSpec.describe Agentic::PlanOrchestrator do
       orchestrator.add_task(task_a)
       result = orchestrator.execute_plan(agent_provider)
       
-      expect(result[:status]).to eq(:completed)
-      expect(result[:results][task_a.id][:status]).to eq(:completed)
+      expect(result).to be_a(Agentic::PlanExecutionResult)
+      expect(result.status).to eq(:completed)
+      expect(result.task_result(task_a.id).status).to eq(:completed)
       expect(orchestrator.execution_state[:completed]).to include(task_a.id)
     end
     
@@ -133,10 +134,10 @@ RSpec.describe Agentic::PlanOrchestrator do
       
       result = orchestrator.execute_plan(agent_provider)
       
-      expect(result[:status]).to eq(:completed)
-      expect(result[:results][task_a.id][:status]).to eq(:completed)
-      expect(result[:results][task_b.id][:status]).to eq(:completed)
-      expect(result[:results][task_c.id][:status]).to eq(:completed)
+      expect(result.status).to eq(:completed)
+      expect(result.task_result(task_a.id).status).to eq(:completed)
+      expect(result.task_result(task_b.id).status).to eq(:completed)
+      expect(result.task_result(task_c.id).status).to eq(:completed)
     end
     
     it "handles task failures" do
@@ -148,8 +149,8 @@ RSpec.describe Agentic::PlanOrchestrator do
       orchestrator.add_task(task_a)
       result = orchestrator.execute_plan(failing_agent_provider)
       
-      expect(result[:status]).to eq(:partial_failure)
-      expect(result[:results][task_a.id][:status]).to eq(:failed)
+      expect(result.status).to eq(:partial_failure)
+      expect(result.task_result(task_a.id).status).to eq(:failed)
       expect(orchestrator.execution_state[:failed]).to include(task_a.id)
     end
     
@@ -168,9 +169,9 @@ RSpec.describe Agentic::PlanOrchestrator do
       orchestrator.add_task(task_b)
       result = orchestrator.execute_plan(mixed_agent_provider)
       
-      expect(result[:status]).to eq(:partial_failure)
-      expect(result[:results][task_a.id][:status]).to eq(:completed)
-      expect(result[:results][task_b.id][:status]).to eq(:failed)
+      expect(result.status).to eq(:partial_failure)
+      expect(result.task_result(task_a.id).status).to eq(:completed)
+      expect(result.task_result(task_b.id).status).to eq(:failed)
       expect(orchestrator.execution_state[:completed]).to include(task_a.id)
       expect(orchestrator.execution_state[:failed]).to include(task_b.id)
     end
@@ -188,9 +189,9 @@ RSpec.describe Agentic::PlanOrchestrator do
       
       result = orchestrator.execute_plan(failing_agent_provider)
       
-      expect(result[:status]).to eq(:partial_failure)
-      expect(result[:results][task_a.id][:status]).to eq(:failed)
-      expect(result[:results]).not_to have_key(task_b.id)
+      expect(result.status).to eq(:partial_failure)
+      expect(result.task_result(task_a.id).status).to eq(:failed)
+      expect(result.task_result(task_b.id)).to be_nil
       expect(orchestrator.execution_state[:pending]).to include(task_b.id)
     end
   end

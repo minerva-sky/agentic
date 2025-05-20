@@ -3,6 +3,8 @@
 require "securerandom"
 require "json"
 require_relative "observable"
+require_relative "task_definition"
+require_relative "agent_specification"
 
 module Agentic
   # Represents an individual task to be executed by an agent
@@ -23,18 +25,41 @@ module Agentic
 
     # Initializes a new task
     # @param description [String] Human-readable description of the task
-    # @param agent_spec [Hash] Requirements for the agent that will execute this task
+    # @param agent_spec [Hash, AgentSpecification] Requirements for the agent that will execute this task
     # @param input [Hash] Input data for the task
     # @return [Task] A new task instance
     def initialize(description:, agent_spec:, input: {})
       @id = SecureRandom.uuid
       @description = description
-      @agent_spec = agent_spec
+      
+      # Convert agent_spec to AgentSpecification if it's a hash
+      @agent_spec = if agent_spec.is_a?(Hash)
+        AgentSpecification.new(
+          name: agent_spec["name"],
+          description: agent_spec["description"] || "",
+          instructions: agent_spec["instructions"]
+        )
+      else
+        agent_spec
+      end
+      
       @input = input
       @output = nil
       @failure = nil
       @status = :pending
       @ready_to_execute = nil
+    end
+    
+    # Creates a task from a TaskDefinition
+    # @param definition [TaskDefinition] The task definition
+    # @param input [Hash] Input data for the task
+    # @return [Task] A new task instance
+    def self.from_definition(definition, input = {})
+      new(
+        description: definition.description,
+        agent_spec: definition.agent,
+        input: input
+      )
     end
 
     # Executes the task using the given agent
@@ -120,7 +145,7 @@ module Agentic
     def build_prompt
       <<~PROMPT
         [System Instructions]
-        #{agent_spec["instructions"]}
+        #{agent_spec.instructions}
         
         [Task Description]
         #{description}
