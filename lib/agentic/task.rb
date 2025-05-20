@@ -13,10 +13,13 @@ module Agentic
   # @attr_reader [Hash, nil] output Output produced by the task, nil if not yet executed
   # @attr_reader [Symbol] status Current status of the task (:pending, :in_progress, :completed, :failed)
   # @attr_reader [TaskFailure, nil] failure Failure information if the task failed, nil otherwise
+  # @attr_reader [Boolean, nil] ready_to_execute Flag indicating if the task is ready to be executed
+  # @attr_accessor [Integer, nil] retry_count Number of times the task has been retried
   class Task
     include Agentic::Observable
 
     attr_reader :id, :description, :agent_spec, :input, :output, :status, :failure, :ready_to_execute
+    attr_accessor :retry_count
 
     # Initializes a new task
     # @param description [String] Human-readable description of the task
