@@ -1,0 +1,443 @@
+# frozen_string_literal: true
+
+require "securerandom"
+require "set"
+require "async"
+require "async/barrier"
+require "async/semaphore"
+require_relative "task_failure"
+
+module Agentic
+  # Orchestrates the execution of tasks in a plan, handling dependencies and concurrency
+  # @attr_reader [String] plan_id Unique identifier for the plan
+  # @attr_reader [Hash] tasks Map of task ids to Task objects
+  # @attr_reader [Hash] execution_state Current state of all tasks in the plan
+  # @attr_reader [Hash] results Results of task execution
+  class PlanOrchestrator
+    attr_reader :plan_id, :tasks, :execution_state, :results, :retry_policy, :lifecycle_hooks
+
+    # Initializes a new plan orchestrator
+    # @param plan_id [String] Optional plan id, will be generated if not provided
+    # @param concurrency_limit [Integer] Maximum number of tasks to execute concurrently
+    # @param retry_policy [Hash] Configuration for retry behavior
+    # @param lifecycle_hooks [Hash] Configuration for execution lifecycle hooks
+    # @return [PlanOrchestrator] A new plan orchestrator instance
+    def initialize(plan_id: SecureRandom.uuid, concurrency_limit: 10, retry_policy: {}, lifecycle_hooks: {})
+      @plan_id = plan_id
+      @tasks = {}
+      @dependencies = {}
+      @results = {}
+      @execution_state = {
+        pending: Set.new,
+        in_progress: Set.new,
+        completed: Set.new,
+        failed: Set.new,
+        canceled: Set.new
+      }
+      @concurrency_limit = concurrency_limit
+      @async_tasks = {}
+      
+      # Configure retry policy with defaults
+      @retry_policy = {
+        max_retries: 3,
+        retryable_errors: ["TimeoutError"],
+        backoff_strategy: :constant
+      }.merge(retry_policy)
+      
+      # Configure lifecycle hooks with callable defaults (no-ops)
+      @lifecycle_hooks = {
+        before_task_execution: ->(task_id:, task:) {},        # Called before a task is executed
+        after_task_success: ->(task_id:, task:, result:, duration:) {}, # Called after a task succeeds
+        after_task_failure: ->(task_id:, task:, failure:, duration:) {}, # Called after a task fails
+        plan_completed: ->(plan_id:, status:, execution_time:, tasks:, results:) {} # Called when plan completes
+      }.merge(lifecycle_hooks)
+    end
+    
+    # Adds a task to the plan with optional dependencies
+    # @param task [Task] The task to add
+    # @param dependencies [Array<String>] Array of task ids that this task depends on
+    # @return [void]
+    def add_task(task, dependencies = [])
+      task_id = task.id
+      @tasks[task_id] = task
+      @dependencies[task_id] = Array(dependencies)
+      @execution_state[:pending].add(task_id)
+    end
+    
+    # Executes the plan, respecting task dependencies and concurrency limits
+    # @param agent_provider [Object] An object that provides agents for task execution
+    # @return [Hash] The execution results
+    def execute_plan(agent_provider)
+      @reactor = Async do |reactor|
+        @barrier = Async::Barrier.new
+        @semaphore = Async::Semaphore.new(@concurrency_limit, parent: @barrier)
+        
+        # Track execution start time
+        @execution_start_time = Time.now
+        
+        # Start with tasks that have no dependencies
+        eligible_tasks = find_eligible_tasks
+        
+        # Initial execution of eligible tasks
+        eligible_tasks.each do |task_id|
+          schedule_task(task_id, agent_provider, @semaphore, @barrier)
+        end
+        
+        # Wait for all tasks to complete
+        @barrier.wait
+        
+        # Track execution completion time
+        @execution_end_time = Time.now
+        
+        # Call plan completion hook
+        @lifecycle_hooks[:plan_completed].call(
+          plan_id: @plan_id,
+          status: overall_status,
+          execution_time: @execution_end_time - @execution_start_time,
+          tasks: @tasks.transform_values(&:to_h),
+          results: @results
+        )
+      end
+      
+      # Return execution results
+      {
+        plan_id: @plan_id,
+        status: overall_status,
+        execution_time: @execution_end_time - @execution_start_time,
+        tasks: @tasks.transform_values(&:to_h),
+        results: @results
+      }
+    end
+    
+    # Cancels execution of a specific task
+    # @param task_id [String] ID of the task to cancel
+    # @return [Boolean] True if the task was canceled, false otherwise
+    def cancel_task(task_id)
+      # Can only cancel pending or in_progress tasks
+      return false unless @execution_state[:pending].include?(task_id) || 
+                          @execution_state[:in_progress].include?(task_id)
+      
+      # If the task is pending, simply move it to canceled state
+      if @execution_state[:pending].include?(task_id)
+        transition_task_state(task_id, from: :pending, to: :canceled)
+        return true
+      end
+      
+      # If the task is in progress, cancel its Async task
+      if @execution_state[:in_progress].include?(task_id) && @async_tasks[task_id]
+        @async_tasks[task_id].stop
+        transition_task_state(task_id, from: :in_progress, to: :canceled)
+        return true
+      end
+      
+      false
+    end
+    
+    # Cancels execution of the entire plan
+    # @return [void]
+    def cancel_plan
+      # Stop the reactor to cancel all async tasks
+      @reactor&.stop
+      
+      # Move all pending and in_progress tasks to canceled state
+      @execution_state[:pending].each do |task_id|
+        transition_task_state(task_id, from: :pending, to: :canceled)
+      end
+      
+      @execution_state[:in_progress].each do |task_id|
+        transition_task_state(task_id, from: :in_progress, to: :canceled)
+      end
+    end
+    
+    # Determines if a task failure is retryable based on retry policy
+    # @param task [Task] The failed task
+    # @param failure [TaskFailure] The failure details
+    # @return [Boolean] True if the task failure is retryable
+    def retry?(task:, failure:)
+      # Check if we've reached max retries
+      task.retry_count ||= 0
+      return false if task.retry_count >= @retry_policy[:max_retries]
+      
+      # Check if error type is in retryable_errors list
+      @retry_policy[:retryable_errors].include?(failure.type)
+    end
+    
+    # Determines if a failure requires human intervention
+    # @param failure [TaskFailure] The failure details
+    # @return [Boolean] True if human intervention is required
+    def requires_intervention?(failure:)
+      # For now, we only identify a few error types that need human help
+      %w[AuthenticationError PermissionDeniedError ConfigurationError].include?(failure.type)
+    end
+    
+    # Applies a delay based on the backoff strategy before retrying
+    # @param task [Task] The task being retried
+    # @return [void]
+    def apply_retry_backoff(task:)
+      return if @retry_policy[:backoff_strategy] == :none
+      
+      delay = case @retry_policy[:backoff_strategy]
+      when :constant
+        # Constant delay (default 1 second)
+        @retry_policy[:backoff_constant] || 1
+      when :linear
+        # Linear backoff (retry_count * base_delay)
+        base_delay = @retry_policy[:backoff_base] || 1
+        task.retry_count * base_delay
+      when :exponential
+        # Exponential backoff (base_delay * 2^retry_count)
+        base_delay = @retry_policy[:backoff_base] || 1
+        base_delay * (2 ** (task.retry_count - 1))
+      else
+        0
+      end
+      
+      # Apply jitter if configured
+      if @retry_policy[:backoff_jitter]
+        jitter_factor = 0.25 # Default 25% jitter
+        jitter = rand(-delay * jitter_factor..delay * jitter_factor)
+        delay += jitter
+      end
+      
+      # Sleep if there's a delay to apply
+      Async do
+        Async::Task.current.sleep(delay) if delay > 0
+      end if delay > 0
+    end
+    
+    # Checks if all dependencies for a task are met
+    # @param task_id [String] ID of the task to check
+    # @return [Boolean] True if all dependencies are met, false otherwise
+    def all_dependencies_met?(task_id)
+      deps = @dependencies[task_id] || []
+      deps.all? do |dep_id|
+        @execution_state[:completed].include?(dep_id)
+      end
+    end
+
+    # Finds tasks that are eligible for execution (have no dependencies)
+    # @return [Array<String>] IDs of eligible tasks
+    def find_eligible_tasks
+      @dependencies.select do |task_id, deps|
+        deps.empty? && @execution_state[:pending].include?(task_id)
+      end.keys
+    end
+    
+    # Determines the overall status of the plan
+    # @return [Symbol] The overall status (:completed, :in_progress, or :partial_failure)
+    def overall_status
+      if @execution_state[:failed].any?
+        :partial_failure
+      elsif @execution_state[:pending].empty? && @execution_state[:in_progress].empty?
+        :completed
+      else
+        :in_progress
+      end
+    end
+
+    private
+    
+    # Schedules a task for execution using the semaphore to limit concurrency
+    # @param task_id [String] ID of the task to schedule
+    # @param agent_provider [Object] Provides agents for task execution
+    # @param semaphore [Async::Semaphore] Controls concurrency
+    # @param barrier [Async::Barrier] Tracks task completion
+    # @return [void]
+    def schedule_task(task_id, agent_provider, semaphore, barrier)
+      return unless @execution_state[:pending].include?(task_id)
+      
+      # Move to in_progress state
+      task = @tasks[task_id]
+      transition_task_state(task_id, from: :pending, to: :in_progress)
+      
+      # Call before_task_execution hook
+      @lifecycle_hooks[:before_task_execution].call(
+        task_id: task_id,
+        task: task
+      )
+      
+      # Schedule task execution with the semaphore
+      async_task = semaphore.async do
+        task_start_time = Time.now
+        begin
+          agent = agent_provider.get_agent_for_task(task)
+          result = task.perform(agent)
+          task_duration = Time.now - task_start_time
+          
+          # Record result and update state
+          if result.successful?
+            record_task_success(task_id, result.output)
+            
+            # Call after_task_success hook
+            @lifecycle_hooks[:after_task_success].call(
+              task_id: task_id,
+              task: task,
+              result: result,
+              duration: task_duration
+            )
+            
+            # Find and schedule dependent tasks
+            schedule_dependent_tasks(task_id, agent_provider, semaphore, barrier)
+          else
+            record_task_failure(task_id, result.failure)
+            
+            # Call after_task_failure hook
+            @lifecycle_hooks[:after_task_failure].call(
+              task_id: task_id,
+              task: task,
+              failure: result.failure,
+              duration: task_duration
+            )
+            
+            # Handle failure based on policy
+            handle_task_failure(task, result.failure, agent_provider, semaphore, barrier)
+          end
+        rescue => e
+          # Handle unexpected errors
+          failure = TaskFailure.from_exception(e, { 
+            task_id: task_id,
+            context_type: "unexpected_error"
+          })
+          
+          record_task_failure(task_id, failure)
+          
+          # Call after_task_failure hook for unexpected errors
+          @lifecycle_hooks[:after_task_failure].call(
+            task_id: task_id,
+            task: task,
+            failure: failure,
+            duration: Time.now - task_start_time
+          )
+          
+          Agentic.logger.error("Unexpected error in task #{task_id}: #{e.message}")
+        end
+      end
+      
+      # Store the async task for potential cancellation
+      @async_tasks[task_id] = async_task
+    end
+    
+    # Schedules tasks that depend on a completed task
+    # @param completed_task_id [String] ID of the completed task
+    # @param agent_provider [Object] Provides agents for task execution
+    # @param semaphore [Async::Semaphore] Controls concurrency
+    # @param barrier [Async::Barrier] Tracks task completion
+    # @return [void]
+    def schedule_dependent_tasks(completed_task_id, agent_provider, semaphore, barrier)
+      # Find tasks that depend on the completed task
+      dependent_tasks = @dependencies.select do |task_id, deps|
+        deps.include?(completed_task_id) && @execution_state[:pending].include?(task_id)
+      end.keys
+      
+      # For each dependent task, check if all dependencies are satisfied
+      dependent_tasks.each do |task_id|
+        deps = @dependencies[task_id]
+        all_deps_satisfied = all_dependencies_met?(task_id)
+        
+        if all_deps_satisfied
+          schedule_task(task_id, agent_provider, semaphore, barrier)
+        end
+      end
+    end
+    
+    # Handles a task failure according to policy
+    # @param task [Task] The failed task
+    # @param failure [TaskFailure] The failure details
+    # @param agent_provider [Object] Provides agents for task execution
+    # @param semaphore [Async::Semaphore] Controls concurrency
+    # @param barrier [Async::Barrier] Tracks task completion
+    # @return [void]
+    def handle_task_failure(task, failure, agent_provider, semaphore, barrier)
+      # Check if this error type is retryable according to policy
+      if retry?(task: task, failure: failure)
+        Agentic.logger.info("Task #{task.id} failed with #{failure.type}, retrying...")
+        retry_task(task, agent_provider, semaphore, barrier)
+      elsif requires_intervention?(failure: failure)
+        Agentic.logger.warn("Task #{task.id} failed with #{failure.type}, intervention required")
+        request_human_intervention(task, failure)
+      else
+        # Apply general failure policy
+        Agentic.logger.error("Task #{task.id} failed: #{failure.message}")
+      end
+    end
+    
+    # Retries a failed task
+    # @param task [Task] The failed task
+    # @param agent_provider [Object] Provides agents for task execution
+    # @param semaphore [Async::Semaphore] Controls concurrency
+    # @param barrier [Async::Barrier] Tracks task completion
+    # @return [void]
+    def retry_task(task, agent_provider, semaphore, barrier)
+      # Check if the task can be retried
+      return unless task.status == :failed
+      
+      # Initialize retry count if not already set
+      task.retry_count ||= 0
+      
+      # Check if max retries reached
+      max_retries = @retry_policy[:max_retries]
+      if task.retry_count >= max_retries
+        Agentic.logger.warn("Max retries reached for task #{task.id}")
+        return
+      end
+      
+      # Increment retry count
+      task.retry_count += 1
+      Agentic.logger.info("Retrying task #{task.id} (attempt #{task.retry_count} of #{max_retries})")
+      
+      # Apply backoff delay if specified
+      apply_retry_backoff(task: task)
+      
+      # Reset task state for retry
+      transition_task_state(task.id, from: :failed, to: :pending)
+      
+      # Schedule retrying the task
+      schedule_task(task.id, agent_provider, semaphore, barrier)
+    end
+    
+    # Requests human intervention for a failed task
+    # @param task [Task] The failed task
+    # @param failure [TaskFailure] The failure details
+    # @return [void]
+    def request_human_intervention(task, failure)
+      # This would integrate with the yet-to-be-implemented human intervention system
+      Agentic.logger.warn("Human intervention requested for task #{task.id}: #{failure.message}")
+    end
+    
+    # Records a successful task completion with proper state transition and result storage
+    # @param task_id [String] ID of the completed task
+    # @param output [Hash] The task output
+    # @return [void]
+    def record_task_success(task_id, output)
+      transition_task_state(task_id, from: :in_progress, to: :completed)
+      @results[task_id] = { 
+        status: :completed,
+        output: output
+      }
+    end
+    
+    # Records a task failure with proper state transition and result storage
+    # @param task_id [String] ID of the failed task
+    # @param failure [TaskFailure] The failure details
+    # @return [void]
+    def record_task_failure(task_id, failure)
+      transition_task_state(task_id, from: :in_progress, to: :failed)
+      @results[task_id] = {
+        status: :failed,
+        failure: failure&.to_h
+      }
+    end
+    
+    # Transitions a task from one state to another
+    # @param task_id [String] ID of the task to transition
+    # @param from: [Symbol] Current state of the task
+    # @param to: [Symbol] Target state for the task
+    # @return [void]
+    def transition_task_state(task_id, from:, to:)
+      return unless @execution_state[from].include?(task_id)
+      
+      @execution_state[from].delete(task_id)
+      @execution_state[to].add(task_id)
+    end
+  end
+end
