@@ -226,6 +226,109 @@ end
 manager.disable("my_plugin")
 ```
 
+## Learning System
+
+Agentic features a Learning System that enables agents to improve over time by capturing execution metrics, recognizing patterns, and optimizing strategies. The Learning System consists of three main components:
+
+### Execution History Store
+
+The ExecutionHistoryStore captures and stores execution metrics and performance data:
+
+```ruby
+# Create a history store
+history_store = Agentic::Learning::ExecutionHistoryStore.new(
+  storage_path: "~/.agentic/history",
+  anonymize: true,
+  retention_days: 30
+)
+
+# Record task execution metrics
+history_store.record_execution(
+  task_id: "task-123",
+  agent_type: "research_agent",
+  duration_ms: 1500,
+  success: true,
+  metrics: { tokens_used: 2000, quality_score: 0.85 }
+)
+
+# Query execution history
+research_tasks = history_store.get_history(agent_type: "research_agent", success: true)
+
+# Calculate metrics
+avg_tokens = history_store.get_metric(:tokens_used, { agent_type: "research_agent" }, :avg)
+```
+
+### Pattern Recognizer
+
+The PatternRecognizer analyzes execution history to identify patterns and optimization opportunities:
+
+```ruby
+# Create a pattern recognizer
+recognizer = Agentic::Learning::PatternRecognizer.new(
+  history_store: history_store,
+  min_sample_size: 10
+)
+
+# Analyze agent performance
+patterns = recognizer.analyze_agent_performance("research_agent")
+
+# Analyze correlations between properties
+correlation = recognizer.analyze_correlation(:duration_ms, :tokens_used)
+
+# Get optimization recommendations
+recommendations = recognizer.recommend_optimizations("research_agent")
+```
+
+### Strategy Optimizer
+
+The StrategyOptimizer generates improvements for prompts, parameters, and task sequences:
+
+```ruby
+# Create a strategy optimizer
+optimizer = Agentic::Learning::StrategyOptimizer.new(
+  pattern_recognizer: recognizer,
+  history_store: history_store,
+  llm_client: llm_client # Optional, for LLM-enhanced optimizations
+)
+
+# Optimize a prompt template
+improved_prompt = optimizer.optimize_prompt_template(
+  "Research the topic: {topic}",
+  "research_agent"
+)
+
+# Optimize LLM parameters
+improved_params = optimizer.optimize_llm_parameters(
+  { temperature: 0.7, max_tokens: 2000 },
+  "research_agent",
+  optimization_strategy: :balanced
+)
+
+# Generate performance report
+report = optimizer.generate_performance_report("research_agent")
+```
+
+### Integrating with Plan Orchestrator
+
+The Learning System can be automatically integrated with the PlanOrchestrator:
+
+```ruby
+# Create the learning system
+learning_system = Agentic::Learning.create(
+  storage_path: "~/.agentic/history",
+  llm_client: llm_client,
+  auto_optimize: false
+)
+
+# Create a plan orchestrator
+orchestrator = Agentic::PlanOrchestrator.new
+
+# Register the learning system with the orchestrator
+Agentic::Learning.register_with_orchestrator(orchestrator, learning_system)
+
+# The orchestrator will now automatically record execution metrics
+```
+
 ## Configuration
 
 ### Setting up the OpenAI API Key

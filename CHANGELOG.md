@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### Added
+- Learning System with ExecutionHistoryStore, PatternRecognizer, and StrategyOptimizer
+- Execution history capturing and analysis for performance optimization
+- Pattern recognition for identifying success/failure correlations
+- Strategy optimization for prompts, parameters, and task sequences
+- Performance reporting and optimization recommendations
+- Automatic integration with PlanOrchestrator for execution tracking
 - Extension System with Domain Adapters, Protocol Handlers, and Plugin Manager
 - Domain adapters for customizing behavior in specific domains
 - Protocol handlers for standardized external system communication
