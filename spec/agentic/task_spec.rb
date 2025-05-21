@@ -12,7 +12,8 @@ RSpec.describe Agentic::Task do
     it "sets the basic attributes" do
       expect(task.id).not_to be_nil
       expect(task.description).to eq(description)
-      expect(task.agent_spec).to eq(agent_spec)
+      expect(task.agent_spec).to be_a(Agentic::AgentSpecification)
+      expect(task.agent_spec.instructions).to eq("You are a test agent")
       expect(task.input).to eq(input)
       expect(task.status).to eq(:pending)
       expect(task.output).to be_nil
@@ -152,7 +153,8 @@ RSpec.describe Agentic::Task do
       expect(hash).to be_a(Hash)
       expect(hash[:id]).to eq(task.id)
       expect(hash[:description]).to eq(task.description)
-      expect(hash[:agent_spec]).to eq(task.agent_spec)
+      expect(hash[:agent_spec]).to be_a(Hash)
+      expect(hash[:agent_spec]["instructions"]).to eq("You are a test agent")
       expect(hash[:input]).to eq(task.input)
       expect(hash[:status]).to eq(task.status)
     end

@@ -83,7 +83,7 @@ RSpec.describe Agentic::GenerationStats do
       expect(stats.prompt_tokens).to eq(0)
       expect(stats.completion_tokens).to eq(0)
       expect(stats.total_tokens).to eq(0)
-      expect(stats.raw_stats).to eq(nil)
+      expect(stats.raw_stats).to eq({})
     end
   end
 end

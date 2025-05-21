@@ -12,7 +12,7 @@ module Agentic
   class LlmClient
     # @return [OpenAI::Client] The underlying LLM client instance
     attr_reader :client, :last_response
-    
+
     # @return [RetryHandler] The retry handler for transient errors
     attr_reader :retry_handler
 
@@ -23,7 +23,7 @@ module Agentic
       @client = OpenAI::Client.new(access_token: Agentic.configuration.access_token)
       @config = config
       @last_response = nil
-      
+
       # Convert retry_config to RetryConfig if it's a hash
       @retry_handler = if retry_config.is_a?(RetryConfig)
         retry_config.to_handler
@@ -42,7 +42,7 @@ module Agentic
     def complete(messages, output_schema: nil, fail_on_error: false, use_retries: true, options: {})
       # Start with base parameters from the config
       parameters = @config.to_api_parameters({messages: messages})
-      
+
       # Add response format if schema is provided
       if output_schema
         parameters[:response_format] = {
@@ -50,14 +50,14 @@ module Agentic
           json_schema: output_schema.to_hash
         }
       end
-      
+
       # Override with any additional options
       parameters.merge!(options)
 
       execution_method = use_retries ? method(:with_retry) : method(:without_retry)
       execution_method.call(messages, parameters, output_schema, fail_on_error)
     end
-    
+
     # Executes the API call with retries for transient errors
     # @param messages [Array<Hash>] The messages being sent
     # @param parameters [Hash] The request parameters
@@ -73,7 +73,7 @@ module Agentic
       Agentic.logger.error("Failed after retries: #{e.message}")
       handle_error(e, fail_on_error)
     end
-    
+
     # Executes the API call without retries
     # @param messages [Array<Hash>] The messages being sent
     # @param parameters [Hash] The request parameters
@@ -81,68 +81,66 @@ module Agentic
     # @param fail_on_error [Boolean] Whether to raise errors or return them as part of the response
     # @return [LlmResponse] The structured response from the LLM
     def without_retry(messages, parameters, output_schema, fail_on_error)
-      begin
-        @last_response = client.chat(parameters: parameters)
-        
-        # Check for API-level refusal
-        if (refusal = @last_response.dig("choices", 0, "message", "refusal"))
-          refusal_error = Errors::LlmRefusalError.new(
-            refusal,
-            response: @last_response,
-            context: { input_messages: extract_message_content(messages) }
-          )
-          
-          Agentic.logger.warn("LLM refused the request: #{refusal} (Category: #{refusal_error.refusal_category})")
-          
-          if fail_on_error
-            raise refusal_error
-          else
-            return LlmResponse.refusal(@last_response, refusal, refusal_error)
-          end
+      @last_response = client.chat(parameters: parameters)
+
+      # Check for API-level refusal
+      if (refusal = @last_response.dig("choices", 0, "message", "refusal"))
+        refusal_error = Errors::LlmRefusalError.new(
+          refusal,
+          response: @last_response,
+          context: {input_messages: extract_message_content(messages)}
+        )
+
+        Agentic.logger.warn("LLM refused the request: #{refusal} (Category: #{refusal_error.refusal_category})")
+
+        if fail_on_error
+          raise refusal_error
+        else
+          return LlmResponse.refusal(@last_response, refusal, refusal_error)
         end
-        
-        # Process the response based on whether we expect structured output
-        if output_schema
-          begin
-            content_text = @last_response.dig("choices", 0, "message", "content")
-            if content_text.nil? || content_text.empty?
-              error = Errors::LlmParseError.new("Empty content returned from LLM", response: @last_response)
-              Agentic.logger.error(error.message)
-              return handle_error(error, fail_on_error)
-            end
-            
-            content = JSON.parse(content_text)
-            return LlmResponse.success(@last_response, content)
-          rescue JSON::ParserError => e
-            error = Errors::LlmParseError.new(
-              "Failed to parse JSON response: #{e.message}", 
-              parse_exception: e, 
-              response: @last_response
-            )
+      end
+
+      # Process the response based on whether we expect structured output
+      if output_schema
+        begin
+          content_text = @last_response.dig("choices", 0, "message", "content")
+          if content_text.nil? || content_text.empty?
+            error = Errors::LlmParseError.new("Empty content returned from LLM", response: @last_response)
             Agentic.logger.error(error.message)
             return handle_error(error, fail_on_error)
           end
-        else
-          content = @last_response.dig("choices", 0, "message", "content")
-          return LlmResponse.success(@last_response, content)
+
+          content = JSON.parse(content_text)
+          LlmResponse.success(@last_response, content)
+        rescue JSON::ParserError => e
+          error = Errors::LlmParseError.new(
+            "Failed to parse JSON response: #{e.message}",
+            parse_exception: e,
+            response: @last_response
+          )
+          Agentic.logger.error(error.message)
+          handle_error(error, fail_on_error)
         end
-      rescue OpenAI::Error => e
-        error = map_openai_error(e)
-        Agentic.logger.error("OpenAI API error: #{error.message}")
-        return handle_error(error, fail_on_error)
-      rescue Net::ReadTimeout, Net::OpenTimeout => e
-        error = Errors::LlmTimeoutError.new("Request to LLM timed out: #{e.message}", context: {timeout_type: e.class.name})
-        Agentic.logger.error(error.message)
-        return handle_error(error, fail_on_error)
-      rescue JSON::ParserError => e
-        error = Errors::LlmParseError.new("Failed to parse LLM response: #{e.message}", parse_exception: e)
-        Agentic.logger.error(error.message)
-        return handle_error(error, fail_on_error)
-      rescue StandardError => e
-        error = Errors::LlmError.new("Unexpected error in LLM request: #{e.message}", context: {error_class: e.class.name})
-        Agentic.logger.error("#{error.message}\n#{e.backtrace.join("\n")}")
-        return handle_error(error, fail_on_error)
+      else
+        content = @last_response.dig("choices", 0, "message", "content")
+        LlmResponse.success(@last_response, content)
       end
+    rescue OpenAI::Error => e
+      error = map_openai_error(e)
+      Agentic.logger.error("OpenAI API error: #{error.message}")
+      handle_error(error, fail_on_error)
+    rescue Net::ReadTimeout, Net::OpenTimeout => e
+      error = Errors::LlmTimeoutError.new("Request to LLM timed out: #{e.message}", context: {timeout_type: e.class.name})
+      Agentic.logger.error(error.message)
+      handle_error(error, fail_on_error)
+    rescue JSON::ParserError => e
+      error = Errors::LlmParseError.new("Failed to parse LLM response: #{e.message}", parse_exception: e)
+      Agentic.logger.error(error.message)
+      handle_error(error, fail_on_error)
+    rescue => e
+      error = Errors::LlmError.new("Unexpected error in LLM request: #{e.message}", context: {error_class: e.class.name})
+      Agentic.logger.error("#{error.message}\n#{e.backtrace.join("\n")}")
+      handle_error(error, fail_on_error)
     end
 
     # Fetches available models from the LLM provider
@@ -150,19 +148,17 @@ module Agentic
     # @return [Array<Hash>, nil] The list of available models, or nil if an error occurred and fail_on_error is false
     # @raise [Agentic::Errors::LlmError] If an error occurred and fail_on_error is true
     def models(fail_on_error: false)
-      begin
-        client.models.list&.dig("data")
-      rescue OpenAI::Error => e
-        error = map_openai_error(e)
-        Agentic.logger.error("OpenAI API error when listing models: #{error.message}")
-        handle_error(error, fail_on_error)
-        nil
-      rescue StandardError => e
-        error = Errors::LlmError.new("Unexpected error listing models: #{e.message}")
-        Agentic.logger.error("#{error.message}\n#{e.backtrace.join("\n")}")
-        handle_error(error, fail_on_error)
-        nil
-      end
+      client.models.list&.dig("data")
+    rescue OpenAI::Error => e
+      error = map_openai_error(e)
+      Agentic.logger.error("OpenAI API error when listing models: #{error.message}")
+      handle_error(error, fail_on_error)
+      nil
+    rescue => e
+      error = Errors::LlmError.new("Unexpected error listing models: #{e.message}")
+      Agentic.logger.error("#{error.message}\n#{e.backtrace.join("\n")}")
+      handle_error(error, fail_on_error)
+      nil
     end
 
     # Queries generation stats for a given generation ID
@@ -171,23 +167,21 @@ module Agentic
     # @return [Hash, nil] The generation stats, or nil if an error occurred and fail_on_error is false
     # @raise [Agentic::Errors::LlmError] If an error occurred and fail_on_error is true
     def query_generation_stats(generation_id, fail_on_error: false)
-      begin
-        client.query_generation_stats(generation_id)
-      rescue OpenAI::Error => e
-        error = map_openai_error(e)
-        Agentic.logger.error("OpenAI API error when querying generation stats: #{error.message}")
-        handle_error(error, fail_on_error)
-        nil
-      rescue StandardError => e
-        error = Errors::LlmError.new("Unexpected error querying generation stats: #{e.message}")
-        Agentic.logger.error("#{error.message}\n#{e.backtrace.join("\n")}")
-        handle_error(error, fail_on_error)
-        nil
-      end
+      client.query_generation_stats(generation_id)
+    rescue OpenAI::Error => e
+      error = map_openai_error(e)
+      Agentic.logger.error("OpenAI API error when querying generation stats: #{error.message}")
+      handle_error(error, fail_on_error)
+      nil
+    rescue => e
+      error = Errors::LlmError.new("Unexpected error querying generation stats: #{e.message}")
+      Agentic.logger.error("#{error.message}\n#{e.backtrace.join("\n")}")
+      handle_error(error, fail_on_error)
+      nil
     end
-    
+
     private
-    
+
     # Extracts content from messages for logging purposes
     # @param messages [Array<Hash>] The messages
     # @return [Array<String>] The extracted content
@@ -195,10 +189,14 @@ module Agentic
       messages.map do |msg|
         content = msg[:content] || msg["content"]
         role = msg[:role] || msg["role"]
-        "#{role}: #{content ? content[0..100] + (content.length > 100 ? "..." : "") : "[no content]"}"
+        "#{role}: #{if content
+                      content[0..100] + ((content.length > 100) ? "..." : "")
+                    else
+                      "[no content]"
+                    end}"
       end
     end
-    
+
     # Maps OpenAI error types to our custom error classes
     # @param error [OpenAI::Error] The original error from the OpenAI gem
     # @return [Agentic::Errors::LlmError] A mapped error
@@ -240,7 +238,7 @@ module Agentic
         )
       end
     end
-    
+
     # Handles an error based on whether to fail or return it in the response
     # @param error [Agentic::Errors::LlmError] The error to handle
     # @param fail_on_error [Boolean] Whether to raise the error

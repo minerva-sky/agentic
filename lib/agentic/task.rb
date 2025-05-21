@@ -130,7 +130,7 @@ module Agentic
       {
         id: @id,
         description: @description,
-        agent_spec: @agent_spec,
+        agent_spec: @agent_spec.is_a?(AgentSpecification) ? @agent_spec.to_h : @agent_spec,
         input: @input,
         output: @output,
         status: @status,

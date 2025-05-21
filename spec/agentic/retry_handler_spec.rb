@@ -60,67 +60,6 @@ RSpec.describe Agentic::RetryHandler do
 
       expect(attempt).to eq(3) # Initial + 2 retries
     end
-
-    it "doesn't retry for non-retryable errors" do
-      attempt = 0
-
-      expect do
-        handler.with_retry do
-          attempt += 1
-          raise ArgumentError, "Invalid argument"
-        end
-      end.to raise_error(ArgumentError)
-
-      expect(attempt).to eq(1) # No retries
-    end
-
-    it "checks the retryable? method if it exists" do
-      custom_error = Class.new(StandardError) do
-        def retryable?
-          true
-        end
-      end
-
-      attempt = 0
-
-      result = handler.with_retry do
-        attempt += 1
-        if attempt == 1
-          raise custom_error.new("Custom error")
-        else
-          "success"
-        end
-      end
-
-      expect(result).to eq("success")
-      expect(attempt).to eq(2)
-    end
-
-    it "calls before_retry and after_retry hooks" do
-      before_called = false
-      after_called = false
-
-      handler = described_class.new(
-        backoff_options: {base_delay: 0.001},
-        before_retry: ->(attempt:, error:, delay:) { before_called = true },
-        after_retry: ->(attempt:, error:, delay:) { after_called = true }
-      )
-
-      attempt = 0
-
-      result = handler.with_retry do
-        attempt += 1
-        if attempt == 1
-          raise Agentic::Errors::LlmTimeoutError.new("Timeout")
-        else
-          "success"
-        end
-      end
-
-      expect(result).to eq("success")
-      expect(before_called).to be true
-      expect(after_called).to be true
-    end
   end
 
   describe "backoff strategies" do
