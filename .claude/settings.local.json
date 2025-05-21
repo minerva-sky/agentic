@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bundle exec rspec:*)",
+      "Bash(bundle exec rake:*)",
+      "Bash(bundle exec:*)",
+      "Bash(ls:*)",
+      "Bash(touch:*)"
+    ],
+    "deny": []
+  }
+}
