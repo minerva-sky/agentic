@@ -45,17 +45,17 @@ module Agentic
         )
       )
     end
-    
+
     # Creates a task failure from a hash
     # @param hash [Hash] The hash representation of a task failure
     # @return [TaskFailure] A new task failure instance
     def self.from_hash(hash)
       # Handle the case where hash is not actually a hash
       return new(message: "Unknown error", type: "UnknownError") unless hash.is_a?(Hash)
-      
+
       # Convert string keys to symbols if necessary
       hash = hash.transform_keys(&:to_sym) if hash.keys.first.is_a?(String)
-      
+
       new(
         message: hash[:message] || "Unknown error",
         type: hash[:type] || "UnknownError",

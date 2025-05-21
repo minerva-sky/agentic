@@ -52,7 +52,7 @@ module Agentic
 
       # Convert string keys to symbols if necessary
       hash = hash.transform_keys(&:to_sym) if hash.keys.first.is_a?(String)
-      
+
       failure = hash[:failure] ? TaskFailure.from_hash(hash[:failure]) : nil
       new(
         status: hash[:status] || :completed,
