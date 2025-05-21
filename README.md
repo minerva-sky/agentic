@@ -472,6 +472,34 @@ client = Agentic::LlmClient.new(config)
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
 
+### Running Tests
+
+Agentic includes a comprehensive test suite with both unit tests and integration tests. To run all tests:
+
+```bash
+rake spec
+```
+
+To run specific test categories:
+
+```bash
+# Run just integration tests
+rspec spec/integration/
+
+# Run a specific integration test file
+rspec spec/integration/plan_orchestrator_integration_spec.rb
+
+# Run with verbose output
+rspec spec/integration/ --format documentation
+```
+
+The integration tests cover real-world scenarios including:
+- Complex orchestration patterns with dependencies
+- Learning system's pattern recognition capabilities
+- Agent specification and task definition interactions
+- Timeout and retry behaviors
+- Error handling in complex scenarios
+
 To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
 
 ## Contributing
