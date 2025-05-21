@@ -226,6 +226,91 @@ end
 manager.disable("my_plugin")
 ```
 
+## Agent Specification and Task Definition
+
+Agentic provides structured representations for agents and tasks through several key value objects:
+
+### Agent Specification
+
+The AgentSpecification defines the requirements for an agent:
+
+```ruby
+# Create an agent specification
+agent_spec = Agentic::AgentSpecification.new(
+  name: "ResearchAgent",
+  description: "An agent that performs research",
+  instructions: "Research the given topic thoroughly"
+)
+
+# Convert to a hash representation
+hash = agent_spec.to_h
+
+# Create from a hash representation
+agent_spec_from_hash = Agentic::AgentSpecification.from_hash(hash)
+```
+
+### Task Definition
+
+The TaskDefinition defines a task to be performed by an agent:
+
+```ruby
+# Create a task definition
+task_def = Agentic::TaskDefinition.new(
+  description: "Research AI trends",
+  agent: agent_spec
+)
+
+# Convert to a hash representation
+hash = task_def.to_h
+
+# Create from a hash representation
+task_def_from_hash = Agentic::TaskDefinition.from_hash(hash)
+```
+
+### Execution Plan
+
+The ExecutionPlan represents a plan with tasks and expected answer format:
+
+```ruby
+# Create an expected answer format
+expected_answer = Agentic::ExpectedAnswerFormat.new(
+  format: "PDF",
+  sections: ["Summary", "Trends", "Conclusion"],
+  length: "10 pages"
+)
+
+# Create an execution plan
+plan = Agentic::ExecutionPlan.new([task_def], expected_answer)
+
+# Convert to a formatted string
+puts plan.to_s
+
+# Convert to a hash representation
+hash = plan.to_h
+```
+
+### Agent Configuration
+
+The AgentConfig provides a configuration object for agents:
+
+```ruby
+# Create an agent configuration
+config = Agentic::AgentConfig.new(
+  name: "ResearchAgent",
+  role: "Research Assistant",
+  backstory: "You are an expert researcher with decades of experience",
+  tools: ["web_search", "document_processor"],
+  llm_config: Agentic::LlmConfig.new(model: "gpt-4o-mini")
+)
+
+# Access configuration properties
+puts config.name
+puts config.role
+
+# Convert to a hash representation
+hash = config.to_h
+```
+
 ## Learning System
 
 Agentic features a Learning System that enables agents to improve over time by capturing execution metrics, recognizing patterns, and optimizing strategies. The Learning System consists of three main components:

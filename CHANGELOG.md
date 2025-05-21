@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- Agent Specification and Task Definition with structured representations
+- Execution Plan with clear separation of data and presentation
+- Expected Answer Format for detailed output requirements
+- Agent Configuration for consistent setup of agent properties
+- Default Agent Provider for streamlined creation of agents from tasks
 - Learning System with ExecutionHistoryStore, PatternRecognizer, and StrategyOptimizer
 - Execution history capturing and analysis for performance optimization
 - Pattern recognition for identifying success/failure correlations
