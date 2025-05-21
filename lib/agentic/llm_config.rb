@@ -5,22 +5,22 @@ module Agentic
   class LlmConfig
     # @return [String] The model to use for LLM requests
     attr_accessor :model
-    
+
     # @return [Integer] The maximum number of tokens to generate
     attr_accessor :max_tokens
-    
+
     # @return [Float] The temperature parameter (controls randomness)
     attr_accessor :temperature
-    
+
     # @return [Float] The top_p parameter (nucleus sampling)
     attr_accessor :top_p
-    
+
     # @return [Integer] The frequency penalty
     attr_accessor :frequency_penalty
-    
+
     # @return [Integer] The presence penalty
     attr_accessor :presence_penalty
-    
+
     # @return [Hash] Additional options to pass to the API
     attr_accessor :additional_options
 
@@ -49,7 +49,7 @@ module Agentic
       @presence_penalty = presence_penalty
       @additional_options = additional_options
     end
-    
+
     # Returns a hash of parameters for the API call
     # @param base_params [Hash] Base parameters to include
     # @return [Hash] Parameters for the API call
@@ -61,13 +61,13 @@ module Agentic
         frequency_penalty: @frequency_penalty,
         presence_penalty: @presence_penalty
       }
-      
+
       # Add max_tokens if specified
       params[:max_tokens] = @max_tokens if @max_tokens
-      
+
       # Merge any additional options
       params.merge!(@additional_options)
-      
+
       # Merge with base parameters
       base_params.merge(params)
     end

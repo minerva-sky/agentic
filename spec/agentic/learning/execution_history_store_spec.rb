@@ -39,7 +39,7 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
   describe "#record_execution" do
     it "records execution data successfully" do
       allow_any_instance_of(Agentic::Learning::ExecutionHistoryStore).to receive(:save_record).and_return(true)
-      
+
       result = history_store.record_execution(
         task_id: "task-123",
         agent_type: "research_agent",
@@ -54,11 +54,11 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
     it "anonymizes context data when anonymize is true" do
       # Mock build_record to test anonymization directly
       allow_any_instance_of(Agentic::Learning::ExecutionHistoryStore).to receive(:save_record).and_return(true)
-      
+
       sensitive_content = "This is sensitive content"
       items = [1, 2, 3]
       nested = {key: "value"}
-      
+
       execution_data = {
         task_id: "task-123",
         agent_type: "research_agent",
@@ -70,7 +70,7 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
           nested: nested
         }
       }
-      
+
       # Mock the anonymize_context method directly to control the output
       allow_any_instance_of(Agentic::Learning::ExecutionHistoryStore).to receive(:anonymize_context) do |instance, context|
         {
@@ -79,10 +79,10 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
           nested: {key: "value length"}
         }
       end
-      
+
       # Get the anonymized record via build_record
       record = history_store.send(:build_record, execution_data)
-      
+
       # Test anonymization is applied correctly
       expect(record[:context][:content]).to eq "#{sensitive_content.length} chars"
       expect(record[:context][:items]).to eq "#{items.length} items"
@@ -95,7 +95,7 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
         anonymize: false
       )
       allow_any_instance_of(Agentic::Learning::ExecutionHistoryStore).to receive(:save_record).and_return(true)
-      
+
       sensitive_content = "This is sensitive content"
       execution_data = {
         task_id: "task-123",
@@ -104,10 +104,10 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
         success: true,
         context: {content: sensitive_content}
       }
-      
+
       # Get the non-anonymized record via build_record
       record = non_anonymized_store.send(:build_record, execution_data)
-      
+
       # Test that content is not anonymized
       expect(record[:context][:content]).to eq sensitive_content
     end
@@ -158,10 +158,10 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
     it "filters by task_id" do
       # Create a specific mock for this test case
       filtered_records = mock_records.select { |r| r[:task_id] == "task-1" }
-      
+
       # Override get_history for this specific test
       allow(history_store).to receive(:get_history).with(task_id: "task-1").and_return(filtered_records)
-      
+
       history = history_store.get_history(task_id: "task-1")
       expect(history.size).to eq 1
       expect(history.first[:task_id]).to eq "task-1"
@@ -170,10 +170,10 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
     it "filters by agent_type" do
       # Create a specific mock for this test case
       filtered_records = mock_records.select { |r| r[:agent_type] == "research_agent" }
-      
+
       # Override get_history for this specific test
       allow(history_store).to receive(:get_history).with(agent_type: "research_agent").and_return(filtered_records)
-      
+
       history = history_store.get_history(agent_type: "research_agent")
       expect(history.size).to eq 2
     end
@@ -181,10 +181,10 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
     it "filters by success status" do
       # Create a specific mock for this test case
       filtered_records = mock_records.select { |r| r[:success] == false }
-      
+
       # Override get_history for this specific test
       allow(history_store).to receive(:get_history).with(success: false).and_return(filtered_records)
-      
+
       history = history_store.get_history(success: false)
       expect(history.size).to eq 1
       expect(history.first[:task_id]).to eq "task-2"
@@ -199,7 +199,7 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
       sorted_records = mock_records.sort_by { |r| r[:timestamp] }.reverse
       allow_any_instance_of(Agentic::Learning::ExecutionHistoryStore).to receive(:load_records).and_return(mock_records)
       allow_any_instance_of(Agentic::Learning::ExecutionHistoryStore).to receive(:filter_records).and_return(sorted_records)
-      
+
       history = history_store.get_history
       expect(history.size).to eq 3
 
@@ -246,7 +246,7 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
     it "calculates average metric value" do
       # Mock get_history to return our mock records
       allow(history_store).to receive(:get_history).and_return(mock_records)
-      
+
       avg_tokens = history_store.get_metric(:tokens_used, {}, :avg)
       expect(avg_tokens).to eq 1500.0  # (1000 + 2000 + 1500) / 3
     end
@@ -254,7 +254,7 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
     it "calculates sum of metric values" do
       # Mock get_history to return our mock records
       allow(history_store).to receive(:get_history).and_return(mock_records)
-      
+
       sum_tokens = history_store.get_metric(:tokens_used, {}, :sum)
       expect(sum_tokens).to eq 4500  # 1000 + 2000 + 1500
     end
@@ -262,7 +262,7 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
     it "calculates min and max metric values" do
       # Mock get_history to return our mock records
       allow(history_store).to receive(:get_history).and_return(mock_records)
-      
+
       min_tokens = history_store.get_metric(:tokens_used, {}, :min)
       expect(min_tokens).to eq 1000
 
@@ -273,10 +273,10 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
     it "applies filters before calculating metric" do
       # Filter for just research_agent records
       filtered_records = mock_records.select { |r| r[:agent_type] == "research_agent" }
-      
+
       # Mock get_history with the filter to return just those records
       allow(history_store).to receive(:get_history).with({agent_type: "research_agent"}).and_return(filtered_records)
-      
+
       avg_tokens = history_store.get_metric(:tokens_used, {agent_type: "research_agent"}, :avg)
       expect(avg_tokens).to eq 1500.0  # (1000 + 2000) / 2
     end
@@ -284,7 +284,7 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
     it "returns nil for non-existent metrics" do
       # Mock get_history to return our mock records
       allow(history_store).to receive(:get_history).and_return(mock_records)
-      
+
       result = history_store.get_metric(:non_existent_metric, {}, :avg)
       expect(result).to be_nil
     end
@@ -297,10 +297,10 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
         # Mock deleting two old records
         2
       end
-      
+
       # Run the test
       count = history_store.cleanup_old_records
-      
+
       # Verify our mock returned the expected count
       expect(count).to eq 2
     end

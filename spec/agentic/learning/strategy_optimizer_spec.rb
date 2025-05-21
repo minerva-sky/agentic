@@ -141,14 +141,14 @@ RSpec.describe Agentic::Learning::StrategyOptimizer do
         # Create a test class with simplified caching behavior
         test_class = Class.new(Agentic::Learning::StrategyOptimizer) do
           attr_accessor :llm_used, :cache_used
-          
+
           def optimize_prompt_template(original_template, agent_type, options = {})
             # Reset tracking for this call
             @llm_used = false
             @cache_used = false
-            
+
             cache_key = "prompt:#{agent_type}:#{Digest::MD5.hexdigest(original_template)}"
-            
+
             # Check cache unless forcing refresh
             unless options[:force]
               if @optimization_cache[cache_key] &&
@@ -158,10 +158,10 @@ RSpec.describe Agentic::Learning::StrategyOptimizer do
                 return @optimization_cache[cache_key]
               end
             end
-            
+
             # Simulate using LLM
             @llm_used = true
-            
+
             # Create a result
             result = {
               optimized: true,
@@ -169,15 +169,15 @@ RSpec.describe Agentic::Learning::StrategyOptimizer do
               improved_template: "Improved #{original_template}",
               explanation: "Made it better"
             }
-            
+
             # Cache the result
             @optimization_cache[cache_key] = result
             @last_optimization[cache_key] = Time.now
-            
+
             result
           end
         end
-        
+
         # Create an instance with our test class
         test_optimizer = test_class.new(
           pattern_recognizer: pattern_recognizer,
@@ -185,19 +185,19 @@ RSpec.describe Agentic::Learning::StrategyOptimizer do
           llm_client: llm_client,
           optimization_interval_hours: 1
         )
-        
+
         # First call - should use LLM and populate cache
-        result1 = test_optimizer.optimize_prompt_template(original_template, agent_type)
+        test_optimizer.optimize_prompt_template(original_template, agent_type)
         expect(test_optimizer.llm_used).to be true
         expect(test_optimizer.cache_used).to be false
-        
+
         # Second call - should use cache
-        result2 = test_optimizer.optimize_prompt_template(original_template, agent_type)
+        test_optimizer.optimize_prompt_template(original_template, agent_type)
         expect(test_optimizer.llm_used).to be false
         expect(test_optimizer.cache_used).to be true
-        
+
         # Third call with force - should bypass cache and use LLM
-        result3 = test_optimizer.optimize_prompt_template(original_template, agent_type, force: true)
+        test_optimizer.optimize_prompt_template(original_template, agent_type, force: true)
         expect(test_optimizer.llm_used).to be true
         expect(test_optimizer.cache_used).to be false
       end
@@ -264,16 +264,16 @@ RSpec.describe Agentic::Learning::StrategyOptimizer do
           def optimize_llm_parameters(original_params, agent_type, options = {})
             # Simplified implementation that always returns predictable values
             strategy = options[:optimization_strategy] || :balanced
-            
+
             improved_params = original_params.dup
             temperature_reduction = case strategy
-              when :conservative then 0.1
-              when :balanced then 0.2 
-              when :aggressive then 0.4  # Much bigger change for aggressive
+            when :conservative then 0.1
+            when :balanced then 0.2
+            when :aggressive then 0.4  # Much bigger change for aggressive
             end
-            
+
             improved_params[:temperature] -= temperature_reduction if improved_params[:temperature] > temperature_reduction
-            
+
             {
               optimized: true,
               original_params: original_params,
@@ -282,14 +282,14 @@ RSpec.describe Agentic::Learning::StrategyOptimizer do
             }
           end
         end
-        
+
         # Create our test instance with our simplified implementation
         test_optimizer = test_class.new(
           pattern_recognizer: pattern_recognizer,
           history_store: history_store,
           optimization_interval_hours: 1
         )
-        
+
         # Call with different strategies to get different results
         conservative_result = test_optimizer.optimize_llm_parameters(
           original_params, agent_type, optimization_strategy: :conservative
@@ -302,11 +302,11 @@ RSpec.describe Agentic::Learning::StrategyOptimizer do
         # Confirm that both results are optimized
         expect(conservative_result[:optimized]).to be true
         expect(aggressive_result[:optimized]).to be true
-        
+
         # Verify temperature changes are different based on strategy
         conservative_diff = (original_params[:temperature] - conservative_result[:improved_params][:temperature]).abs
         aggressive_diff = (original_params[:temperature] - aggressive_result[:improved_params][:temperature]).abs
-        
+
         # Now this test will reliably pass since we control the exact values
         expect(aggressive_diff).to be > conservative_diff
       end
@@ -431,14 +431,14 @@ RSpec.describe Agentic::Learning::StrategyOptimizer do
         # Create a test class with simplified caching behavior
         test_class = Class.new(Agentic::Learning::StrategyOptimizer) do
           attr_accessor :history_used, :cache_used
-          
+
           def optimize_task_sequence(original_sequence, plan_type, options = {})
             # Reset tracking for this call
             @history_used = false
             @cache_used = false
-            
+
             cache_key = "sequence:#{plan_type}:#{Digest::MD5.hexdigest(original_sequence.to_s)}"
-            
+
             # Check cache unless forcing refresh
             unless options[:force]
               if @optimization_cache[cache_key] &&
@@ -448,10 +448,10 @@ RSpec.describe Agentic::Learning::StrategyOptimizer do
                 return @optimization_cache[cache_key]
               end
             end
-            
+
             # Simulate fetching history
             @history_used = true
-            
+
             # Create a result
             result = {
               optimized: true,
@@ -459,34 +459,34 @@ RSpec.describe Agentic::Learning::StrategyOptimizer do
               improved_sequence: original_sequence.map(&:dup),
               explanation: "Made it better"
             }
-            
+
             # Cache the result
             @optimization_cache[cache_key] = result
             @last_optimization[cache_key] = Time.now
-            
+
             result
           end
         end
-        
+
         # Create an instance with our test class
         test_optimizer = test_class.new(
           pattern_recognizer: pattern_recognizer,
           history_store: history_store,
           optimization_interval_hours: 1
         )
-        
+
         # First call - should use history and populate cache
-        result1 = test_optimizer.optimize_task_sequence(original_sequence, plan_type)
+        test_optimizer.optimize_task_sequence(original_sequence, plan_type)
         expect(test_optimizer.history_used).to be true
         expect(test_optimizer.cache_used).to be false
-        
+
         # Second call - should use cache
-        result2 = test_optimizer.optimize_task_sequence(original_sequence, plan_type)
+        test_optimizer.optimize_task_sequence(original_sequence, plan_type)
         expect(test_optimizer.history_used).to be false
         expect(test_optimizer.cache_used).to be true
-        
+
         # Third call with force - should bypass cache and fetch history
-        result3 = test_optimizer.optimize_task_sequence(original_sequence, plan_type, force: true)
+        test_optimizer.optimize_task_sequence(original_sequence, plan_type, force: true)
         expect(test_optimizer.history_used).to be true
         expect(test_optimizer.cache_used).to be false
       end

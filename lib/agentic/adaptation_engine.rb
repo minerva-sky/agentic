@@ -42,10 +42,10 @@ module Agentic
     # @return [Hash] Result of the adaptation process
     def process_feedback(feedback)
       record_feedback(feedback)
-      
+
       adaptation_needed = determine_if_adaptation_needed(feedback)
       return {adapted: false, reason: "Adaptation threshold not met"} unless adaptation_needed
-      
+
       if @auto_adapt
         apply_adaptation(feedback)
       else
@@ -63,13 +63,13 @@ module Agentic
     # @return [Hash] Result of the adaptation attempt
     def apply_adaptation(feedback)
       component = feedback[:component]
-      
+
       unless @adaptation_registry.key?(component)
         return {adapted: false, reason: "No adaptation strategy registered for #{component}"}
       end
-      
+
       strategy = @adaptation_registry[component]
-      
+
       begin
         result = strategy.call(feedback)
         {
@@ -78,7 +78,7 @@ module Agentic
           target: feedback[:target],
           result: result
         }
-      rescue StandardError => e
+      rescue => e
         @logger.error("Adaptation failed: #{e.message}")
         {
           adapted: false,
@@ -116,7 +116,7 @@ module Agentic
     def determine_if_adaptation_needed(feedback)
       # Simple implementation - can be expanded with more sophisticated logic
       return false unless feedback[:metrics] && feedback[:metrics][:confidence]
-      
+
       confidence_score = feedback[:metrics][:confidence]
       confidence_score < @adaptation_threshold
     end

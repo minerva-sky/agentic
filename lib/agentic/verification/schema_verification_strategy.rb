@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require_relative 'verification_strategy'
-require_relative 'verification_result'
+require_relative "verification_strategy"
+require_relative "verification_result"
 
 module Agentic
   module Verification
@@ -20,10 +20,10 @@ module Agentic
             messages: ["Task failed, skipping schema verification"]
           )
         end
-        
+
         # Extracting schema from task if available
         schema = task.input["output_schema"] if task.input.is_a?(Hash)
-        
+
         unless schema
           return VerificationResult.new(
             task_id: task.id,
@@ -32,7 +32,7 @@ module Agentic
             messages: ["No schema specified for verification, passing by default"]
           )
         end
-        
+
         # In a real implementation, we would validate the output against the schema
         # For this stub, we'll assume validation passes
         VerificationResult.new(

@@ -39,12 +39,12 @@ module Agentic
       # @return [Hash] Analysis results with identified patterns
       def analyze_agent_performance(agent_type, options = {})
         cache_key = "agent_perf:#{agent_type}:#{options[:metrics]}"
-        
+
         # Check cache first if not forcing refresh
         if !options[:force_refresh] && @pattern_cache[cache_key] && @cache_expiry[cache_key] && @cache_expiry[cache_key] > Time.now
           return @pattern_cache[cache_key]
         end
-        
+
         # Fetch relevant history
         history = fetch_agent_history(agent_type)
 
@@ -143,7 +143,7 @@ module Agentic
         end
 
         # Check failure patterns
-        if performance[:failure_patterns] && performance[:failure_patterns].any?
+        if performance[:failure_patterns]&.any?
           recommendations << {
             type: :failures,
             priority: :high,
@@ -154,7 +154,7 @@ module Agentic
         end
 
         # Check optimization opportunities
-        if performance[:optimization_opportunities] && performance[:optimization_opportunities].any?
+        if performance[:optimization_opportunities]&.any?
           recommendations << {
             type: :optimization,
             priority: :medium,
@@ -464,7 +464,7 @@ module Agentic
       def generate_success_rate_suggestions(performance)
         suggestions = []
 
-        if performance[:failure_patterns] && performance[:failure_patterns].any?
+        if performance[:failure_patterns].any?
           top_failure = performance[:failure_patterns].first
           suggestions << "Address most common failure pattern: #{top_failure[:pattern]}"
         end

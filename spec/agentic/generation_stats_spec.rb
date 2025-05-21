@@ -12,7 +12,7 @@ RSpec.describe Agentic::GenerationStats do
       raw_stats: {"usage" => {"prompt_tokens" => 50, "completion_tokens" => 150, "total_tokens" => 200}}
     )
   end
-  
+
   describe "#initialize" do
     it "sets the id, prompt_tokens, completion_tokens, and total_tokens" do
       expect(generation_stats.id).to eq("gen-123")
@@ -20,7 +20,7 @@ RSpec.describe Agentic::GenerationStats do
       expect(generation_stats.completion_tokens).to eq(150)
       expect(generation_stats.total_tokens).to eq(200)
     end
-    
+
     it "sets the raw_stats" do
       expect(generation_stats.raw_stats).to eq({
         "usage" => {
@@ -31,7 +31,7 @@ RSpec.describe Agentic::GenerationStats do
       })
     end
   end
-  
+
   describe "#to_h" do
     it "returns a hash representation of the generation statistics" do
       expect(generation_stats.to_h).to eq({
@@ -42,7 +42,7 @@ RSpec.describe Agentic::GenerationStats do
       })
     end
   end
-  
+
   describe ".from_response" do
     let(:response) do
       {
@@ -54,7 +54,7 @@ RSpec.describe Agentic::GenerationStats do
         }
       }
     end
-    
+
     it "creates a GenerationStats from an API response" do
       stats = described_class.from_response(response)
       expect(stats).to be_a(described_class)
@@ -64,7 +64,7 @@ RSpec.describe Agentic::GenerationStats do
       expect(stats.total_tokens).to eq(200)
       expect(stats.raw_stats).to eq(response)
     end
-    
+
     it "handles missing or incomplete data gracefully" do
       incomplete_response = {"id" => "gen-123"}
       stats = described_class.from_response(incomplete_response)
@@ -75,7 +75,7 @@ RSpec.describe Agentic::GenerationStats do
       expect(stats.total_tokens).to eq(0)
       expect(stats.raw_stats).to eq(incomplete_response)
     end
-    
+
     it "handles nil response gracefully" do
       stats = described_class.from_response(nil)
       expect(stats).to be_a(described_class)

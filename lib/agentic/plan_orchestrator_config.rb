@@ -5,19 +5,19 @@ module Agentic
   class PlanOrchestratorConfig
     # @return [Integer] Maximum number of concurrent tasks
     attr_accessor :concurrency_limit
-    
+
     # @return [Hash] Lifecycle hooks for the orchestrator
     attr_accessor :lifecycle_hooks
-    
+
     # @return [Boolean] Whether to continue execution after a task failure
     attr_accessor :continue_on_failure
-    
+
     # @return [RetryConfig] Retry configuration for tasks
     attr_accessor :retry_config
-    
+
     # @return [Boolean] Whether to execute tasks asynchronously
     attr_accessor :async
-    
+
     # Initializes a new plan orchestrator configuration
     # @param concurrency_limit [Integer] Maximum number of concurrent tasks
     # @param lifecycle_hooks [Hash] Lifecycle hooks for the orchestrator
@@ -37,7 +37,7 @@ module Agentic
       @retry_config = retry_config || RetryConfig.new
       @async = async
     end
-    
+
     # Returns a hash of configuration options
     # @return [Hash] The configuration options
     def to_h

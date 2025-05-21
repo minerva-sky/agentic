@@ -1,15 +1,25 @@
 # frozen_string_literal: true
 
+require_relative "execution_plan"
+require_relative "agent_specification"
+require_relative "task_definition"
+require_relative "expected_answer_format"
+
 module Agentic
   # Handles the task planning process for Agentic using LLM
+  #
+  # This class follows separation of concerns by:
+  # 1. Focusing on core planning logic and data generation
+  # 2. Returning structured data (ExecutionPlan) instead of formatted strings
+  # 3. Delegating presentation concerns to the ExecutionPlan class
   class TaskPlanner
     # @return [String] The goal to be accomplished
     attr_reader :goal
 
-    # @return [Array<Hash>] The list of tasks to accomplish the goal
+    # @return [Array<TaskDefinition>] The list of tasks to accomplish the goal
     attr_reader :tasks
 
-    # @return [Hash] The expected answer format
+    # @return [ExpectedAnswerFormat] The expected answer format
     attr_reader :expected_answer
 
     # @return [LlmConfig] The configuration for the LLM
@@ -21,7 +31,11 @@ module Agentic
     def initialize(goal, llm_config = LlmConfig.new)
       @goal = goal
       @tasks = []
-      @expected_answer = {}
+      @expected_answer = ExpectedAnswerFormat.new(
+        format: "Undetermined",
+        sections: [],
+        length: "Undetermined"
+      )
       @llm_config = llm_config
     end
 
@@ -51,7 +65,22 @@ module Agentic
       end
 
       response = llm_request(system_message, user_message, schema)
-      @tasks = response[:content]["tasks"]
+
+      if response.successful?
+        @tasks = response.content["tasks"].map do |task_data|
+          TaskDefinition.new(
+            description: task_data["description"],
+            agent: AgentSpecification.new(
+              name: task_data["agent"]["name"],
+              description: task_data["agent"]["description"],
+              instructions: task_data["agent"]["instructions"]
+            )
+          )
+        end
+      else
+        Agentic.logger.error("Failed to analyze goal: #{response.error&.message || response.refusal}")
+        @tasks = []
+      end
     end
 
     # Determines the expected answer format using LLM
@@ -67,29 +96,35 @@ module Agentic
       end
 
       response = llm_request(system_message, user_message, schema)
-      @expected_answer = response[:content]
+
+      if response.successful?
+        @expected_answer = ExpectedAnswerFormat.new(
+          format: response.content["format"],
+          sections: response.content["sections"],
+          length: response.content["length"]
+        )
+      else
+        Agentic.logger.error("Failed to determine expected answer format: #{response.error&.message || response.refusal}")
+        @expected_answer = ExpectedAnswerFormat.new(
+          format: "Undetermined",
+          sections: [],
+          length: "Undetermined"
+        )
+      end
     end
 
-    # Displays the execution plan
-    # @return [String] The formatted execution plan
-    def display_plan
-      plan = "Execution Plan:\n\n"
-      @tasks.each_with_index do |task, index|
-        plan += "#{index + 1}. #{task["description"]} (Agent: #{task["agent"].inspect})\n"
-      end
-      plan += "\nExpected Answer:\n"
-      plan += "Format: #{@expected_answer["format"]}\n"
-      plan += "Sections: #{@expected_answer["sections"].join(", ")}\n"
-      plan += "Length: #{@expected_answer["length"]}\n"
-      plan
+    # Returns an ExecutionPlan object representing the execution plan
+    # @return [ExecutionPlan] The structured execution plan
+    def execution_plan
+      ExecutionPlan.new(@tasks, @expected_answer)
     end
 
     # Executes the entire planning process
-    # @return [String] The formatted execution plan
+    # @return [ExecutionPlan] The structured execution plan
     def plan
       analyze_goal
       determine_expected_answer
-      display_plan
+      execution_plan
     end
 
     private

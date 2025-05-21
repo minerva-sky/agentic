@@ -133,54 +133,54 @@ RSpec.describe Agentic::Learning::PatternRecognizer do
         # Create a test class that stubs out the specific methods we need to test caching
         test_class = Class.new(Agentic::Learning::PatternRecognizer) do
           attr_accessor :fetch_called, :cache_used
-          
+
           def fetch_agent_history(agent_type)
             @fetch_called = true
             [{id: "mock", success: true, metrics: {tokens: 100}}] * 10  # Return 10 mock records
           end
-          
+
           # Override the analyze_agent_performance method to track cache usage
           def analyze_agent_performance(agent_type, options = {})
             @fetch_called = false  # Reset for this call
-            
+
             cache_key = "agent_perf:#{agent_type}:#{options[:metrics]}"
-            
+
             # First check cache if not forcing refresh
-            if !options[:force_refresh] && @pattern_cache[cache_key] && 
+            if !options[:force_refresh] && @pattern_cache[cache_key] &&
                 @cache_expiry[cache_key] && @cache_expiry[cache_key] > Time.now
               @cache_used = true
               return @pattern_cache[cache_key]
             end
-            
+
             @cache_used = false
-            
+
             # If cache not used, generate results
-            history = fetch_agent_history(agent_type)
+            fetch_agent_history(agent_type)
             result = {success_rate: {overall: 0.8}, performance_trends: {}}
-            
+
             # Cache the result
             @pattern_cache[cache_key] = result
             @cache_expiry[cache_key] = Time.now + 3600
-            
+
             result
           end
         end
-        
+
         # Create an instance of our test class
         test_recognizer = test_class.new(history_store: history_store, min_sample_size: 5)
-        
+
         # First call - no cache yet, should fetch data
-        result1 = test_recognizer.analyze_agent_performance("test_agent")
+        test_recognizer.analyze_agent_performance("test_agent")
         expect(test_recognizer.fetch_called).to be true
         expect(test_recognizer.cache_used).to be false
-        
+
         # Second call - should use cache
-        result2 = test_recognizer.analyze_agent_performance("test_agent")
+        test_recognizer.analyze_agent_performance("test_agent")
         expect(test_recognizer.fetch_called).to be false
         expect(test_recognizer.cache_used).to be true
-        
+
         # Third call with force - should bypass cache
-        result3 = test_recognizer.analyze_agent_performance("test_agent", force_refresh: true)
+        test_recognizer.analyze_agent_performance("test_agent", force_refresh: true)
         expect(test_recognizer.fetch_called).to be true
         expect(test_recognizer.cache_used).to be false
       end
@@ -241,7 +241,7 @@ RSpec.describe Agentic::Learning::PatternRecognizer do
     it "returns a correlation analysis between two properties" do
       # First, make sure history store returns enough records to pass the min_sample_size check
       allow(history_store).to receive(:get_history).and_return(mock_records)
-      
+
       # Directly mock the private methods used for correlation to ensure predictable results
       allow(recognizer).to receive(:extract_property_value) do |record, property|
         if property == :duration_ms
@@ -250,20 +250,20 @@ RSpec.describe Agentic::Learning::PatternRecognizer do
           record.dig(:metrics, "tokens_used")
         end
       end
-      
+
       allow(recognizer).to receive(:extract_metric_value) do |record, metric|
         if metric == :tokens_used
           record.dig(:metrics, "tokens_used")
         end
       end
-      
+
       # Make correlation calculation predictable
       allow(recognizer).to receive(:calculate_correlation).and_return({coefficient: 0.85, significance: 0.01})
-      
+
       result = recognizer.analyze_correlation(:duration_ms, :tokens_used)
 
       expect(result).to include(:correlation_coefficient)
-      expect(result).to include(:statistical_significance) 
+      expect(result).to include(:statistical_significance)
       expect(result).to include(:sample_size)
       expect(result).to include(:significant)
     end
@@ -275,7 +275,7 @@ RSpec.describe Agentic::Learning::PatternRecognizer do
         min_sample_size: 10,  # Higher than our mock data size
         significance_threshold: 0.1
       )
-      
+
       allow(history_store).to receive(:get_history).and_return(mock_records[0..2])
 
       result = test_recognizer.analyze_correlation(:duration_ms, :tokens_used)

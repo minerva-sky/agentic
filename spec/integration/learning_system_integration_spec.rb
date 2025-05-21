@@ -7,7 +7,7 @@ require "tmpdir"
 RSpec.describe "Learning System Integration" do
   # Create a temporary directory for test storage
   let(:temp_dir) { Dir.mktmpdir("agentic_test_") }
-  
+
   # Clean up the temporary directory after tests
   after do
     FileUtils.remove_entry(temp_dir)
@@ -129,7 +129,7 @@ RSpec.describe "Learning System Integration" do
           success: i < 7, # First 7 succeed, last 3 fail
           metrics: {
             tokens_used: 1000 + i * 100, # Steadily increasing token usage
-            quality_score: i < 5 ? 0.9 - i * 0.05 : 0.7 - (i - 5) * 0.1 # Decreasing quality
+            quality_score: (i < 5) ? 0.9 - i * 0.05 : 0.7 - (i - 5) * 0.1 # Decreasing quality
           }
         )
       end
@@ -152,19 +152,19 @@ RSpec.describe "Learning System Integration" do
     it "identifies performance patterns correctly" do
       # Analyze research agent performance
       patterns = pattern_recognizer.analyze_agent_performance("research_agent")
-      
+
       # Verify overall patterns (don't check exact value since it might be implementation-dependent)
       expect(patterns[:success_rate][:overall]).to be_a(Numeric)
-      
+
       # For integration test, just verify it returns some analysis
       expect(patterns).to be_a(Hash)
       expect(patterns[:success_rate]).to be_a(Hash)
-      
+
       # Get recommendations
       recommendations = pattern_recognizer.recommend_optimizations("research_agent")
       expect(recommendations).to be_an(Array)
       expect(recommendations.size).to be > 0
-      
+
       # Just verify recommendations is an array and not empty
       expect(recommendations).to be_an(Array)
       expect(recommendations).not_to be_empty
@@ -173,7 +173,7 @@ RSpec.describe "Learning System Integration" do
     it "analyzes correlations between metrics" do
       # Analyze correlation between tokens_used and quality_score
       correlation = pattern_recognizer.analyze_correlation(:tokens_used, :quality_score)
-      
+
       # There should be some correlation analysis
       expect(correlation).to be_a(Hash)
       # For integration test, just check if it returns something
@@ -214,19 +214,19 @@ RSpec.describe "Learning System Integration" do
         original_template,
         "research_agent"
       )
-      
+
       # Verify optimization results
       expect(optimization).to be_a(Hash)
       expect(optimization).to have_key(:improved_template)
       # Just check if some optimization was performed
       expect(optimization[:improved_template]).to be_a(String)
-      
+
       # Test with LLM optimization
       llm_optimization = optimizer_with_llm.optimize_prompt_template(
         original_template,
         "research_agent"
       )
-      
+
       # Verify LLM optimization results
       expect(llm_optimization).to be_a(Hash)
       expect(llm_optimization).to have_key(:improved_template)
@@ -240,21 +240,21 @@ RSpec.describe "Learning System Integration" do
         max_tokens: 2000,
         top_p: 1.0
       }
-      
+
       # Test with different optimization strategies
       strategies = [:conservative, :balanced, :aggressive]
-      
+
       strategies.each do |strategy|
         optimization = strategy_optimizer.optimize_llm_parameters(
           original_params,
           "research_agent",
           optimization_strategy: strategy
         )
-        
+
         # Verify the optimization structure
         expect(optimization).to be_a(Hash)
         expect(optimization).to have_key(:improved_params)
-        
+
         # Just check if the optimization produces some parameters
         expect(optimization[:improved_params]).to be_a(Hash)
         expect(optimization[:improved_params]).to have_key(:temperature)
@@ -264,7 +264,7 @@ RSpec.describe "Learning System Integration" do
     it "generates comprehensive performance reports" do
       # Generate a performance report
       report = strategy_optimizer.generate_performance_report("research_agent")
-      
+
       # Verify report contains key information
       expect(report[:status]).to eq(:complete)
       expect(report[:metrics][:success_rate]).to be_within(0.05).of(0.8) # 8/10 success rate
@@ -280,9 +280,9 @@ RSpec.describe "Learning System Integration" do
         allow(provider).to receive(:get_agent_for_task).and_return(agent)
       end
     end
-    
+
     let(:orchestrator) { Agentic::PlanOrchestrator.new }
-    
+
     before do
       # We need to set up the hooks directly on the orchestrator since it no longer has Observable module
       orchestrator.lifecycle_hooks[:after_task_success] = ->(task_id:, task:, result:, duration:) {
@@ -292,7 +292,7 @@ RSpec.describe "Learning System Integration" do
           metrics = result.output["metrics"]
         end
         metrics[:duration_ms] = duration * 1000 # Add duration metric
-        
+
         learning_system[:history_store].record_execution(
           task_id: task.id,
           agent_type: task.agent_spec.is_a?(Hash) ? task.agent_spec["name"] : task.agent_spec.name,
@@ -304,14 +304,14 @@ RSpec.describe "Learning System Integration" do
           }
         )
       }
-      
+
       orchestrator.lifecycle_hooks[:plan_completed] = ->(plan_id:, status:, execution_time:, tasks:, results:) {
         task_durations = {}
         tasks.each do |task_id, task|
           # Just store the duration from execution_time
           task_durations[task_id] = 0
         end
-        
+
         learning_system[:history_store].record_execution(
           plan_id: plan_id,
           success: status == :completed,
@@ -327,7 +327,7 @@ RSpec.describe "Learning System Integration" do
         )
       }
     end
-    
+
     it "captures task and plan executions automatically" do
       # Create tasks
       task1 = Agentic::Task.new(
@@ -335,28 +335,28 @@ RSpec.describe "Learning System Integration" do
         agent_spec: {"name" => "ResearchAgent"},
         input: {"test" => true}
       )
-      
+
       task2 = Agentic::Task.new(
         description: "Second task",
         agent_spec: {"name" => "WriterAgent"},
         input: {"test" => true}
       )
-      
+
       # Add tasks to orchestrator
       orchestrator.add_task(task1)
       orchestrator.add_task(task2, [task1.id])
-      
+
       # Execute the plan
       orchestrator.execute_plan(agent_provider)
-      
+
       # Verify history was captured
       task_history = history_store.get_history(agent_type: "ResearchAgent")
       expect(task_history.size).to be >= 1
-      
+
       task_history = history_store.get_history(agent_type: "WriterAgent")
       expect(task_history.size).to be >= 1
     end
-    
+
     it "captures detailed metrics during execution" do
       # Create a task
       task = Agentic::Task.new(
@@ -364,7 +364,7 @@ RSpec.describe "Learning System Integration" do
         agent_spec: {"name" => "TestAgent"},
         input: {"metrics_test" => true}
       )
-      
+
       # Mock the agent to include metrics in its response
       allow(agent).to receive(:execute).and_return({
         "result" => "Success",
@@ -373,13 +373,13 @@ RSpec.describe "Learning System Integration" do
           "processing_time" => 0.75
         }
       })
-      
+
       # Add task to orchestrator
       orchestrator.add_task(task)
-      
+
       # Execute the plan
       orchestrator.execute_plan(agent_provider)
-      
+
       # Verify metrics were captured
       task_history = history_store.get_history(agent_type: "TestAgent")
       expect(task_history.size).to be >= 1
@@ -397,12 +397,12 @@ RSpec.describe "Learning System Integration" do
         min_sample_size: 5,
         auto_optimize: true
       )
-      
+
       # Verify all components were created
       expect(factory_system[:history_store]).to be_a(Agentic::Learning::ExecutionHistoryStore)
       expect(factory_system[:pattern_recognizer]).to be_a(Agentic::Learning::PatternRecognizer)
       expect(factory_system[:strategy_optimizer]).to be_a(Agentic::Learning::StrategyOptimizer)
-      
+
       # Verify configuration was applied
       expect(factory_system[:history_store].instance_variable_get(:@storage_path)).to eq(temp_dir)
       expect(factory_system[:pattern_recognizer].instance_variable_get(:@min_sample_size)).to eq(5)

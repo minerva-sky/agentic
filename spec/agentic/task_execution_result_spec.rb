@@ -5,7 +5,7 @@ require "spec_helper"
 RSpec.describe Agentic::TaskExecutionResult do
   let(:output) { {key: "value"} }
   let(:failure) { Agentic::TaskFailure.new(message: "Something went wrong", type: "ErrorType") }
-  
+
   describe "#initialize" do
     it "initializes with status, output, and failure" do
       result = described_class.new(status: :completed, output: output, failure: nil)
@@ -14,7 +14,7 @@ RSpec.describe Agentic::TaskExecutionResult do
       expect(result.failure).to be_nil
     end
   end
-  
+
   describe ".success" do
     it "creates a successful result" do
       result = described_class.success(output)
@@ -26,7 +26,7 @@ RSpec.describe Agentic::TaskExecutionResult do
       expect(result.canceled?).to be false
     end
   end
-  
+
   describe ".failure" do
     it "creates a failed result" do
       result = described_class.failure(failure)
@@ -38,7 +38,7 @@ RSpec.describe Agentic::TaskExecutionResult do
       expect(result.canceled?).to be false
     end
   end
-  
+
   describe ".canceled" do
     it "creates a canceled result" do
       result = described_class.canceled
@@ -50,18 +50,18 @@ RSpec.describe Agentic::TaskExecutionResult do
       expect(result.canceled?).to be true
     end
   end
-  
+
   describe ".from_hash" do
     let(:hash) { {status: :completed, output: output, failure: nil} }
     let(:failure_hash) { {status: :failed, output: nil, failure: failure.to_h} }
-    
+
     it "creates a result from a success hash" do
       result = described_class.from_hash(hash)
       expect(result.status).to eq(:completed)
       expect(result.output).to eq(output)
       expect(result.failure).to be_nil
     end
-    
+
     it "creates a result from a failure hash" do
       result = described_class.from_hash(failure_hash)
       expect(result.status).to eq(:failed)
@@ -71,7 +71,7 @@ RSpec.describe Agentic::TaskExecutionResult do
       expect(result.failure.type).to eq("ErrorType")
     end
   end
-  
+
   describe "#to_h" do
     it "returns a hash for a successful result" do
       result = described_class.success(output)
@@ -81,7 +81,7 @@ RSpec.describe Agentic::TaskExecutionResult do
         failure: nil
       })
     end
-    
+
     it "returns a hash for a failed result" do
       result = described_class.failure(failure)
       expect(result.to_h).to eq({

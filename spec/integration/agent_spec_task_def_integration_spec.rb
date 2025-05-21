@@ -20,13 +20,13 @@ RSpec.describe "AgentSpecification and TaskDefinition Integration" do
         "name" => prompt.match(/\[System Instructions\]\s*(.+?)\s*\[Task Description\]/m)[1].strip,
         "instructions" => prompt.match(/\[System Instructions\]\s*(.+?)\s*\[Task Description\]/m)[1].strip
       }
-      
+
       @execution_history << {
         spec: @last_spec,
         prompt: prompt
       }
-      
-      {"result" => "Executed with #{@last_spec['name']}"}
+
+      {"result" => "Executed with #{@last_spec["name"]}"}
     end
   end
 
@@ -121,7 +121,7 @@ RSpec.describe "AgentSpecification and TaskDefinition Integration" do
       )
 
       analyst_spec = Agentic::AgentSpecification.new(
-        name: "AnalystAgent", 
+        name: "AnalystAgent",
         description: "An agent specialized in analysis",
         instructions: "Analyze the provided data and extract insights"
       )
@@ -209,7 +209,7 @@ RSpec.describe "AgentSpecification and TaskDefinition Integration" do
       # The default agent provider creates an Agent instance
       # but we need to mock it for this test
       expect(agent).to be_a(Agentic::Agent)
-      
+
       # Since Agent might have different interface in the actual implementation,
       # let's just verify the agent was created
     end
@@ -233,7 +233,7 @@ RSpec.describe "AgentSpecification and TaskDefinition Integration" do
       expect(agent_config.tools).to eq(["search", "analyze"])
       expect(agent_config.llm_config.model).to eq("gpt-4o")
       expect(agent_config.llm_config.temperature).to eq(0.2)
-      
+
       # Verify to_h converts to a hash
       config_hash = agent_config.to_h
       expect(config_hash).to be_a(Hash)

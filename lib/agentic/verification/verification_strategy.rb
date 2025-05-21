@@ -6,13 +6,13 @@ module Agentic
     class VerificationStrategy
       # @return [Hash] Configuration options for the strategy
       attr_reader :config
-      
+
       # Initializes a new VerificationStrategy
       # @param config [Hash] Configuration options for the strategy
       def initialize(config = {})
         @config = config
       end
-      
+
       # Verifies a task result
       # @param task [Task] The task to verify
       # @param result [TaskResult] The result to verify

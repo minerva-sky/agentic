@@ -31,7 +31,7 @@ module Agentic
     def initialize(description:, agent_spec:, input: {})
       @id = SecureRandom.uuid
       @description = description
-      
+
       # Convert agent_spec to AgentSpecification if it's a hash
       @agent_spec = if agent_spec.is_a?(Hash)
         AgentSpecification.new(
@@ -42,14 +42,14 @@ module Agentic
       else
         agent_spec
       end
-      
+
       @input = input
       @output = nil
       @failure = nil
       @status = :pending
       @ready_to_execute = nil
     end
-    
+
     # Creates a task from a TaskDefinition
     # @param definition [TaskDefinition] The task definition
     # @param input [Hash] Input data for the task

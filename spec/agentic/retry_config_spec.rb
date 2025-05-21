@@ -9,12 +9,12 @@ RSpec.describe Agentic::RetryConfig do
       max_retries: 5,
       retryable_errors: [Agentic::Errors::LlmTimeoutError],
       backoff_strategy: :linear,
-      backoff_options: { base_delay: 2.0, jitter_factor: 0.3 },
+      backoff_options: {base_delay: 2.0, jitter_factor: 0.3},
       before_retry: lambda { |attempt:, **_| puts "Retrying (#{attempt})" },
       after_retry: lambda { |attempt:, **_| puts "Retried (#{attempt})" }
     )
   end
-  
+
   describe "#initialize" do
     it "sets default values" do
       expect(default_config.max_retries).to eq(3)
@@ -28,7 +28,7 @@ RSpec.describe Agentic::RetryConfig do
       expect(default_config.before_retry).to be_nil
       expect(default_config.after_retry).to be_nil
     end
-    
+
     it "allows custom values" do
       expect(custom_config.max_retries).to eq(5)
       expect(custom_config.retryable_errors).to eq([Agentic::Errors::LlmTimeoutError])
@@ -38,14 +38,14 @@ RSpec.describe Agentic::RetryConfig do
       expect(custom_config.before_retry).to be_a(Proc)
       expect(custom_config.after_retry).to be_a(Proc)
     end
-    
+
     it "merges backoff options with defaults" do
-      config = described_class.new(backoff_options: { base_delay: 2.0 })
+      config = described_class.new(backoff_options: {base_delay: 2.0})
       expect(config.backoff_options[:base_delay]).to eq(2.0)
       expect(config.backoff_options[:jitter_factor]).to eq(0.25)
     end
   end
-  
+
   describe "#to_handler" do
     it "creates a RetryHandler with the configuration" do
       handler = custom_config.to_handler
