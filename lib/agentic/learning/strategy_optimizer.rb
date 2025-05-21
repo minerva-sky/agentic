@@ -288,27 +288,27 @@ module Agentic
         # Generate optimization prompt
         optimization_prompt = <<~PROMPT
           I need to optimize this prompt template for a #{agent_type}:
-          
+
           """
           #{original_template}
           """
-          
+
           Performance data:
           - Success rate: #{(context[:success_rate] * 100).round(1)}%
           - Trend: #{context[:trend]}
-          
+
           Common failure patterns:
           #{context[:failure_patterns].map { |p| "- #{p[:pattern]} (#{p[:count]} occurrences)" }.join("\n")}
-          
+
           Recommendations:
           #{recommendations.map { |r| "- #{r[:message]}" }.join("\n")}
-          
+
           Please provide an improved version of this prompt template that addresses these issues.
           Format your response as:
-          
+
           IMPROVED_TEMPLATE:
           [Your improved template here]
-          
+
           EXPLANATION:
           [Explanation of changes and how they address the issues]
         PROMPT
@@ -344,26 +344,24 @@ module Agentic
         changes = []
 
         # Check for common failure patterns and apply heuristic improvements
-        if performance[:failure_patterns]
-          performance[:failure_patterns].each do |pattern|
-            case pattern[:pattern]
-            when /timeout/i, /too slow/i
-              if !improved_template.include?("time limit") && !improved_template.include?("time constraint")
-                improved_template = improved_template.sub(/\A/, "You must complete this task efficiently within the time limit. ")
-                changes << "Added time constraint reminder"
-              end
+        Array(performance[:failure_patterns]).each do |pattern|
+          case pattern[:pattern]
+          when /timeout/i, /too slow/i
+            if !improved_template.include?("time limit") && !improved_template.include?("time constraint")
+              improved_template = improved_template.sub(/\A/, "You must complete this task efficiently within the time limit. ")
+              changes << "Added time constraint reminder"
+            end
 
-            when /unclear instructions/i, /ambiguous/i
-              if !improved_template.include?("clear and specific")
-                improved_template = improved_template.sub(/\A/, "Be clear and specific in your response. ")
-                changes << "Added clarity instruction"
-              end
+          when /unclear instructions/i, /ambiguous/i
+            if !improved_template.include?("clear and specific")
+              improved_template = improved_template.sub(/\A/, "Be clear and specific in your response. ")
+              changes << "Added clarity instruction"
+            end
 
-            when /missing information/i, /incomplete/i
-              if !improved_template.include?("comprehensive") && !improved_template.include?("complete")
-                improved_template = improved_template.sub(/\A/, "Provide a comprehensive and complete response. ")
-                changes << "Added comprehensiveness instruction"
-              end
+          when /missing information/i, /incomplete/i
+            if !improved_template.include?("comprehensive") && !improved_template.include?("complete")
+              improved_template = improved_template.sub(/\A/, "Provide a comprehensive and complete response. ")
+              changes << "Added comprehensiveness instruction"
             end
           end
         end
@@ -497,10 +495,8 @@ module Agentic
             task_durations[task_id] << duration
           end
 
-          if execution[:context][:task_dependencies]
-            execution[:context][:task_dependencies].each do |task_id, deps|
-              dependencies[task_id] = deps
-            end
+          Array(execution[:context][:task_dependencies]).each do |task_id, deps|
+            dependencies[task_id] = deps
           end
         end
 
