@@ -20,30 +20,38 @@ $ gem install agentic
 
 ### Command-Line Interface
 
-Agentic comes with a command-line interface for easy interaction:
+Agentic comes with a rich command-line interface featuring colored output, spinners for long-running tasks, and progress tracking:
 
 ```bash
 # Display version information
 $ agentic version
 
-# Initialize configuration
-$ agentic config init
+# Configuration Management
+$ agentic config init                               # Initialize configuration
+$ agentic config init --global                      # Initialize global configuration
+$ agentic config list                               # List all configuration settings
+$ agentic config get model                          # Get a specific configuration value
+$ agentic config set api_token=your_openai_api_key  # Set your OpenAI API token
+$ agentic config set model=gpt-4o-mini             # Configure the default model
 
-# Set your OpenAI API token
-$ agentic config set api_token=your_openai_api_key
+# Plan Creation and Execution
+$ agentic plan "Generate a market research report on AI trends"          # Create a plan
+$ agentic plan "Write a blog post about Ruby" --save plan.json           # Save plan to file
+$ agentic plan "Research quantum computing" --output json                # Output in JSON format
+$ agentic plan "Analyze market trends" --model gpt-4o                    # Use a specific model
 
-# Create a plan for a goal
-$ agentic plan "Generate a market research report on AI trends"
+$ agentic execute --plan plan.json                  # Execute a saved plan
+$ agentic execute --async                           # Execute tasks asynchronously
+$ agentic execute --max-concurrency 5               # Limit concurrent tasks
 
-# Save the plan to a file
-$ agentic plan "Write a blog post about Ruby" --save plan.json
-
-# Execute a plan
-$ agentic execute --plan plan.json
-
-# List available agents
-$ agentic agent list
+# Agent Management
+$ agentic agent list                                # List available agents
+$ agentic agent create "ResearchAgent" \            # Create a new agent
+    --role="Research Assistant" \
+    --instructions="Conduct thorough research on the given topic"
 ```
+
+The CLI provides real-time feedback with spinners for long-running operations, colored status updates, and detailed progress tracking. It supports both global and project-specific configuration, allowing you to customize the behavior for different projects.
 
 ### Programmatic API
 

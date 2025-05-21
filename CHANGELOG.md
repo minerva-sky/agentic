@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### Added
+- CLI and User Interface enhancements with rich formatting and feedback
+- Real-time task progress tracking with spinners and progress indicators
+- Configuration management with global and project-specific settings
+- Agent management commands for listing and creating agents
+- Improved plan visualization and execution monitoring
 - Agent Specification and Task Definition with structured representations
 - Execution Plan with clear separation of data and presentation
 - Expected Answer Format for detailed output requirements

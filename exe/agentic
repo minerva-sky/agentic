@@ -1,3 +1,8 @@
 #!/usr/bin/env ruby
+# frozen_string_literal: true
 
 require "agentic"
+require "fileutils"
+
+# Execute the CLI
+Agentic::CLI.start(ARGV)
