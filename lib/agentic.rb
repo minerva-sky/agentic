@@ -8,9 +8,13 @@ loader.inflector.inflect(
   "cli" => "CLI"
 )
 
+# Configure paths that need to be eager loaded or excluded from Zeitwerk
+loader.do_not_eager_load("#{__dir__}/agentic/cli")
+
 loader.setup
 
-# Do not eager load, require components manually to avoid zeitwerk issues with Thor
+# Explicitly require Thor-related components to avoid Zeitwerk issues with Thor
+# Thor requires subcommands to be loaded before they're referenced
 require_relative "agentic/ui"
 require_relative "agentic/default_agent_provider"
 require_relative "agentic/cli"

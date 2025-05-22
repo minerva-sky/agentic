@@ -145,3 +145,11 @@ You must keep your answers very short, concise, simple and informative.
     - Version-to-version comparisons are documented in `.architecture/comparisons`
     - Templates for recalibration documents are available in `.architecture/templates`
     - Start a recalibration by requesting "Start architecture recalibration" or similar phrasing
+
+## Local Development Guidelines
+
+- Always use the local ./exe/agentic executable to run agentic commands. There's no need to install the gem with `bundle exec rake install` (that's a release process).
+
+## Workspace Guidelines
+
+- Always assume you are in the current working agentic project directory. When running scripts, don't change directories.

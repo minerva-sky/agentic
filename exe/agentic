@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require "agentic"
+require_relative "../lib/agentic"
 require "fileutils"
 
 # Execute the CLI
