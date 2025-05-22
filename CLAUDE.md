@@ -105,13 +105,13 @@ You must keep your answers very short, concise, simple and informative.
 7. **Ruby Style**: The project follows StandardRB conventions. Ensure your code passes `rake standard`.
 8. **Documentation**: Document new classes and methods using YARD-style comments.
 9. When planning, imagine you are a Software Architect thinking about how to solve a solution abstractly in an object-oriented way; and keep track of cohesive and concise notes in their own .md file(s).
-10. **Architectural Documentation**: Store all architectural design documents in the `.architecture-review` directory, keeping implementation details separate from high-level design.
+10. **Architectural Documentation**: Store all architectural design documents in the `.architecture` directory, with decisions in `.architecture/decisions` and reviews in `.architecture/reviews`, keeping implementation details separate from high-level design. Review files should be named using the version number format (e.g., `0-2-0.md`).
 11. **Implementation Strategy**: 
     - Implement features in small, concise, and minimally implemented commitable chunks
     - Follow each implementation with a refactor-in-place
     - Ensure each commit is intentional and focused on a single purpose
     - Consider next steps and maintain forward-thinking design
-12. **Architecture References**: Always reference `ArchitectureConsiderations.md` when making architectural decisions and update it when design changes occur.
+12. **Architecture References**: Always reference `.architecture/decisions/ArchitectureConsiderations.md` when making architectural decisions and update it when design changes occur.
 13. **Architectural Evolution**:
     - Apply rigor and scrutiny to all architectural modifications
     - Consider additions as augmenting rather than replacing existing elements
@@ -120,3 +120,28 @@ You must keep your answers very short, concise, simple and informative.
     - Document rationale for changes in the appropriate architecture review document
     - Maintain backward compatibility with existing architectural principles
     - Distinguish between implementation details and architectural principles
+
+14. **Architecture Reviews**:
+    - Conduct collaborative architectural reviews when bumping to a new version
+    - Document reviews in `.architecture/reviews` using version number format (e.g., `0-2-0.md`)
+    - Reviews provide multi-perspective analysis through specialized architecture members
+    - Architecture members are defined in `.architecture/members.yml` with personas, specialties, and domains
+    - The review process includes:
+      - Individual member review phase (each member reviews independently)
+      - Collaborative discussion phase (members confer on findings)
+      - Final consolidated report (balanced perspective across all domains)
+    - Include findings, recommendations, trade-offs analysis, and improvement suggestions
+    - Start a review by requesting "Start architecture review" or similar phrasing
+
+15. **Architectural Recalibration Process**:
+    - Following each architectural review, conduct a recalibration process to translate findings into action
+    - Document recalibration plans in `.architecture/recalibration` using version number format (e.g., `0-2-0.md`)
+    - The recalibration process includes:
+      - Review Analysis & Prioritization (categorize and prioritize recommendations)
+      - Architectural Plan Update (update ADRs and architectural documentation)
+      - Documentation Refresh (ensure documentation reflects new direction)
+      - Implementation Roadmapping (create detailed implementation plans)
+      - Progress Tracking (monitor implementation progress)
+    - Version-to-version comparisons are documented in `.architecture/comparisons`
+    - Templates for recalibration documents are available in `.architecture/templates`
+    - Start a recalibration by requesting "Start architecture recalibration" or similar phrasing
