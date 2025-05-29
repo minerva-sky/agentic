@@ -28,7 +28,7 @@ module Agentic
       @retry_handler = if retry_config.is_a?(RetryConfig)
         retry_config.to_handler
       else
-        RetryHandler.new(retry_config)
+        RetryHandler.new(**retry_config)
       end
     end
 

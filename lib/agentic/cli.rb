@@ -459,14 +459,14 @@ module Agentic
     def format_plan(execution_plan)
       tasks_text = "Tasks:\n"
       execution_plan.tasks.each_with_index do |task, index|
-        tasks_text += "  #{UI.colorize((index + 1).to_s, :blue)} #{task["description"]}\n"
-        tasks_text += "    Agent: #{UI.colorize(task["agent"]["name"], :magenta)}\n"
+        tasks_text += "  #{UI.colorize((index + 1).to_s, :blue)} #{task.description}\n"
+        tasks_text += "    Agent: #{UI.colorize(task.agent.name, :magenta)}\n"
       end
 
       expected_answer_text = "Expected Answer:\n"
-      expected_answer_text += "  Format: #{UI.colorize(execution_plan.expected_answer["format"], :yellow)}\n"
-      expected_answer_text += "  Sections: #{execution_plan.expected_answer["sections"].map { |s| UI.colorize(s, :yellow) }.join(", ")}\n"
-      expected_answer_text += "  Length: #{UI.colorize(execution_plan.expected_answer["length"], :yellow)}\n"
+      expected_answer_text += "  Format: #{UI.colorize(execution_plan.expected_answer.format, :yellow)}\n"
+      expected_answer_text += "  Sections: #{execution_plan.expected_answer.sections.map { |s| UI.colorize(s, :yellow) }.join(", ")}\n"
+      expected_answer_text += "  Length: #{UI.colorize(execution_plan.expected_answer.length, :yellow)}\n"
 
       plan_text = "#{tasks_text}\n#{expected_answer_text}"
 
