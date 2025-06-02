@@ -1,0 +1,238 @@
+---
+http_interactions:
+- request:
+    method: post
+    uri: https://api.openai.com/v1/chat/completions
+    body:
+      encoding: UTF-8
+      string: '{"messages":[{"role":"system","content":"You are an expert project
+        planner. Your task is to break down complex goals into actionable tasks."},{"role":"user","content":"Goal:
+        Create a Ruby coding agent\n\nBreak this goal down into a series of tasks.
+        For each task:\n1. Specify the type of agent best suited to complete it.\n2.
+        Include a brief description of the agent\n3. Include a set of instructions
+        that the agent can follow to perform this task."}],"model":"gpt-4o-2024-08-06","temperature":0.7,"top_p":1.0,"frequency_penalty":0.0,"presence_penalty":0.0,"response_format":{"type":"json_schema","json_schema":{"name":"tasks","description":"Schema
+        for the structured response","schema":{"type":"object","properties":{"tasks":{"type":"array","items":{"type":"object","properties":{"description":{"type":"string"},"agent":{"type":"object","properties":{"name":{"type":"string"},"description":{"type":"string"},"instructions":{"type":"string"}},"required":["name","description","instructions"]}},"required":["description","agent"]}}},"required":["tasks"],"additionalProperties":false,"strict":true}}}}'
+    headers:
+      Content-Type:
+      - application/json
+      Authorization:
+      - Bearer <OPENAI_ACCESS_TOKEN>
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Ruby
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Date:
+      - Thu, 29 May 2025 02:35:39 GMT
+      Content-Type:
+      - application/json
+      Transfer-Encoding:
+      - chunked
+      Connection:
+      - keep-alive
+      Access-Control-Expose-Headers:
+      - X-Request-ID
+      Openai-Organization:
+      - user-dup9zcwkwpbrgftk7mms7ssr
+      Openai-Processing-Ms:
+      - '10541'
+      Openai-Version:
+      - '2020-10-01'
+      X-Envoy-Upstream-Service-Time:
+      - '10544'
+      X-Ratelimit-Limit-Requests:
+      - '5000'
+      X-Ratelimit-Limit-Tokens:
+      - '450000'
+      X-Ratelimit-Remaining-Requests:
+      - '4999'
+      X-Ratelimit-Remaining-Tokens:
+      - '449902'
+      X-Ratelimit-Reset-Requests:
+      - 12ms
+      X-Ratelimit-Reset-Tokens:
+      - 12ms
+      X-Request-Id:
+      - req_d8feafdd6f9d403ccff0c0a4e0c210ab
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      Cf-Cache-Status:
+      - DYNAMIC
+      Set-Cookie:
+      - __cf_bm=R61lgeJ7rFwgGUiF4R5ylBFljDN1BVRGsfcxoPpKo3s-1748486139-1.0.1.1-U_f9yK6pAqDANgfZpFrtG9_ifwzUn.R6ijh0BRHNoesXs5.GNd9YETZx6_4RLWO1NEhoOoU8wGcepeP6.1BqKRMv5S_fKWnABH7axe2sUqY;
+        path=/; expires=Thu, 29-May-25 03:05:39 GMT; domain=.api.openai.com; HttpOnly;
+        Secure; SameSite=None
+      - _cfuvid=bbiUDAq3IGRxE8FF34i_ZLu5HXjNqxXDVUxKFmNvBSc-1748486139833-0.0.1.1-604800000;
+        path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
+      X-Content-Type-Options:
+      - nosniff
+      Server:
+      - cloudflare
+      Cf-Ray:
+      - 947299410ed48c09-EWR
+      Alt-Svc:
+      - h3=":443"; ma=86400
+    body:
+      encoding: ASCII-8BIT
+      string: |
+        {
+          "id": "chatcmpl-BcNP7mURi7ElZSnerDMTwSSHcWO0H",
+          "object": "chat.completion",
+          "created": 1748486129,
+          "model": "gpt-4o-2024-08-06",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "{\"tasks\":[{\"description\":\"Define the requirements and scope for the Ruby coding agent.\",\"agent\":{\"name\":\"Project Manager\",\"description\":\"An agent that specializes in project planning and management to define project scope and requirements.\",\"instructions\":\"1. Gather input from stakeholders on what the Ruby coding agent should accomplish.\\n2. Define the key functionalities and features needed for the agent.\\n3. Document the requirements clearly, including inputs, outputs, and any constraints.\\n4. Establish success criteria for the agent's performance.\"}},{\"description\":\"Design the architecture for the Ruby coding agent.\",\"agent\":{\"name\":\"Software Architect\",\"description\":\"An agent that designs software systems and outlines the architecture for the solution.\",\"instructions\":\"1. Review the defined requirements and scope.\\n2. Determine the best architectural patterns and designs suited for the agent.\\n3. Create a high-level design diagram, including modules and components required.\\n4. Ensure scalability, maintainability, and performance considerations are included in the design.\"}},{\"description\":\"Develop the core functionality of the Ruby coding agent.\",\"agent\":{\"name\":\"Ruby Developer\",\"description\":\"An agent skilled in Ruby programming to implement the core features of the agent.\",\"instructions\":\"1. Set up the development environment for Ruby.\\n2. Implement the main features and functionalities as per the design specifications.\\n3. Write clean, efficient, and well-documented code.\\n4. Perform unit testing to ensure the code works as expected.\"}},{\"description\":\"Integrate the components and ensure interoperability of the Ruby coding agent.\",\"agent\":{\"name\":\"Integration Specialist\",\"description\":\"An agent that focuses on integrating different software components to work together effectively.\",\"instructions\":\"1. Review the architecture and design documents.\\n2. Integrate the various modules and components developed by the Ruby Developer.\\n3. Test the integrated system for bugs and interoperability issues.\\n4. Document the integration process and any issues faced.\"}},{\"description\":\"Test the Ruby coding agent for functionality, performance, and security.\",\"agent\":{\"name\":\"Quality Assurance Tester\",\"description\":\"An agent that specializes in testing software to ensure it meets quality standards.\",\"instructions\":\"1. Develop a comprehensive testing plan covering all functionalities and edge cases.\\n2. Conduct functional, performance, and security testing on the agent.\\n3. Report any bugs or issues found during testing.\\n4. Verify that all bugs are fixed and the agent performs as expected.\"}},{\"description\":\"Deploy the Ruby coding agent to the production environment.\",\"agent\":{\"name\":\"DevOps Engineer\",\"description\":\"An agent skilled in deployment and operations to handle the release and maintenance of software.\",\"instructions\":\"1. Prepare the production environment for deployment.\\n2. Deploy the Ruby coding agent following best DevOps practices.\\n3. Monitor the deployment for any issues and ensure smooth operation.\\n4. Document the deployment process and any changes made.\"}},{\"description\":\"Provide documentation and training for users of the Ruby coding agent.\",\"agent\":{\"name\":\"Technical Writer\",\"description\":\"An agent that creates clear and concise documentation for technical products.\",\"instructions\":\"1. Develop user manuals and guides for the Ruby coding agent.\\n2. Create training materials and tutorials for end-users.\\n3. Conduct training sessions or workshops if needed.\\n4. Gather feedback from users to improve documentation.\"}}]}",
+                "refusal": null,
+                "annotations": []
+              },
+              "logprobs": null,
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 172,
+            "completion_tokens": 662,
+            "total_tokens": 834,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "audio_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "audio_tokens": 0,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0
+            }
+          },
+          "service_tier": "default",
+          "system_fingerprint": "fp_76544d79cb"
+        }
+  recorded_at: Thu, 29 May 2025 02:35:39 GMT
+- request:
+    method: post
+    uri: https://api.openai.com/v1/chat/completions
+    body:
+      encoding: UTF-8
+      string: '{"messages":[{"role":"system","content":"You are an expert in report
+        structuring and formatting. Your task is to determine the best format for
+        a given report goal."},{"role":"user","content":"Goal: Create a Ruby coding
+        agent\n\nDetermine the optimal format, sections, and length for a report addressing
+        this goal."}],"model":"gpt-4o-2024-08-06","temperature":0.7,"top_p":1.0,"frequency_penalty":0.0,"presence_penalty":0.0,"response_format":{"type":"json_schema","json_schema":{"name":"answer_format","description":"Schema
+        for the structured response","schema":{"type":"object","properties":{"format":{"type":"string"},"sections":{"type":"array","items":{"type":"string"}},"length":{"type":"string"}},"required":["format","sections","length"],"additionalProperties":false,"strict":true}}}}'
+    headers:
+      Content-Type:
+      - application/json
+      Authorization:
+      - Bearer <OPENAI_ACCESS_TOKEN>
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Ruby
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Date:
+      - Thu, 29 May 2025 02:35:41 GMT
+      Content-Type:
+      - application/json
+      Transfer-Encoding:
+      - chunked
+      Connection:
+      - keep-alive
+      Access-Control-Expose-Headers:
+      - X-Request-ID
+      Openai-Organization:
+      - user-dup9zcwkwpbrgftk7mms7ssr
+      Openai-Processing-Ms:
+      - '1500'
+      Openai-Version:
+      - '2020-10-01'
+      X-Envoy-Upstream-Service-Time:
+      - '1502'
+      X-Ratelimit-Limit-Requests:
+      - '5000'
+      X-Ratelimit-Limit-Tokens:
+      - '450000'
+      X-Ratelimit-Remaining-Requests:
+      - '4999'
+      X-Ratelimit-Remaining-Tokens:
+      - '449936'
+      X-Ratelimit-Reset-Requests:
+      - 12ms
+      X-Ratelimit-Reset-Tokens:
+      - 8ms
+      X-Request-Id:
+      - req_02bb1049f9f825a00754575652357170
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      Cf-Cache-Status:
+      - DYNAMIC
+      Set-Cookie:
+      - __cf_bm=OMNLj7Bs3mb6k5H4q2TthU6i9_zaB6OGlCDkPiNdc.o-1748486141-1.0.1.1-Sgfx0fZfOzUCpfTBORIjl91dsFGAe7IUWvdkWroztmTvnXcYoffq0mZL2kiVaZvaGBkOhsf0gB12bg1J4EJ2NGXbTyMTNAysUHDnN9ZbDh0;
+        path=/; expires=Thu, 29-May-25 03:05:41 GMT; domain=.api.openai.com; HttpOnly;
+        Secure; SameSite=None
+      - _cfuvid=PsAOqwghcvIlMJYSSy74YX6_GIOnMlkYo0UOjg9KuYY-1748486141861-0.0.1.1-604800000;
+        path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
+      X-Content-Type-Options:
+      - nosniff
+      Server:
+      - cloudflare
+      Cf-Ray:
+      - 94729986cab0b295-EWR
+      Alt-Svc:
+      - h3=":443"; ma=86400
+    body:
+      encoding: ASCII-8BIT
+      string: |
+        {
+          "id": "chatcmpl-BcNPIdxnZOJn2T3cnmKicJAFTJ5Sf",
+          "object": "chat.completion",
+          "created": 1748486140,
+          "model": "gpt-4o-2024-08-06",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "{\"sections\":[\"Executive Summary\",\"Introduction\",\"Project Objectives\",\"Technical Requirements\",\"Development Environment\",\"Design and Architecture\",\"Implementation Plan\",\"Testing and Validation\",\"Deployment Strategy\",\"Maintenance and Updates\",\"Conclusion\",\"Appendices\"],\"length\":\"15-20 pages\"}",
+                "refusal": null,
+                "annotations": []
+              },
+              "logprobs": null,
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 110,
+            "completion_tokens": 48,
+            "total_tokens": 158,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "audio_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "audio_tokens": 0,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0
+            }
+          },
+          "service_tier": "default",
+          "system_fingerprint": "fp_07871e2ad8"
+        }
+  recorded_at: Thu, 29 May 2025 02:35:41 GMT
+recorded_with: VCR 6.3.1

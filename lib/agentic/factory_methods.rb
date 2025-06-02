@@ -21,7 +21,15 @@ module Agentic
 
       def configure(agent)
         configurable_attributes.each do |attr|
-          agent.public_send(:"#{attr}=", nil) unless agent.public_send(attr)
+          unless agent.public_send(attr)
+            default_value = case attr
+            when :tools
+              Set.new
+            when :capabilities
+              {}
+            end
+            agent.public_send(:"#{attr}=", default_value)
+          end
         end
       end
 

@@ -3,6 +3,7 @@
 require "thor"
 require "json"
 require "yaml"
+require_relative "cli/capabilities"
 
 module Agentic
   # Command Line Interface for Agentic
@@ -39,10 +40,10 @@ module Agentic
     desc "plan GOAL", "Create an execution plan for a goal"
     long_desc <<-LONGDESC
       Creates an execution plan for the given goal using the TaskPlanner.
-      
+
       Example:
         $ agentic plan "Generate a market research report on AI trends"
-        
+
       You can also save the plan to a file:
         $ agentic plan "Generate a market research report" --save plan.json
     LONGDESC
@@ -75,10 +76,10 @@ module Agentic
     desc "execute", "Execute a plan"
     long_desc <<-LONGDESC
       Executes a plan created by the 'plan' command.
-      
+
       You can provide a plan file:
         $ agentic execute --plan plan.json
-        
+
       Or pipe in a plan:
         $ cat plan.json | agentic execute --from-stdin
     LONGDESC
@@ -135,12 +136,60 @@ module Agentic
     # Agent commands
     class AgentCommands < Thor
       desc "list", "List available agents"
+      option :detailed, type: :boolean, aliases: "-d",
+        desc: "Show detailed information"
       def list
+        # Initialize agent assembly system
+        Agentic.initialize_agent_assembly
+
+        # Get stored agents
+        agents = Agentic.agent_store.all
+
+        if agents.empty?
+          puts UI.box(
+            "Available Agents",
+            "No agents stored yet.\n\n" \
+            "You can create a new agent with:\n" \
+            "  #{UI.colorize("agentic agent create NAME --role=ROLE --purpose=PURPOSE", :blue)}",
+            padding: [1, 2, 1, 2],
+            style: {border: {fg: :blue}}
+          )
+          return
+        end
+
+        output = ""
+        agents.each do |agent|
+          output += "#{UI.colorize(agent[:name], :blue)} (#{agent[:id]}):\n"
+          output += "  Stored: #{agent[:timestamp]}\n"
+
+          if options[:detailed]
+            output += "  Role: #{agent[:agent][:role]}\n" if agent[:agent] && agent[:agent][:role]
+            output += "  Purpose: #{agent[:agent][:purpose]}\n" if agent[:agent] && agent[:agent][:purpose]
+
+            if agent[:capabilities] && !agent[:capabilities].empty?
+              output += "  Capabilities:\n"
+              agent[:capabilities].each do |capability|
+                output += "    - #{capability[:name]} (v#{capability[:version]})\n"
+              end
+            end
+
+            if agent[:metadata] && !agent[:metadata].empty?
+              output += "  Metadata:\n"
+              agent[:metadata].each do |key, value|
+                output += "    - #{key}: #{value}\n" unless key.to_s == "requirements"
+              end
+            end
+          else
+            capabilities_count = agent[:capabilities] ? agent[:capabilities].size : 0
+            output += "  Capabilities: #{capabilities_count}\n"
+          end
+
+          output += "\n"
+        end
+
         puts UI.box(
           "Available Agents",
-          "No custom agents registered yet.\n\n" \
-          "You can create a new agent with:\n" \
-          "  #{UI.colorize("agentic agent create NAME --role=ROLE --instructions=INSTRUCTIONS", :blue)}",
+          output,
           padding: [1, 2, 1, 2],
           style: {border: {fg: :blue}}
         )
@@ -148,22 +197,45 @@ module Agentic
 
       desc "create NAME", "Create a new agent"
       option :role, type: :string, required: true, desc: "Role of the agent"
-      option :instructions, type: :string, required: true, desc: "Instructions for the agent"
+      option :purpose, type: :string, required: true, desc: "Purpose of the agent"
+      option :backstory, type: :string, desc: "Backstory for the agent"
+      option :capabilities, type: :array, desc: "Capabilities to add to the agent"
       def create(name)
-        role = options[:role]
-        instructions = options[:instructions]
+        # Initialize agent assembly system
+        Agentic.initialize_agent_assembly
 
         # Create spinner for agent creation
-        UI.with_spinner("Creating agent: #{name}") do
-          # In a future implementation, this would create and register an agent
-          sleep(0.5) # Simulate some work
+        agent = UI.with_spinner("Creating agent: #{name}") do
+          # Create new agent
+          agent = Agentic::Agent.new do |a|
+            a.role = options[:role]
+            a.purpose = options[:purpose]
+            a.backstory = options[:backstory] || ""
+          end
+
+          # Add capabilities if specified
+          options[:capabilities]&.each do |capability_name|
+            agent.add_capability(capability_name)
+          rescue => e
+            Agentic.logger.warn("Failed to add capability: #{capability_name} - #{e.message}")
+          end
+
+          # Store the agent
+          Agentic.agent_store.store(agent, name: name)
+
+          agent
         end
+
+        # Format capabilities list
+        capabilities = agent.capabilities.keys.map { |c| "- #{c}" }.join("\n")
+        capabilities = "None" if capabilities.empty?
 
         # Show success message with agent details
         details = [
           "Name: #{UI.colorize(name, :blue)}",
-          "Role: #{UI.colorize(role, :magenta)}",
-          "Instructions: #{instructions}"
+          "Role: #{UI.colorize(agent.role, :magenta)}",
+          "Purpose: #{agent.purpose}",
+          "Capabilities:\n#{capabilities}"
         ].join("\n")
 
         puts UI.box(
@@ -174,19 +246,131 @@ module Agentic
         )
       end
 
-      desc "delete NAME", "Delete an agent"
-      def delete(name)
-        # Create spinner for agent deletion
-        UI.with_spinner("Deleting agent: #{name}") do
-          # In a future implementation, this would delete an agent from a registry
-          sleep(0.5) # Simulate some work
+      desc "show ID_OR_NAME", "Show details of a specific agent"
+      def show(id_or_name)
+        # Initialize agent assembly system
+        Agentic.initialize_agent_assembly
+
+        # Find the agent
+        agent_config = nil
+        Agentic.agent_store.all.each do |config|
+          if config[:id] == id_or_name || config[:name] == id_or_name
+            agent_config = config
+            break
+          end
+        end
+
+        unless agent_config
+          puts UI.box(
+            "Error",
+            "Agent '#{UI.colorize(id_or_name, :yellow)}' not found.",
+            padding: [1, 2, 1, 2],
+            style: {border: {fg: :red}}
+          )
+          exit 1
+        end
+
+        # Format the agent details
+        output = ""
+        output += "ID: #{UI.colorize(agent_config[:id], :blue)}\n"
+        output += "Name: #{UI.colorize(agent_config[:name], :blue)}\n"
+        output += "Stored: #{agent_config[:timestamp]}\n"
+        output += "Version: #{agent_config[:version]}\n\n"
+
+        if agent_config[:agent]
+          output += "Role: #{agent_config[:agent][:role]}\n" if agent_config[:agent][:role]
+          output += "Purpose: #{agent_config[:agent][:purpose]}\n" if agent_config[:agent][:purpose]
+          output += "Backstory: #{agent_config[:agent][:backstory]}\n" if agent_config[:agent][:backstory]
+          output += "\n"
+        end
+
+        if agent_config[:capabilities] && !agent_config[:capabilities].empty?
+          output += "Capabilities:\n"
+          agent_config[:capabilities].each do |capability|
+            output += "  - #{UI.colorize(capability[:name], :magenta)} (v#{capability[:version]})\n"
+          end
+          output += "\n"
+        end
+
+        if agent_config[:metadata] && !agent_config[:metadata].empty?
+          output += "Metadata:\n"
+          agent_config[:metadata].each do |key, value|
+            next if key.to_s == "requirements" # Skip complex requirements object
+            output += "  - #{key}: #{value}\n"
+          end
         end
 
         puts UI.box(
-          "Agent Deleted",
-          "Agent #{UI.colorize(name, :blue)} has been deleted successfully.",
+          "Agent Details",
+          output,
           padding: [1, 2, 1, 2],
-          style: {border: {fg: :yellow}}
+          style: {border: {fg: :blue}}
+        )
+      end
+
+      desc "delete ID_OR_NAME", "Delete an agent"
+      def delete(id_or_name)
+        # Initialize agent assembly system
+        Agentic.initialize_agent_assembly
+
+        # Create spinner for agent deletion
+        success = UI.with_spinner("Deleting agent: #{id_or_name}") do
+          Agentic.agent_store.delete(id_or_name)
+        end
+
+        if success
+          puts UI.box(
+            "Agent Deleted",
+            "Agent #{UI.colorize(id_or_name, :blue)} has been deleted successfully.",
+            padding: [1, 2, 1, 2],
+            style: {border: {fg: :yellow}}
+          )
+        else
+          puts UI.box(
+            "Error",
+            "Agent #{UI.colorize(id_or_name, :blue)} could not be deleted. Please check the ID or name.",
+            padding: [1, 2, 1, 2],
+            style: {border: {fg: :red}}
+          )
+        end
+      end
+
+      desc "build ID_OR_NAME", "Build an agent from storage"
+      def build(id_or_name)
+        # Initialize agent assembly system
+        Agentic.initialize_agent_assembly
+
+        # Build the agent
+        agent = UI.with_spinner("Building agent: #{id_or_name}") do
+          Agentic.agent_store.build_agent(id_or_name)
+        end
+
+        unless agent
+          puts UI.box(
+            "Error",
+            "Agent '#{UI.colorize(id_or_name, :yellow)}' not found or could not be built.",
+            padding: [1, 2, 1, 2],
+            style: {border: {fg: :red}}
+          )
+          exit 1
+        end
+
+        # Format capabilities list
+        capabilities = agent.capabilities.keys.map { |c| "- #{c}" }.join("\n")
+        capabilities = "None" if capabilities.empty?
+
+        # Show success message with agent details
+        details = [
+          "Role: #{UI.colorize(agent.role, :magenta)}",
+          "Purpose: #{agent.purpose}",
+          "Capabilities:\n#{capabilities}"
+        ].join("\n")
+
+        puts UI.box(
+          "Agent Built Successfully",
+          details,
+          padding: [1, 2, 1, 2],
+          style: {border: {fg: :green}}
         )
       end
     end
@@ -387,6 +571,9 @@ module Agentic
 
     desc "config", "Configure Agentic settings"
     subcommand "config", ConfigCommands
+
+    desc "capabilities", "Manage capability registry"
+    subcommand "capabilities", Capabilities
 
     private
 

@@ -86,7 +86,7 @@ RSpec.describe Agentic::CLI::ConfigCommands do
         config_commands.get("non_existent_key")
 
         expect(output.string).to include("Error:")
-        expect(output.string).to include("Key 'non_existent_key' not found")
+        expect(output.string).to match(/Key '.*non_existent_key.*' not found/)
       end
     end
   end
@@ -102,7 +102,7 @@ RSpec.describe Agentic::CLI::ConfigCommands do
       config_commands.set("test_key=test_value")
 
       expect(output.string).to include("Configuration Updated:")
-      expect(output.string).to include("Set test_key to test_value")
+      expect(output.string).to match(/Set .*test_key.* to .*test_value.*/)
       expect(config_commands).to have_received(:save_config).with(config_path, {"test_key" => "test_value"})
     end
 
@@ -136,7 +136,6 @@ RSpec.describe Agentic::CLI::ConfigCommands do
 
     it "shows an error for invalid format" do
       # Instead of testing with the real implementation, mock the behavior
-      error_message = nil
 
       # Stub the split operation to simulate the error condition
       allow(config_commands).to receive(:set).and_wrap_original do |original_method, *args|

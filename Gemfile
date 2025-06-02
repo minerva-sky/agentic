@@ -13,3 +13,4 @@ gem "standard", "~> 1.3"
 
 gem "vcr"
 gem "webmock"
+gem "timecop"

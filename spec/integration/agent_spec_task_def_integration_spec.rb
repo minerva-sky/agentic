@@ -2,51 +2,51 @@
 
 require "spec_helper"
 
+# Mock agent for testing
+class SpecAwareAgent
+  attr_reader :execution_history, :last_spec
+
+  def initialize
+    @execution_history = []
+    @last_spec = nil
+  end
+
+  def execute(prompt)
+    # Extract agent specs from the prompt text instead of parsing JSON
+    # This handles the multi-line format that build_prompt creates
+    @last_spec = {
+      "name" => prompt.match(/\[System Instructions\]\s*(.+?)\s*\[Task Description\]/m)[1].strip,
+      "instructions" => prompt.match(/\[System Instructions\]\s*(.+?)\s*\[Task Description\]/m)[1].strip
+    }
+
+    @execution_history << {
+      spec: @last_spec,
+      prompt: prompt
+    }
+
+    {"result" => "Executed with #{@last_spec["name"]}"}
+  end
+end
+
+# Mock agent provider that respects agent specifications
+class SpecAwareAgentProvider
+  def initialize
+    @agents = {}
+  end
+
+  def get_agent_for_task(task)
+    agent_type = task.agent_spec.name
+    @agents[agent_type] ||= SpecAwareAgent.new
+    @agents[agent_type]
+  end
+
+  def get_agent(agent_type)
+    @agents[agent_type]
+  end
+end
+
 # Integration tests for Agent Specification and Task Definition
 RSpec.describe "AgentSpecification and TaskDefinition Integration" do
-  # Mock agent for testing
-  class SpecAwareAgent
-    attr_reader :execution_history, :last_spec
-
-    def initialize
-      @execution_history = []
-      @last_spec = nil
-    end
-
-    def execute(prompt)
-      # Extract agent specs from the prompt text instead of parsing JSON
-      # This handles the multi-line format that build_prompt creates
-      @last_spec = {
-        "name" => prompt.match(/\[System Instructions\]\s*(.+?)\s*\[Task Description\]/m)[1].strip,
-        "instructions" => prompt.match(/\[System Instructions\]\s*(.+?)\s*\[Task Description\]/m)[1].strip
-      }
-
-      @execution_history << {
-        spec: @last_spec,
-        prompt: prompt
-      }
-
-      {"result" => "Executed with #{@last_spec["name"]}"}
-    end
-  end
-
-  # Mock agent provider that respects agent specifications
-  class SpecAwareAgentProvider
-    def initialize
-      @agents = {}
-    end
-
-    def get_agent_for_task(task)
-      agent_type = task.agent_spec.name
-      @agents[agent_type] ||= SpecAwareAgent.new
-      @agents[agent_type]
-    end
-
-    def get_agent(agent_type)
-      @agents[agent_type]
-    end
-  end
-
   let(:agent_provider) { SpecAwareAgentProvider.new }
   let(:orchestrator) { Agentic::PlanOrchestrator.new }
 
@@ -156,7 +156,7 @@ RSpec.describe "AgentSpecification and TaskDefinition Integration" do
       )
 
       # Create an execution plan
-      plan = Agentic::ExecutionPlan.new(task_defs, expected_answer)
+      Agentic::ExecutionPlan.new(task_defs, expected_answer)
 
       # Create tasks from the plan
       tasks = task_defs.map.with_index do |task_def, i|

@@ -85,6 +85,62 @@ class RetryableAgentProvider < IntegrationAgentProvider
   end
 end
 
+# Create a special agent provider that fails a specific number of times
+class TestProvider < IntegrationAgentProvider
+  def initialize(task_id, fail_count)
+    super()
+    @fail_count = fail_count
+    @execution_count = 0
+    @test_task_id = task_id
+  end
+
+  def get_agent_for_task(task)
+    agent = super
+
+    if task.id == @test_task_id
+      @execution_count += 1
+      agent.set_failure_mode(@execution_count <= @fail_count)
+    end
+
+    agent
+  end
+end
+
+# Create a special PlanOrchestrator subclass for testing with hooks
+class TestOrchestrator < Agentic::PlanOrchestrator
+  attr_reader :task_execution_count
+
+  def initialize(*args)
+    super
+    @task_execution_count = Hash.new(0)
+    @max_failures = 2
+  end
+
+  # Override the handle_task_failure method to implement a custom retry strategy
+  def handle_task_failure(task, failure, agent_provider, semaphore, barrier)
+    @task_execution_count[task.id] += 1
+
+    # Retry the task if we haven't exceeded max failures
+    if @task_execution_count[task.id] <= @max_failures
+      Agentic.logger.info("Test orchestrator retrying task #{task.id}, attempt #{@task_execution_count[task.id]}")
+
+      # Track retry count on the task
+      task.retry_count ||= 0
+      task.retry_count += 1
+
+      # Move task back to pending state
+      @execution_state[:failed].delete(task.id)
+      @execution_state[:pending].add(task.id)
+
+      # Schedule retrying the task
+      schedule_task(task.id, agent_provider, semaphore, barrier)
+    else
+      Agentic.logger.warn("Test orchestrator: max retries exceeded for task #{task.id}")
+      super
+    end
+  end
+end
+
 RSpec.describe "PlanOrchestrator Integration" do
   let(:agent_provider) { IntegrationAgentProvider.new }
   let(:orchestrator) { Agentic::PlanOrchestrator.new }
@@ -207,41 +263,6 @@ RSpec.describe "PlanOrchestrator Integration" do
     # This test verifies that the PlanOrchestrator can be extended to support
     # custom task handling strategies like retries
     it "supports custom task handlers" do
-      # Create a special PlanOrchestrator subclass for testing with hooks
-      class TestOrchestrator < Agentic::PlanOrchestrator
-        attr_reader :task_execution_count
-
-        def initialize(*args)
-          super
-          @task_execution_count = Hash.new(0)
-          @max_failures = 2
-        end
-
-        # Override the handle_task_failure method to implement a custom retry strategy
-        def handle_task_failure(task, failure, agent_provider, semaphore, barrier)
-          @task_execution_count[task.id] += 1
-
-          # Retry the task if we haven't exceeded max failures
-          if @task_execution_count[task.id] <= @max_failures
-            Agentic.logger.info("Test orchestrator retrying task #{task.id}, attempt #{@task_execution_count[task.id]}")
-
-            # Track retry count on the task
-            task.retry_count ||= 0
-            task.retry_count += 1
-
-            # Move task back to pending state
-            @execution_state[:failed].delete(task.id)
-            @execution_state[:pending].add(task.id)
-
-            # Schedule retrying the task
-            schedule_task(task.id, agent_provider, semaphore, barrier)
-          else
-            Agentic.logger.warn("Test orchestrator: max retries exceeded for task #{task.id}")
-            super
-          end
-        end
-      end
-
       # Create a task that will fail on first attempt
       test_task = Agentic::Task.new(
         description: "Test Task",
@@ -252,27 +273,6 @@ RSpec.describe "PlanOrchestrator Integration" do
       # Create our test orchestrator
       test_orchestrator = TestOrchestrator.new
       test_orchestrator.add_task(test_task)
-
-      # Create a special agent provider that fails a specific number of times
-      class TestProvider < IntegrationAgentProvider
-        def initialize(task_id, fail_count)
-          super()
-          @fail_count = fail_count
-          @execution_count = 0
-          @test_task_id = task_id
-        end
-
-        def get_agent_for_task(task)
-          agent = super
-
-          if task.id == @test_task_id
-            @execution_count += 1
-            agent.set_failure_mode(@execution_count <= @fail_count)
-          end
-
-          agent
-        end
-      end
 
       # Configure test provider to fail twice then succeed
       test_provider = TestProvider.new(test_task.id, 2)

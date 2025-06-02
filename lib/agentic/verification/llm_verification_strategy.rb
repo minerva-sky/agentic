@@ -34,16 +34,13 @@ module Agentic
         # For this stub, we'll simulate a response
 
         # Example verification prompt
-        system_message = "You are an expert verifier. Your task is to determine if the result of a task meets the requirements."
-        user_message = <<~MESSAGE
-          Task Description: #{task.description}
-          Task Input: #{task.input.inspect}
-          Task Result: #{result.output.inspect}
-          
-          Verify if the result satisfies the task requirements. 
-          Consider correctness, completeness, and alignment with the task description.
-          Provide your assessment with a boolean verdict (verified: true/false) and a confidence score (0.0-1.0).
-        MESSAGE
+        #   Task Description: #{task.description}
+        #   Task Input: #{task.input.inspect}
+        #   Task Result: #{result.output.inspect}
+        #
+        #   Verify if the result satisfies the task requirements.
+        #   Consider correctness, completeness, and alignment with the task description.
+        #   Provide your assessment with a boolean verdict (verified: true/false) and a confidence score (0.0-1.0).
 
         # In a real implementation, we would use the LLM client here
         # For this stub, we'll return a simulated verification result

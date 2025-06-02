@@ -29,7 +29,7 @@ RSpec.describe Agentic::Learning::ExecutionHistoryStore do
 
     it "uses default storage path if none provided" do
       allow_any_instance_of(Agentic::Learning::ExecutionHistoryStore).to receive(:default_storage_path).and_return(File.join(temp_dir, "default_path"))
-      store = Agentic::Learning::ExecutionHistoryStore.new
+      Agentic::Learning::ExecutionHistoryStore.new
 
       # Ensure default path was created
       expect(Dir.exist?(File.join(temp_dir, "default_path"))).to be true

@@ -28,13 +28,13 @@ RSpec.describe "CLI plan command integration", :vcr do
 
       # Verify output contains expected elements
       expect(output.string).to include("Creating plan for goal: Create a Ruby coding agent")
-      
+
       # Verify that the plan contains tasks
       expect(output.string).to include("Tasks:")
-      
+
       # Verify that agents are assigned to tasks
       expect(output.string).to include("Agent:")
-      
+
       # Verify that expected answer format is present
       expect(output.string).to include("Expected Answer:")
     end
@@ -42,7 +42,7 @@ RSpec.describe "CLI plan command integration", :vcr do
     it "saves the plan to a file when requested" do
       # Stub check_api_token! to not raise an error
       allow_any_instance_of(Agentic::CLI).to receive(:check_api_token!).and_return(true)
-      
+
       # Create a temporary file for the test
       require "tempfile"
       temp_file = Tempfile.new(["test_plan", ".json"])
@@ -52,7 +52,7 @@ RSpec.describe "CLI plan command integration", :vcr do
       begin
         # Simply expect File.write to be called with the right path
         expect(File).to receive(:write).with(file_path, anything)
-        
+
         # Set up VCR to record the API call
         VCR.use_cassette("plan_ruby_coding_agent") do
           # Execute the plan command with save option

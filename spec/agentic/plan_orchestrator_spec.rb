@@ -2,41 +2,41 @@
 
 require "spec_helper"
 
+# Simple agent provider for testing
+class TestAgentProvider
+  def get_agent_for_task(task)
+    MockAgent.new
+  end
+end
+
+# Re-use MockAgent from task_integration_spec.rb
+class MockAgent
+  attr_reader :id, :prompt_history
+
+  def initialize(id = "mock-agent-123")
+    @id = id
+    @prompt_history = []
+    @should_fail = false
+  end
+
+  def execute(prompt)
+    @prompt_history << prompt
+
+    if @should_fail
+      raise StandardError, "Mock agent execution failed"
+    end
+
+    {"result" => "Mock agent response"}
+  end
+
+  def set_failure_mode(should_fail)
+    @should_fail = should_fail
+  end
+end
+
 RSpec.describe Agentic::PlanOrchestrator do
   let(:plan_id) { "test-plan-id" }
   let(:orchestrator) { described_class.new(plan_id: plan_id) }
-
-  # Simple agent provider for testing
-  class TestAgentProvider
-    def get_agent_for_task(task)
-      MockAgent.new
-    end
-  end
-
-  # Re-use MockAgent from task_integration_spec.rb
-  class MockAgent
-    attr_reader :id, :prompt_history
-
-    def initialize(id = "mock-agent-123")
-      @id = id
-      @prompt_history = []
-      @should_fail = false
-    end
-
-    def execute(prompt)
-      @prompt_history << prompt
-
-      if @should_fail
-        raise StandardError, "Mock agent execution failed"
-      end
-
-      {"result" => "Mock agent response"}
-    end
-
-    def set_failure_mode(should_fail)
-      @should_fail = should_fail
-    end
-  end
 
   describe "#initialize" do
     it "sets the plan id and default attributes" do

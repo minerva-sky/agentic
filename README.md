@@ -48,7 +48,15 @@ $ agentic execute --max-concurrency 5               # Limit concurrent tasks
 $ agentic agent list                                # List available agents
 $ agentic agent create "ResearchAgent" \            # Create a new agent
     --role="Research Assistant" \
-    --instructions="Conduct thorough research on the given topic"
+    --purpose="Conduct thorough research" \
+    --capabilities=text_generation,web_search
+$ agentic agent show "ResearchAgent"                # Show agent details
+$ agentic agent build "ResearchAgent"               # Build an agent from storage
+
+# Capability Management
+$ agentic capabilities list                         # List available capabilities
+$ agentic capabilities show text_generation         # Show capability details
+$ agentic capabilities search generation            # Search for capabilities
 ```
 
 The CLI provides real-time feedback with spinners for long-running operations, colored status updates, and detailed progress tracking. It supports both global and project-specific configuration, allowing you to customize the behavior for different projects.
@@ -317,6 +325,111 @@ puts config.role
 
 # Convert to a hash representation
 hash = config.to_h
+```
+
+## Agent Capabilities System
+
+Agentic features a powerful Capability System that enables dynamic agent composition, self-assembly, and persistence. The system allows agents to be constructed with precisely the capabilities they need for specific tasks, and to be stored for future reuse.
+
+### Capability Registry
+
+The capability registry manages capability specifications and providers:
+
+```ruby
+# Define a capability specification
+text_gen_capability = Agentic::CapabilitySpecification.new(
+  name: "text_generation",
+  description: "Generates text based on a prompt",
+  version: "1.0.0",
+  inputs: {
+    prompt: { type: "string", required: true, description: "The prompt to generate text from" }
+  },
+  outputs: {
+    response: { type: "string", description: "The generated text" }
+  }
+)
+
+# Create a provider for the capability
+text_gen_provider = Agentic::CapabilityProvider.new(
+  capability: text_gen_capability,
+  implementation: ->(inputs) { { response: "Generated text for: #{inputs[:prompt]}" } }
+)
+
+# Register the capability with the system
+Agentic.register_capability(text_gen_capability, text_gen_provider)
+```
+
+### Agent Assembly Engine
+
+The assembly engine dynamically constructs agents based on task requirements:
+
+```ruby
+# Define a task
+task = Agentic::Task.new(
+  description: "Generate a report on AI trends",
+  agent_spec: Agentic::AgentSpecification.new(
+    name: "Report Generator",
+    description: "An agent that generates reports",
+    instructions: "Generate a comprehensive report on the topic"
+  ),
+  input: {
+    topic: "AI trends in 2023",
+    format: "markdown"
+  }
+)
+
+# Assemble an agent for the task
+agent = Agentic.assemble_agent(task)
+
+# The agent will automatically have capabilities like "text_generation"
+# based on the task requirements
+```
+
+### Agent Persistence
+
+Agents can be stored and retrieved for future use:
+
+```ruby
+# Store an agent for future use
+agent_id = Agentic.agent_store.store(agent, name: "report_generator")
+
+# Later, retrieve the agent by name
+stored_agent = Agentic.agent_store.build_agent("report_generator")
+
+# Or retrieve by ID
+stored_agent = Agentic.agent_store.build_agent(agent_id)
+
+# List all stored agents
+agents = Agentic.agent_store.all
+```
+
+### Capability Composition
+
+Capabilities can be composed into higher-level capabilities:
+
+```ruby
+registry = Agentic.agent_capability_registry
+
+# Compose multiple capabilities into a new one
+registry.compose(
+  "comprehensive_report",
+  "Generates a comprehensive report with research and formatting",
+  "1.0.0",
+  [
+    { name: "text_generation", version: "1.0.0" },
+    { name: "data_analysis", version: "1.0.0" }
+  ],
+  ->(providers, inputs) {
+    # Implementation that uses both capabilities
+    analysis = providers[1].execute(data: inputs[:data])
+    report = providers[0].execute(prompt: "Generate a report on: #{analysis[:summary]}")
+    { report: report[:response], analysis: analysis }
+  }
+)
+
+# Use the composed capability
+agent.add_capability("comprehensive_report")
+result = agent.execute_capability("comprehensive_report", { data: { ... } })
 ```
 
 ## Learning System
