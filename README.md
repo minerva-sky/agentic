@@ -4,12 +4,12 @@ A Ruby gem for building and running AI agents in a [plan-and-execute](https://bl
 
 ## What's New in v0.2.0
 
-🚀 **Agent Self-Assembly System** - Agents can now dynamically construct themselves based on task requirements
-🎯 **Capability System** - Rich specification and versioning system for agent capabilities  
-💾 **Persistent Agent Store** - Save and reuse agents across sessions
-🔧 **Enhanced CLI** - Comprehensive command-line interface with agent and capability management
-📊 **Learning System** - Agents improve over time through execution history analysis
-🎨 **Real-time Feedback** - Progress bars, spinners, and colorized output for better user experience
+🚀 **Agent Self-Assembly System** - Agents can now dynamically construct themselves based on task requirements<br>
+🎯 **Capability System** - Rich specification and versioning system for agent capabilities<br>
+💾 **Persistent Agent Store** - Save and reuse agents across sessions<br>
+🔧 **Enhanced CLI** - Comprehensive command-line interface with agent and capability management<br>
+📊 **Learning System** - Agents improve over time through execution history analysis<br>
+🎨 **Real-time Feedback** - Progress bars, spinners, and colorized output for better user experience<br>
 
 ## Demo Video
 
