@@ -189,5 +189,168 @@ RSpec.describe Agentic::Task do
       expect(prompt).to include("test_value")
       expect(prompt).to include("[Output Requirements]")
     end
+
+    context "when task has no output schema" do
+      it "includes generic JSON output requirements" do
+        prompt = task.send(:build_prompt)
+        expect(prompt).to include("Provide your response as valid JSON only")
+        expect(prompt).to include("Do not wrap the JSON in markdown code blocks")
+      end
+    end
+
+    context "when task has an output schema" do
+      before do
+        task.output_schema_name = :default
+      end
+
+      it "includes structured output requirements" do
+        prompt = task.send(:build_prompt)
+        expect(prompt).to include("Provide your response as a structured JSON object")
+        expect(prompt).to include("follows the specified schema")
+        expect(prompt).to include("Do not include any markdown formatting")
+      end
+    end
+  end
+
+  describe "structured output functionality" do
+    describe "#output_schema_name" do
+      it "can be set during initialization" do
+        task_with_schema = described_class.new(
+          description: description,
+          agent_spec: agent_spec,
+          input: input,
+          output_schema_name: :default
+        )
+        expect(task_with_schema.output_schema_name).to eq(:default)
+      end
+
+      it "can be set after initialization" do
+        task.output_schema_name = :analysis
+        expect(task.output_schema_name).to eq(:analysis)
+      end
+    end
+
+    describe "#output_schema" do
+      context "when no schema name is set" do
+        it "returns nil" do
+          expect(task.output_schema).to be_nil
+        end
+      end
+
+      context "when a valid schema name is set" do
+        before do
+          task.output_schema_name = :default
+        end
+
+        it "returns the corresponding schema" do
+          schema = task.output_schema
+          expect(schema).to be_a(Agentic::StructuredOutputs::Schema)
+          expect(schema.to_hash[:name]).to eq("task_output")
+        end
+      end
+
+      context "when an invalid schema name is set" do
+        before do
+          task.output_schema_name = :non_existent
+        end
+
+        it "returns nil" do
+          expect(task.output_schema).to be_nil
+        end
+      end
+    end
+
+    describe "#has_output_schema?" do
+      context "when no schema name is set" do
+        it "returns false" do
+          expect(task.has_output_schema?).to be false
+        end
+      end
+
+      context "when a valid schema name is set" do
+        before do
+          task.output_schema_name = :default
+        end
+
+        it "returns true" do
+          expect(task.has_output_schema?).to be true
+        end
+      end
+
+      context "when an invalid schema name is set" do
+        before do
+          task.output_schema_name = :non_existent
+        end
+
+        it "returns false" do
+          expect(task.has_output_schema?).to be false
+        end
+      end
+    end
+
+    describe "#set_output_schema" do
+      it "sets the output schema name" do
+        task.set_output_schema(:analysis)
+        expect(task.output_schema_name).to eq(:analysis)
+      end
+    end
+
+    describe "#perform with structured output" do
+      let(:agent) { double("Agent") }
+      let(:schema) { Agentic::TaskOutputSchemas.default_task_schema }
+      let(:structured_output) do
+        {
+          "status" => "completed",
+          "result" => {
+            "summary" => "Task completed successfully"
+          },
+          "steps" => ["step1", "step2"]
+        }
+      end
+
+      before do
+        task.output_schema_name = :default
+      end
+
+      context "when agent supports structured output" do
+        before do
+          allow(agent).to receive(:execute_with_schema).with(anything, schema).and_return(structured_output)
+        end
+
+        it "calls execute_with_schema instead of execute" do
+          expect(agent).to receive(:execute_with_schema).with(anything, schema)
+          expect(agent).not_to receive(:execute)
+
+          task.perform(agent)
+        end
+
+        it "sets the structured output" do
+          task.perform(agent)
+          expect(task.output).to eq(structured_output)
+        end
+
+        it "returns a successful TaskResult" do
+          result = task.perform(agent)
+          expect(result).to be_a(Agentic::TaskResult)
+          expect(result.successful?).to be true
+          expect(result.output).to eq(structured_output)
+        end
+      end
+
+      context "when agent does not support structured output" do
+        before do
+          allow(agent).to receive(:execute_with_schema).and_raise(StandardError, "Structured output not supported")
+        end
+
+        it "handles the error and creates a TaskResult with failure" do
+          result = task.perform(agent)
+          expect(result).to be_a(Agentic::TaskResult)
+          expect(result.successful?).to be false
+          expect(task.status).to eq(:failed)
+          expect(task.failure).to be_a(Agentic::TaskFailure)
+          expect(task.failure.message).to include("Structured output not supported")
+        end
+      end
+    end
   end
 end

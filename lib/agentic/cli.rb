@@ -51,9 +51,13 @@ module Agentic
       enum: %w[json yaml text], default: "text",
       desc: "Output format (json, yaml, or text)"
     option :save, type: :string, aliases: "-s",
-      desc: "Save plan to a file"
+      desc: "Save plan to a file (defaults to plan-TIMESTAMP.json)"
     option :model, type: :string, aliases: "-m",
       desc: "LLM model to use (defaults to configuration)"
+    option :no_interactive, type: :boolean,
+      desc: "Skip interactive plan adjustment prompt"
+    option :execute, type: :boolean,
+      desc: "Execute the plan immediately after generation"
     def plan(goal)
       check_api_token!
 
@@ -69,8 +73,26 @@ module Agentic
         planner.plan
       end
 
-      # Output the plan based on format option
-      output_plan(execution_plan, options)
+      # Show the plan to the user
+      unless options[:quiet]
+        puts format_plan(execution_plan)
+        puts
+      end
+
+      # Ask user if they want to adjust the plan
+      if !options[:quiet] && !options[:no_interactive] && ask_user_for_plan_adjustment
+        execution_plan = adjust_plan_with_user_input(execution_plan, config)
+      end
+
+      # Output the plan based on format option (only if saving to file or different format)
+      if options[:save] || options[:output] != "text"
+        output_plan(execution_plan, options)
+      end
+
+      # Ask user if they want to execute the plan
+      if options[:execute] || (should_ask_for_execution? && ask_user_for_execution)
+        execute_plan_immediately(execution_plan)
+      end
     end
 
     desc "execute", "Execute a plan"
@@ -91,6 +113,10 @@ module Agentic
       desc: "Execute tasks asynchronously"
     option :max_concurrency, type: :numeric, default: 10,
       desc: "Maximum concurrent tasks"
+    option :file, type: :string, aliases: "-f",
+      desc: "Output file path (defaults to result-TIMESTAMP.json)"
+    option :model, type: :string, aliases: "-m",
+      desc: "LLM model to use (defaults to configuration)"
     def execute
       check_api_token!
 
@@ -101,36 +127,11 @@ module Agentic
         raise Thor::Error, "No plan provided. Use --plan FILE or --from-stdin"
       end
 
-      say UI.colorize("Executing plan...", :green) unless options[:quiet]
-
       # Initialize task instances from the plan
       tasks = initialize_tasks(plan_data)
 
-      # Create an execution observer for real-time feedback
-      observer = ExecutionObserver.new(options)
-
-      # Setup the PlanOrchestrator with the observer's lifecycle hooks
-      orchestrator = PlanOrchestrator.new(
-        concurrency_limit: options[:max_concurrency],
-        lifecycle_hooks: observer.lifecycle_hooks
-      )
-
-      # Add tasks to the orchestrator
-      tasks.each do |task|
-        orchestrator.add_task(task)
-      end
-
-      # Show the total number of tasks
-      unless options[:quiet]
-        puts UI.colorize("Total tasks: #{tasks.size}", :blue)
-        puts
-      end
-
-      # Execute the plan
-      result = orchestrator.execute_plan(DefaultAgentProvider.new)
-
-      # Output the result
-      output_result(result, options)
+      # Execute the tasks
+      execute_tasks(tasks)
     end
 
     # Agent commands
@@ -577,6 +578,212 @@ module Agentic
 
     private
 
+    # Asks the user if they want to adjust the plan
+    # @return [Boolean] true if user wants to adjust, false otherwise
+    def ask_user_for_plan_adjustment
+      puts UI.colorize("Would you like to adjust this plan? (y/n)", :cyan)
+      response = $stdin.gets&.chomp&.downcase
+      response == "y" || response == "yes"
+    end
+
+    # Determines if we should ask the user about executing the plan
+    # @return [Boolean] true if we should ask, false otherwise
+    def should_ask_for_execution?
+      !options[:quiet] && !options[:execute] && !options[:no_interactive]
+    end
+
+    # Asks the user if they want to execute the plan
+    # @return [Boolean] true if user wants to execute, false otherwise
+    def ask_user_for_execution
+      puts
+      puts UI.colorize("Would you like to execute this plan now? (y/n)", :cyan)
+      response = $stdin.gets&.chomp&.downcase
+      response == "y" || response == "yes"
+    end
+
+    # Executes a plan immediately (from plan command)
+    # @param execution_plan [ExecutionPlan] The execution plan to execute
+    def execute_plan_immediately(execution_plan)
+      # Convert ExecutionPlan to tasks
+      tasks = execution_plan.tasks.map do |task_def|
+        Task.new(
+          description: task_def.description,
+          agent_spec: task_def.agent,
+          input: {}
+        )
+      end
+
+      # Execute the tasks
+      execute_tasks(tasks)
+    end
+
+    # Shared execution logic for both execute command and immediate execution
+    # @param tasks [Array<Task>] The tasks to execute
+    def execute_tasks(tasks)
+      say UI.colorize("Executing plan...", :green) unless options[:quiet]
+
+      # Determine output format from file extension if provided
+      output_format = determine_output_format(options[:file])
+
+      # Create an execution observer for real-time feedback
+      observer = ExecutionObserver.new(options.merge(output_format: output_format, holistic_display: true))
+
+      # Setup the PlanOrchestrator with the observer's lifecycle hooks
+      orchestrator = PlanOrchestrator.new(
+        concurrency_limit: options[:max_concurrency] || 10,
+        lifecycle_hooks: observer.lifecycle_hooks
+      )
+
+      # Add tasks to the orchestrator
+      tasks.each do |task|
+        orchestrator.add_task(task)
+      end
+
+      # Show the total number of tasks
+      unless options[:quiet]
+        puts UI.colorize("Total tasks: #{tasks.size}", :blue)
+        puts
+      end
+
+      # Configure LLM for agent execution
+      llm_config = LlmConfig.new
+      llm_config.model = options[:model] if options[:model]
+
+      # Setup signal handler for graceful cancellation
+      setup_cancellation_handler(orchestrator, observer)
+
+      # Execute the plan
+      begin
+        result = orchestrator.execute_plan(DefaultAgentProvider.new(llm_config))
+
+        # Always save result to file
+        save_result_to_file(result, options, observer)
+      rescue Interrupt
+        # Handle Ctrl+C gracefully - signal handler will take care of cleanup
+        # This rescue is here just in case the signal doesn't propagate properly
+        puts "\n#{UI.colorize("⚠", :yellow)} Execution interrupted"
+        exit(130)
+      end
+    end
+
+    # Adjusts the plan based on user input
+    # @param execution_plan [ExecutionPlan] The original execution plan
+    # @param config [LlmConfig] The LLM configuration
+    # @return [ExecutionPlan] The adjusted execution plan
+    def adjust_plan_with_user_input(execution_plan, config)
+      puts UI.colorize("What adjustments would you like to make to the plan?", :cyan)
+      puts UI.colorize("(Describe what you'd like to add, remove, or modify)", :dark)
+
+      user_input = $stdin.gets&.chomp || ""
+
+      return execution_plan if user_input.strip.empty?
+
+      # Use LLM to adjust the plan based on user input
+      adjusted_plan = UI.with_spinner("Adjusting plan based on your feedback") do
+        adjust_plan_via_llm(execution_plan, user_input, config)
+      end
+
+      # Show the adjusted plan
+      puts UI.colorize("\nAdjusted Plan:", :green)
+      puts format_plan(adjusted_plan)
+      puts
+
+      adjusted_plan
+    end
+
+    # Uses LLM to adjust the plan based on user feedback
+    # @param execution_plan [ExecutionPlan] The original execution plan
+    # @param user_feedback [String] The user's feedback for adjustments
+    # @param config [LlmConfig] The LLM configuration
+    # @return [ExecutionPlan] The adjusted execution plan
+    def adjust_plan_via_llm(execution_plan, user_feedback, config)
+      system_message = "You are an expert project planner. Your task is to adjust an existing execution plan based on user feedback."
+
+      current_plan = {
+        tasks: execution_plan.tasks.map do |task|
+          {
+            description: task.description,
+            agent: {
+              name: task.agent.name,
+              description: task.agent.description,
+              instructions: task.agent.instructions
+            }
+          }
+        end,
+        expected_answer: {
+          format: execution_plan.expected_answer.format,
+          sections: execution_plan.expected_answer.sections,
+          length: execution_plan.expected_answer.length
+        }
+      }
+
+      user_message = <<~MSG
+        Current Plan:
+        #{JSON.pretty_generate(current_plan)}
+
+        User Feedback:
+        #{user_feedback}
+
+        Please adjust the plan based on the user's feedback. Maintain the same structure but modify tasks as requested.
+      MSG
+
+      schema = StructuredOutputs::Schema.new("adjusted_plan") do |s|
+        s.array :tasks, items: {
+          type: "object",
+          properties: {
+            description: {type: "string"},
+            agent: {
+              type: "object",
+              properties: {
+                name: {type: "string"},
+                description: {type: "string"},
+                instructions: {type: "string"}
+              },
+              required: %w[name description instructions]
+            }
+          },
+          required: %w[description agent]
+        }
+        s.object :expected_answer do |o|
+          o.string :format
+          o.array :sections, items: {type: "string"}
+          o.string :length
+        end
+      end
+
+      messages = [
+        {role: "system", content: system_message},
+        {role: "user", content: user_message}
+      ]
+
+      llm_client = Agentic.client(config)
+      response = llm_client.complete(messages, output_schema: schema)
+
+      if response.successful?
+        tasks = response.content["tasks"].map do |task_data|
+          TaskDefinition.new(
+            description: task_data["description"],
+            agent: AgentSpecification.new(
+              name: task_data["agent"]["name"],
+              description: task_data["agent"]["description"],
+              instructions: task_data["agent"]["instructions"]
+            )
+          )
+        end
+
+        expected_answer = ExpectedAnswerFormat.new(
+          format: response.content["expected_answer"]["format"],
+          sections: response.content["expected_answer"]["sections"],
+          length: response.content["expected_answer"]["length"]
+        )
+
+        ExecutionPlan.new(tasks, expected_answer)
+      else
+        Agentic.logger.error("Failed to adjust plan: #{response.error&.message || response.refusal}")
+        execution_plan # Return original plan if adjustment fails
+      end
+    end
+
     # Configures logging based on command options
     def configure_logging
       if options[:verbose]
@@ -591,7 +798,7 @@ module Agentic
           else :white
           end
 
-          timestamp = UI.colorize(datetime.strftime("%Y-%m-%d %H:%M:%S"), :dim)
+          timestamp = UI.colorize(datetime.strftime("%Y-%m-%d %H:%M:%S"), :dark)
           severity_colored = UI.colorize(severity.ljust(5), color)
 
           "[#{timestamp}] #{severity_colored} : #{msg}\n"
@@ -623,7 +830,31 @@ module Agentic
 
     # Outputs plan based on format options
     def output_plan(execution_plan, options)
-      output = case options[:output]
+      # Determine the save file path if --save is used
+      save_path = nil
+      output_format = options[:output]
+
+      if options[:save]
+        if options[:save] == "save" # Default value when --save is used without argument
+          timestamp = Time.now.strftime("%Y%m%d_%H%M%S")
+          # Default to JSON when saving without explicit format for better structure
+          if output_format == "text"
+            output_format = "json"
+            save_path = "plan-#{timestamp}.json"
+          else
+            extension = (output_format == "yaml") ? "yml" : output_format
+            save_path = "plan-#{timestamp}.#{extension}"
+          end
+        else
+          save_path = options[:save]
+          # When saving to a file, prefer structured format over text for better usability
+          if output_format == "text"
+            output_format = "json"
+          end
+        end
+      end
+
+      output = case output_format
       when "json"
         JSON.pretty_generate(execution_plan.to_h)
       when "yaml"
@@ -632,9 +863,9 @@ module Agentic
         format_plan(execution_plan)
       end
 
-      if options[:save]
-        File.write(options[:save], output)
-        say UI.colorize("Plan saved to #{options[:save]}", :green) unless options[:quiet]
+      if save_path
+        File.write(save_path, output)
+        say UI.colorize("Plan saved to #{save_path}", :green) unless options[:quiet]
       else
         puts output unless options[:quiet]
       end
@@ -644,25 +875,46 @@ module Agentic
     # @param execution_plan [ExecutionPlan] The execution plan
     # @return [String] The formatted plan
     def format_plan(execution_plan)
-      tasks_text = "Tasks:\n"
+      output = []
+      output << UI.colorize("═" * 80, :blue)
+      output << UI.colorize(" EXECUTION PLAN", :blue)
+      output << UI.colorize("═" * 80, :blue)
+      output << ""
+
+      output << UI.colorize("Tasks:", :green)
       execution_plan.tasks.each_with_index do |task, index|
-        tasks_text += "  #{UI.colorize((index + 1).to_s, :blue)} #{task.description}\n"
-        tasks_text += "    Agent: #{UI.colorize(task.agent.name, :magenta)}\n"
+        # Wrap long descriptions to prevent formatting issues
+        description = if task.description.length > 70
+          "#{task.description[0..67]}..."
+        else
+          task.description
+        end
+
+        output << "  #{UI.colorize("#{index + 1}.", :blue)} #{description}"
+        output << "     #{UI.colorize("Agent:", :dark)} #{UI.colorize(task.agent.name, :magenta)}"
+        output << ""
       end
 
-      expected_answer_text = "Expected Answer:\n"
-      expected_answer_text += "  Format: #{UI.colorize(execution_plan.expected_answer.format, :yellow)}\n"
-      expected_answer_text += "  Sections: #{execution_plan.expected_answer.sections.map { |s| UI.colorize(s, :yellow) }.join(", ")}\n"
-      expected_answer_text += "  Length: #{UI.colorize(execution_plan.expected_answer.length, :yellow)}\n"
+      output << UI.colorize("Expected Answer:", :green)
+      output << "  #{UI.colorize("Format:", :dark)} #{UI.colorize(execution_plan.expected_answer.format, :yellow)}"
 
-      plan_text = "#{tasks_text}\n#{expected_answer_text}"
+      # Handle long section lists safely
+      if execution_plan.expected_answer.sections.empty?
+        sections_display = UI.colorize("(none specified)", :dark)
+      elsif execution_plan.expected_answer.sections.length > 3
+        first_three = execution_plan.expected_answer.sections[0..2]
+        remaining = execution_plan.expected_answer.sections.length - 3
+        sections_display = "#{first_three.join(", ")} #{UI.colorize("(+#{remaining} more)", :dark)}"
+      else
+        sections_display = execution_plan.expected_answer.sections.join(", ")
+      end
 
-      UI.box(
-        "Execution Plan",
-        plan_text,
-        padding: [1, 2, 1, 2],
-        style: {border: {fg: :blue}}
-      )
+      output << "  #{UI.colorize("Sections:", :dark)} #{sections_display}"
+      output << "  #{UI.colorize("Length:", :dark)} #{UI.colorize(execution_plan.expected_answer.length, :yellow)}"
+      output << ""
+      output << UI.colorize("═" * 80, :blue)
+
+      output.join("\n")
     end
 
     # Loads plan data from file or stdin based on options
@@ -670,7 +922,9 @@ module Agentic
       if options[:plan]
         JSON.parse(File.read(options[:plan]))
       elsif options[:from_stdin]
-        JSON.parse($stdin.read)
+        stdin_content = $stdin.read
+        $stdin.close unless $stdin.closed?
+        JSON.parse(stdin_content)
       end
     end
 
@@ -731,6 +985,84 @@ module Agentic
         padding: [1, 2, 1, 2],
         style: {border: {fg: result.successful? ? :green : :yellow}}
       )
+    end
+
+    # Saves execution result to file if requested
+    def save_result_to_file(result, options, observer = nil)
+      # Determine the save file path - always save to a file
+      save_path = if options[:file]
+        # User specified a file path
+        options[:file]
+      else
+        # Default filename with timestamp
+        timestamp = Time.now.strftime("%Y%m%d_%H%M%S")
+        "result-#{timestamp}.json"
+      end
+
+      # Determine content format
+      output_format = determine_output_format(save_path)
+
+      # Generate content based on format
+      content = if output_format == :json || !observer
+        # Save as JSON (default behavior)
+        JSON.pretty_generate(result.to_h)
+      else
+        # Use observer to generate format-specific content
+        observer.generate_file_content(result, output_format)
+      end
+
+      # Save the content
+      File.write(save_path, content)
+
+      say UI.colorize("Execution result saved to #{save_path}", :green) unless options[:quiet]
+    end
+
+    # Determines output format from file extension
+    # @param file_path [String, nil] The file path
+    # @return [Symbol] The detected format (:json, :markdown, :html, :text)
+    def determine_output_format(file_path)
+      return :text unless file_path
+
+      extension = File.extname(file_path).downcase
+      case extension
+      when ".json"
+        :json
+      when ".md", ".markdown"
+        :markdown
+      when ".html", ".htm"
+        :html
+      when ".txt"
+        :text
+      when ".yaml", ".yml"
+        :yaml
+      else
+        :text # Default fallback
+      end
+    end
+
+    # Sets up signal handler for graceful cancellation
+    # @param orchestrator [PlanOrchestrator] The plan orchestrator to cancel
+    # @param observer [ExecutionObserver] The observer to notify of cancellation
+    def setup_cancellation_handler(orchestrator, observer)
+      Signal.trap("INT") do
+        puts "\n#{UI.colorize("⚠", :yellow)} Cancellation requested..."
+
+        # Notify observer of cancellation (sets flag)
+        observer.handle_cancellation if observer.respond_to?(:handle_cancellation)
+
+        # Cancel the plan execution
+        orchestrator.cancel_plan
+
+        # Show cancellation message
+        puts UI.box(
+          "Execution Cancelled",
+          "Plan execution was cancelled by user request.\nPartial results may be available.",
+          padding: [1, 2, 1, 2],
+          style: {border: {fg: :yellow}}
+        )
+
+        exit(130) # Standard exit code for SIGINT
+      end
     end
   end
 end

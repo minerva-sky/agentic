@@ -20,7 +20,14 @@ module Agentic
     # @param config [LlmConfig] The configuration for the LLM
     # @param retry_config [RetryConfig, Hash] Configuration for the retry handler
     def initialize(config, retry_config = {})
-      @client = OpenAI::Client.new(access_token: Agentic.configuration.access_token)
+      client_options = {access_token: Agentic.configuration.access_token}
+
+      # Add custom base URL if configured (for Ollama, etc.)
+      if Agentic.configuration.api_base_url
+        client_options[:uri_base] = Agentic.configuration.api_base_url
+      end
+
+      @client = OpenAI::Client.new(client_options)
       @config = config
       @last_response = nil
 

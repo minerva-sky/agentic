@@ -117,7 +117,7 @@ module Agentic
         max_child_depth = schema[:properties].values.map do |prop|
           calculate_max_depth(prop, current_depth + 1)
         end.max
-        [current_depth, max_child_depth].max
+        max_child_depth ? [current_depth, max_child_depth].max : current_depth
       end
     end
   end

@@ -23,6 +23,7 @@ require_relative "agentic/extension"
 require_relative "agentic/capabilities"
 require_relative "agentic/agent_assembly_engine"
 require_relative "agentic/llm_assisted_composition_strategy"
+require_relative "agentic/task_output_schemas"
 
 module Agentic
   class Error < StandardError; end
@@ -34,11 +35,12 @@ module Agentic
   self.logger ||= Logger.new($stdout, level: :debug)
 
   class Configuration
-    attr_accessor :access_token, :agent_store_path
+    attr_accessor :access_token, :agent_store_path, :api_base_url
 
     def initialize
-      @access_token = ENV["OPENAI_ACCESS_TOKEN"]
+      @access_token = ENV["OPENAI_ACCESS_TOKEN"] || ENV["AGENTIC_API_TOKEN"] || "ollama"
       @agent_store_path = ENV["AGENTIC_AGENT_STORE_PATH"] || File.join(Dir.home, ".agentic", "agents")
+      @api_base_url = ENV["AGENTIC_API_BASE_URL"] || ENV["OPENAI_BASE_URL"]
     end
   end
 

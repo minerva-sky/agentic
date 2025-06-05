@@ -17,18 +17,20 @@ module Agentic
   # @attr_reader [TaskFailure, nil] failure Failure information if the task failed, nil otherwise
   # @attr_reader [Boolean, nil] ready_to_execute Flag indicating if the task is ready to be executed
   # @attr_accessor [Integer, nil] retry_count Number of times the task has been retried
+  # @attr_accessor [Symbol, nil] output_schema_name Name of the output schema to use
   class Task
     include Agentic::Observable
 
     attr_reader :id, :description, :agent_spec, :input, :output, :status, :failure, :ready_to_execute
-    attr_accessor :retry_count
+    attr_accessor :retry_count, :output_schema_name
 
     # Initializes a new task
     # @param description [String] Human-readable description of the task
     # @param agent_spec [Hash, AgentSpecification] Requirements for the agent that will execute this task
     # @param input [Hash] Input data for the task
+    # @param output_schema_name [Symbol, nil] Name of the output schema to use for structured output
     # @return [Task] A new task instance
-    def initialize(description:, agent_spec:, input: {})
+    def initialize(description:, agent_spec:, input: {}, output_schema_name: nil)
       @id = SecureRandom.uuid
       @description = description
 
@@ -48,6 +50,7 @@ module Agentic
       @failure = nil
       @status = :pending
       @ready_to_execute = nil
+      @output_schema_name = output_schema_name
     end
 
     # Creates a task from a TaskDefinition
@@ -72,7 +75,11 @@ module Agentic
       notify_observers(:status_change, old_status, @status)
 
       begin
-        @output = agent.execute(build_prompt)
+        @output = if has_output_schema?
+          agent.execute_with_schema(build_prompt, output_schema)
+        else
+          agent.execute(build_prompt)
+        end
         old_status = @status
         @status = :completed
 
@@ -138,11 +145,36 @@ module Agentic
       }
     end
 
+    # Returns the output schema for this task
+    # @return [Agentic::StructuredOutputs::Schema, nil] The schema or nil if none specified
+    def output_schema
+      return nil unless @output_schema_name
+      TaskOutputSchemas.get(@output_schema_name)
+    end
+
+    # Checks if this task has a structured output schema
+    # @return [Boolean] True if task has an output schema
+    def has_output_schema?
+      !@output_schema_name.nil? && TaskOutputSchemas.exists?(@output_schema_name)
+    end
+
+    # Sets the output schema for this task
+    # @param schema_name [Symbol] The name of the schema to use
+    def set_output_schema(schema_name)
+      @output_schema_name = schema_name
+    end
+
     private
 
     # Builds the prompt to be sent to the agent
     # @return [String] The formatted prompt
     def build_prompt
+      output_requirements = if has_output_schema?
+        "Provide your response as a structured JSON object that follows the specified schema. Do not include any markdown formatting, code blocks, or additional text - just the raw JSON."
+      else
+        "Provide your response as valid JSON only. Do not wrap the JSON in markdown code blocks or any other formatting. Return raw JSON that can be parsed directly."
+      end
+
       <<~PROMPT
         [System Instructions]
         #{agent_spec.instructions}
@@ -154,7 +186,7 @@ module Agentic
         #{JSON.pretty_generate(input)}
         
         [Output Requirements]
-        Please provide your response in JSON format.
+        #{output_requirements}
       PROMPT
     end
   end

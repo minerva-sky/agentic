@@ -48,6 +48,8 @@ module Agentic
 
       # Configure lifecycle hooks with callable defaults (no-ops)
       @lifecycle_hooks = {
+        before_agent_build: ->(task_id:, task:) {},          # Called before an agent is built
+        after_agent_build: ->(task_id:, task:, agent:, build_duration:) {}, # Called after an agent is built
         before_task_execution: ->(task_id:, task:) {},        # Called before a task is executed
         after_task_success: ->(task_id:, task:, result:, duration:) {}, # Called after a task succeeds
         after_task_failure: ->(task_id:, task:, failure:, duration:) {}, # Called after a task fails
@@ -99,6 +101,10 @@ module Agentic
           tasks: @tasks.transform_values(&:to_h),
           results: @results
         )
+      ensure
+        @barrier&.stop
+        # Ensure execution_end_time is set even if an exception occurred
+        @execution_end_time ||= Time.now
       end
 
       # Create and return a PlanExecutionResult
@@ -264,7 +270,24 @@ module Agentic
       async_task = semaphore.async do
         task_start_time = Time.now
         begin
+          # Call before_agent_build hook
+          @lifecycle_hooks[:before_agent_build].call(
+            task_id: task_id,
+            task: task
+          )
+
+          agent_build_start = Time.now
           agent = agent_provider.get_agent_for_task(task)
+          agent_build_duration = Time.now - agent_build_start
+
+          # Call after_agent_build hook
+          @lifecycle_hooks[:after_agent_build].call(
+            task_id: task_id,
+            task: task,
+            agent: agent,
+            build_duration: agent_build_duration
+          )
+
           result = task.perform(agent)
           task_duration = Time.now - task_start_time
 

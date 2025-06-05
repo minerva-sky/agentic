@@ -63,7 +63,7 @@ RSpec.describe Agentic::CLI::ExecutionObserver do
   describe "#after_task_success" do
     let(:task_id) { "task-123" }
     let(:task) { double("Task", description: "Test task") }
-    let(:result) { double("TaskResult") }
+    let(:result) { double("TaskResult", output: "Test output") }
     let(:duration) { 5.0 }
     let(:spinner) { double("TTY::Spinner", success: nil) }
 
@@ -138,7 +138,7 @@ RSpec.describe Agentic::CLI::ExecutionObserver do
     let(:status) { :completed }
     let(:execution_time) { 10.0 }
     let(:tasks) { {"task-1" => {description: "Task 1"}} }
-    let(:results) { {"task-1" => double("TaskResult")} }
+    let(:results) { {"task-1" => double("TaskResult", successful?: true, output: "Test output")} }
 
     before do
       allow(Agentic::UI).to receive(:format_duration).and_return("10s")
@@ -163,11 +163,12 @@ RSpec.describe Agentic::CLI::ExecutionObserver do
         )
       }.to output(/result-box/).to_stdout
 
+      # Expect two calls to box - initial and final
       expect(Agentic::UI).to have_received(:box).with(
-        "Execution Results",
+        "Execution Summary",
         a_string_including("Status:"),
         hash_including(style: {border: {fg: :green}})
-      )
+      ).twice
     end
 
     it "uses different colors for different statuses" do
@@ -181,10 +182,10 @@ RSpec.describe Agentic::CLI::ExecutionObserver do
       )
 
       expect(Agentic::UI).to have_received(:box).with(
-        "Execution Results",
+        "Execution Summary",
         anything,
         hash_including(style: {border: {fg: :yellow}})
-      )
+      ).twice
 
       # Test failure status
       observer.plan_completed(
@@ -196,10 +197,10 @@ RSpec.describe Agentic::CLI::ExecutionObserver do
       )
 
       expect(Agentic::UI).to have_received(:box).with(
-        "Execution Results",
+        "Execution Summary",
         anything,
         hash_including(style: {border: {fg: :red}})
-      )
+      ).twice
     end
 
     it "does nothing when quiet mode is enabled" do
@@ -247,12 +248,12 @@ RSpec.describe Agentic::CLI::ExecutionObserver do
       expect(result).to include("Elapsed:")
     end
 
-    it "does not display progress when all tasks are completed" do
+    it "prints a newline when all tasks are completed" do
       observer.instance_variable_set(:@completed_tasks, 5)
 
       expect {
         observer.send(:display_progress)
-      }.not_to output.to_stdout
+      }.to output("\n").to_stdout
     end
 
     it "does not display progress when no tasks have been completed" do
@@ -272,6 +273,119 @@ RSpec.describe Agentic::CLI::ExecutionObserver do
       expect {
         observer.send(:display_progress)
       }.not_to output.to_stdout
+    end
+  end
+
+  describe "agent information in task table" do
+    let(:task_id) { "task-123" }
+    let(:task) { double("Task", description: "Test task") }
+    let(:agent) { double("Agent", role: "Test Agent") }
+
+    before do
+      # Enable holistic display
+      observer.instance_variable_set(:@holistic_display, true)
+      observer.instance_variable_set(:@task_states, {})
+
+      # Mock UI methods
+      allow(Agentic::UI).to receive(:colorize).and_return("colored-text")
+      allow(Agentic::UI).to receive(:format_duration).and_return("1.5s")
+      allow(Agentic::UI).to receive(:box).and_return("agent-box")
+      allow(Agentic::UI).to receive(:task_display_table).and_return("task-table")
+      allow(Agentic::UI).to receive(:clear_and_reposition)
+      allow(Agentic::UI).to receive(:truncate_text) { |text, length| text[0...length] }
+    end
+
+    # Helper method to capture stdout including escape sequences
+    def capture_stdout
+      old_stdout = $stdout
+      $stdout = StringIO.new
+      yield
+      $stdout.string
+    ensure
+      $stdout = old_stdout
+    end
+
+    it "displays agent information in task table when agents are built" do
+      # Simulate agent building and task execution
+      observer.before_agent_build(task_id: task_id, task: task)
+      observer.after_agent_build(task_id: task_id, task: task, agent: agent, build_duration: 1.5)
+      observer.before_task_execution(task_id: task_id, task: task)
+
+      output = capture_stdout do
+        observer.send(:update_holistic_display)
+      end
+
+      # Verify that the table content is displayed and includes agent info
+      expect(output).to include("task-table")
+
+      # Verify that agent information is tracked
+      built_agents = observer.instance_variable_get(:@built_agents)
+      expect(built_agents[task_id]).to include(
+        role: "Test Agent",
+        build_duration: 1.5,
+        task_description: "Test task"
+      )
+
+      # Verify that no separate agent box is created
+      expect(Agentic::UI).not_to have_received(:box).with(
+        "Agent Summary",
+        anything,
+        anything
+      )
+    end
+
+    it "displays task table with agent column even when no agents are built" do
+      observer.before_task_execution(task_id: task_id, task: task)
+
+      output = capture_stdout do
+        observer.send(:update_holistic_display)
+      end
+
+      # Verify that the table content is displayed
+      expect(output).to include("task-table")
+
+      # Verify that no agent information is tracked yet
+      built_agents = observer.instance_variable_get(:@built_agents)
+      expect(built_agents[task_id]).to be_nil
+
+      # Verify that no agent box is created
+      expect(Agentic::UI).not_to have_received(:box).with(
+        "Agent Summary",
+        anything,
+        anything
+      )
+    end
+
+    it "handles agent reuse across multiple tasks correctly" do
+      # Create multiple tasks that will use the same agent
+      task_id_1 = "task-1"
+      task_id_2 = "task-2"
+      task_1 = double("Task", description: "First task")
+      task_2 = double("Task", description: "Second task")
+      shared_agent = double("Agent", role: "Shared Agent")
+
+      # Simulate the same agent being built for multiple tasks
+      observer.before_agent_build(task_id: task_id_1, task: task_1)
+      observer.after_agent_build(task_id: task_id_1, task: task_1, agent: shared_agent, build_duration: 1.0)
+      observer.before_task_execution(task_id: task_id_1, task: task_1)
+
+      observer.before_agent_build(task_id: task_id_2, task: task_2)
+      observer.after_agent_build(task_id: task_id_2, task: task_2, agent: shared_agent, build_duration: 0.1) # Reused agent builds faster
+      observer.before_task_execution(task_id: task_id_2, task: task_2)
+
+      # Verify that both tasks show their agent assignments
+      built_agents = observer.instance_variable_get(:@built_agents)
+      expect(built_agents[task_id_1][:role]).to eq("Shared Agent")
+      expect(built_agents[task_id_2][:role]).to eq("Shared Agent")
+      expect(built_agents[task_id_1][:build_duration]).to eq(1.0)
+      expect(built_agents[task_id_2][:build_duration]).to eq(0.1)
+
+      output = capture_stdout do
+        observer.send(:update_holistic_display)
+      end
+
+      # Verify that the table content is displayed
+      expect(output).to include("task-table")
     end
   end
 end

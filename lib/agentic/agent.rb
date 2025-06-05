@@ -1,10 +1,20 @@
 # frozen_string_literal: true
 
+require_relative "llm_client"
+require_relative "llm_config"
+
 module Agentic
   class Agent
     include FactoryMethods
 
-    configurable :id, :role, :purpose, :backstory, :tools, :capabilities
+    configurable :id, :name, :role, :purpose, :backstory, :instructions, :tools, :capabilities, :llm_client
+
+    # Initialize with default values
+    def initialize
+      @capabilities = {}
+      @tools = Set.new
+      @llm_client = nil
+    end
 
     # Executes a task using this agent
     # @param task [String, Task] The task to execute, either a task object or a prompt
@@ -16,6 +26,30 @@ module Agentic
       else
         # Task object
         task.perform(self)
+      end
+    end
+
+    # Executes a prompt with structured output schema
+    # @param prompt [String] The prompt to execute
+    # @param schema [Agentic::StructuredOutputs::Schema] The output schema
+    # @return [Object] The structured response
+    def execute_with_schema(prompt, schema)
+      # If the agent has a text_generation capability, use it
+      if has_capability?("text_generation")
+        # For now, text_generation capabilities don't support schemas
+        # Fall back to regular execution
+        execute_capability("text_generation", {prompt: prompt})[:response]
+      elsif @llm_client
+        # Use the configured LLM client with structured output
+        response = @llm_client.complete(build_messages(prompt), output_schema: schema)
+        if response.successful?
+          response.content
+        else
+          raise "LLM execution failed: #{response.error.message}"
+        end
+      else
+        # Fallback error - agent not properly configured
+        raise "Agent not configured with LLM capabilities. Use DefaultAgentProvider or configure llm_client directly."
       end
     end
 
@@ -108,11 +142,53 @@ module Agentic
       # If the agent has a text_generation capability, use it
       if has_capability?("text_generation")
         execute_capability("text_generation", {prompt: prompt})[:response]
+      elsif @llm_client
+        # Use the configured LLM client
+        response = @llm_client.complete(build_messages(prompt))
+        if response.successful?
+          response.content
+        else
+          raise "LLM execution failed: #{response.error.message}"
+        end
       else
-        # Otherwise, implement default behavior
-        # This would typically integrate with the LLM client
-        "This is a placeholder response. In a real implementation, this would use an LLM."
+        # Fallback error - agent not properly configured
+        raise "Agent not configured with LLM capabilities. Use DefaultAgentProvider or configure llm_client directly."
       end
+    end
+
+    # Builds messages array for LLM completion
+    # @param prompt [String] The user prompt
+    # @return [Array<Hash>] The messages array
+    def build_messages(prompt)
+      messages = []
+
+      # Add system message with agent context
+      system_content = build_system_message
+      messages << {role: "system", content: system_content} if system_content && !system_content.empty?
+
+      # Add user prompt
+      messages << {role: "user", content: prompt}
+
+      messages
+    end
+
+    # Builds system message with agent personality and instructions
+    # @return [String] The system message content
+    def build_system_message
+      parts = []
+
+      parts << "You are #{@role}" if @role && !@role.empty?
+      parts << "Purpose: #{@purpose}" if @purpose && !@purpose.empty?
+      parts << "Background: #{@backstory}" if @backstory && !@backstory.empty?
+      parts << "Instructions: #{@instructions}" if @instructions && !@instructions.empty?
+
+      # Add capability information
+      if @capabilities && !@capabilities.empty?
+        capabilities_list = @capabilities.keys.join(", ")
+        parts << "Available capabilities: #{capabilities_list}"
+      end
+
+      parts.join("\n\n")
     end
   end
 end
