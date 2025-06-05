@@ -14,6 +14,7 @@ Agentic aims to be a domain-agnostic, self-improving framework for AI agent orch
 - **AgentRegistry**: Central registry for managing different agent types
 - **CapabilityManager**: Handles extensible agent abilities and tools
 - **MetaLearningSystem**: Enables cross-execution improvements and adaptation
+- **StreamingObservabilityHub**: Central coordinator for real-time event streaming and observability
 
 **Design Principles**:
 - Dependency injection for all components
@@ -43,6 +44,7 @@ Agentic aims to be a domain-agnostic, self-improving framework for AI agent orch
 - Event-driven communication between components
 - Transaction-like semantics for task execution
 - Observable pattern for task state notification
+- Streaming observability for real-time insights
 - Result-oriented failure handling
 
 ### 3. Verification Layer
@@ -106,6 +108,31 @@ Agentic aims to be a domain-agnostic, self-improving framework for AI agent orch
 - Anonymized telemetry collection
 - Incremental learning with stability guarantees
 - Performance benchmarking against baselines
+
+## Observability System
+
+**Purpose**: Provides real-time insights into system execution and behavior.
+
+**Components**:
+- **StreamingObservabilityHub**: Central coordinator for all observability events
+- **ObservabilityStream**: Generic streaming interface supporting multiple backends (console, file, WebSocket, memory)
+- **StreamProcessor**: Event filtering, transformation, and routing capabilities
+- **MetricsAggregator**: Real-time metrics calculation and windowed aggregation
+- **Enhanced Observable Pattern**: Streaming-aware extension of existing Observable pattern
+
+**Design Principles**:
+- Non-blocking streaming to prevent execution delays
+- Pluggable stream backends for different use cases
+- Configurable event filtering and transformation
+- Thread-safe concurrent stream processing
+- Backwards compatible with existing Observable behavior
+
+**Stream Types**:
+- **Task Execution Streams**: Intermediate steps, progress updates, and performance metrics
+- **Agent Assembly Streams**: Capability analysis, selection reasoning, and construction steps
+- **Plan Building Streams**: Goal analysis, task generation, and dependency resolution
+- **Orchestration Streams**: Scheduling decisions, resource allocation, and execution coordination
+- **LLM Interaction Streams**: Token usage, response times, and content flow
 
 ## Human Interface
 
@@ -183,9 +210,10 @@ With verification points at each transition and potential human intervention bas
 7. ✅ Implement Extension System components (PluginManager, DomainAdapter, ProtocolHandler)
 8. ✅ Implement Learning System components (ExecutionHistoryStore, PatternRecognizer, StrategyOptimizer)
 9. ✅ Implement metrics collection
-10. Add human intervention portal
+10. 🚧 Implement Streaming Observability System (StreamingObservabilityHub, ObservabilityStream, enhanced Observable pattern)
+11. Add human intervention portal
 
-For detailed design documentation on specific architectural decisions, see the `.architecture-review` directory, which contains in-depth analysis of:
+For detailed design documentation on specific architectural decisions, see the @.architecture/decisions/adrs directory, which contains in-depth analysis of:
 - Task Input Handling
 - Task Output Handling
 - Task Failure Handling
@@ -194,6 +222,7 @@ For detailed design documentation on specific architectural decisions, see the `
 - Adaptation Engine
 - Extension System
 - Learning System
+- Streaming Observability
 
 ## Conclusion
 
