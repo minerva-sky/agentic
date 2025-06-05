@@ -2,6 +2,26 @@
 
 A Ruby gem for building and running AI agents in a [plan-and-execute](https://blog.langchain.dev/planning-agents/#plan-and-execute) fashion. Agentic provides a simple command-line tool and library to build, manage, deploy, and run purpose-driven AI agents using OpenAI's LLM API.
 
+## What's New in v0.2.0
+
+🚀 **Agent Self-Assembly System** - Agents can now dynamically construct themselves based on task requirements
+🎯 **Capability System** - Rich specification and versioning system for agent capabilities  
+💾 **Persistent Agent Store** - Save and reuse agents across sessions
+🔧 **Enhanced CLI** - Comprehensive command-line interface with agent and capability management
+📊 **Learning System** - Agents improve over time through execution history analysis
+🎨 **Real-time Feedback** - Progress bars, spinners, and colorized output for better user experience
+
+## Demo Video
+
+<div>
+    <a href="https://www.loom.com/share/278bc1749f68480fa8a0a3a6658a0291">
+      <p>Agentic Gem v0.2.0 Release - Watch Video</p>
+    </a>
+    <a href="https://www.loom.com/share/278bc1749f68480fa8a0a3a6658a0291">
+      <img style="max-width:300px;" src="https://cdn.loom.com/sessions/thumbnails/278bc1749f68480fa8a0a3a6658a0291-2146dcc57ee7b47f-full-play.gif">
+    </a>
+  </div>
+
 ## Installation
 
 Install the gem and add to the application's Gemfile by executing:
@@ -39,19 +59,24 @@ $ agentic plan "Generate a market research report on AI trends"          # Creat
 $ agentic plan "Write a blog post about Ruby" --save plan.json           # Save plan to file
 $ agentic plan "Research quantum computing" --output json                # Output in JSON format
 $ agentic plan "Analyze market trends" --model gpt-4o                    # Use a specific model
+$ agentic plan "Create documentation" --execute                          # Create and execute immediately
+$ agentic plan "Research topics" --no-interactive                        # Skip interactive prompts
 
 $ agentic execute --plan plan.json                  # Execute a saved plan
-$ agentic execute --async                           # Execute tasks asynchronously
+$ agentic execute --from-stdin                      # Read plan from stdin
 $ agentic execute --max-concurrency 5               # Limit concurrent tasks
+$ agentic execute --file results.json               # Save results to specific file
 
 # Agent Management
 $ agentic agent list                                # List available agents
+$ agentic agent list --detailed                    # List with detailed information
 $ agentic agent create "ResearchAgent" \            # Create a new agent
     --role="Research Assistant" \
     --purpose="Conduct thorough research" \
     --capabilities=text_generation,web_search
 $ agentic agent show "ResearchAgent"                # Show agent details
 $ agentic agent build "ResearchAgent"               # Build an agent from storage
+$ agentic agent delete "ResearchAgent"              # Delete an agent
 
 # Capability Management
 $ agentic capabilities list                         # List available capabilities
