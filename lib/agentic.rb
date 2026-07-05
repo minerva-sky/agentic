@@ -27,15 +27,32 @@ module Agentic
     attr_accessor :logger
   end
 
-  self.logger ||= Logger.new($stdout, level: :debug)
+  # Library etiquette: quiet by default. The CLI raises verbosity for
+  # interactive use; library consumers opt in via Agentic.logger.level=
+  self.logger ||= Logger.new($stdout, level: :warn)
 
   class Configuration
     attr_accessor :access_token, :agent_store_path, :api_base_url
 
     def initialize
-      @access_token = ENV["OPENAI_ACCESS_TOKEN"] || ENV["AGENTIC_API_TOKEN"] || "ollama"
+      @access_token = ENV["OPENAI_ACCESS_TOKEN"] || ENV["AGENTIC_API_TOKEN"]
       @agent_store_path = ENV["AGENTIC_AGENT_STORE_PATH"] || File.join(Dir.home, ".agentic", "agents")
       @api_base_url = ENV["AGENTIC_API_BASE_URL"] || ENV["OPENAI_BASE_URL"]
+    end
+
+    # Verifies that the configuration can reach an LLM: either an access
+    # token (hosted APIs) or a custom base URL (local endpoints such as
+    # Ollama, which accept any token).
+    #
+    # @return [Configuration] self, for chaining
+    # @raise [Errors::ConfigurationError] when no credentials are configured
+    def validate!
+      return self if access_token || api_base_url
+
+      raise Errors::ConfigurationError,
+        "No LLM credentials configured. Set OPENAI_ACCESS_TOKEN (or " \
+        "AGENTIC_API_TOKEN), configure an api_base_url for a local " \
+        "endpoint, or use Agentic.configure { |c| c.access_token = ... }"
     end
   end
 

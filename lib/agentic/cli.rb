@@ -811,7 +811,7 @@ module Agentic
 
     # Checks for API token and raises error if not configured
     def check_api_token!
-      unless Agentic.configuration.access_token
+      unless Agentic.configuration.access_token || Agentic.configuration.api_base_url
         error_box = UI.box(
           "Configuration Error",
           "No OpenAI API token configured.\n\n" \
