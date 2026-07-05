@@ -140,6 +140,20 @@ RSpec.describe Agentic::PlanOrchestrator do
       expect(result.task_result(task_c.id).status).to eq(:completed)
     end
 
+    it "joins an existing reactor instead of nesting a new event loop" do
+      orchestrator.add_task(task_a)
+      orchestrator.add_task(task_b, [task_a.id])
+
+      result = nil
+      Async do
+        result = orchestrator.execute_plan(agent_provider)
+      end.wait
+
+      expect(result).to be_a(Agentic::PlanExecutionResult)
+      expect(result.status).to eq(:completed)
+      expect(result.task_result(task_b.id).status).to eq(:completed)
+    end
+
     it "handles task failures" do
       failing_agent_provider = TestAgentProvider.new
       agent = MockAgent.new

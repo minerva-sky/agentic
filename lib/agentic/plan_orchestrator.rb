@@ -66,10 +66,16 @@ module Agentic
     end
 
     # Executes the plan, respecting task dependencies and concurrency limits
+    #
+    # Composes with structured concurrency: when called inside a running
+    # Async reactor (e.g. under Falcon or within another task) it joins the
+    # current reactor instead of nesting a new event loop; standalone calls
+    # still create their own reactor and block until the plan completes.
+    #
     # @param agent_provider [Object] An object that provides agents for task execution
     # @return [PlanExecutionResult] The structured execution results
     def execute_plan(agent_provider)
-      @reactor = Async do |reactor|
+      @reactor = Sync do |reactor|
         @barrier = Async::Barrier.new
         @semaphore = Async::Semaphore.new(@concurrency_limit, parent: @barrier)
 
@@ -204,12 +210,11 @@ module Agentic
         delay += jitter
       end
 
-      # Sleep if there's a delay to apply
-      if delay > 0
-        Async do
-          Async::Task.current.sleep(delay) if delay > 0
-        end
-      end
+      # Sleep in the current task so the retry actually waits; the async
+      # fiber scheduler keeps this non-blocking for sibling tasks. The old
+      # `Async { sleep }` spawned a detached task and returned immediately,
+      # so retries never observed their backoff delay.
+      sleep(delay) if delay > 0
     end
 
     # Checks if all dependencies for a task are met

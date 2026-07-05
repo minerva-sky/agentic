@@ -65,26 +65,17 @@ RSpec.describe Agentic::PlanOrchestrator, "retry behavior" do
   end
 
   describe "backoff strategies" do
-    let(:async_task) { double("Async::Task") }
-
-    before do
-      # Setup mocks for Async
-      allow(Async).to receive(:current_reactor).and_return(double("Reactor"))
-      allow(Async).to receive(:run).and_yield
-      allow(Async::Task).to receive(:current).and_return(async_task)
-      allow(async_task).to receive(:sleep)
-    end
-
     it "applies constant backoff strategy" do
       orchestrator = described_class.new(retry_policy: {
         backoff_strategy: :constant,
         backoff_constant: 2
       })
+      allow(orchestrator).to receive(:sleep)
 
       task.retry_count = 1
       orchestrator.apply_retry_backoff(task: task)
 
-      expect(async_task).to have_received(:sleep).with(a_value_within(1).of(2))
+      expect(orchestrator).to have_received(:sleep).with(a_value_within(1).of(2))
     end
 
     it "applies linear backoff strategy" do
@@ -92,11 +83,12 @@ RSpec.describe Agentic::PlanOrchestrator, "retry behavior" do
         backoff_strategy: :linear,
         backoff_base: 1
       })
+      allow(orchestrator).to receive(:sleep)
 
       task.retry_count = 3
       orchestrator.apply_retry_backoff(task: task)
 
-      expect(async_task).to have_received(:sleep).with(a_value_within(1).of(3))
+      expect(orchestrator).to have_received(:sleep).with(a_value_within(1).of(3))
     end
 
     it "applies exponential backoff strategy" do
@@ -104,23 +96,25 @@ RSpec.describe Agentic::PlanOrchestrator, "retry behavior" do
         backoff_strategy: :exponential,
         backoff_base: 1
       })
+      allow(orchestrator).to receive(:sleep)
 
       task.retry_count = 3
       orchestrator.apply_retry_backoff(task: task)
 
       # Should be approximately 1 * 2^(3-1) = 4
-      expect(async_task).to have_received(:sleep).with(a_value_within(1).of(4))
+      expect(orchestrator).to have_received(:sleep).with(a_value_within(1).of(4))
     end
 
     it "does not apply backoff when strategy is :none" do
       orchestrator = described_class.new(retry_policy: {
         backoff_strategy: :none
       })
+      allow(orchestrator).to receive(:sleep)
 
       task.retry_count = 1
       orchestrator.apply_retry_backoff(task: task)
 
-      expect(async_task).not_to have_received(:sleep)
+      expect(orchestrator).not_to have_received(:sleep)
     end
   end
 
