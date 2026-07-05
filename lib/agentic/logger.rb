@@ -25,7 +25,10 @@ module Agentic
       end
     end
 
-    def initialize(*args)
+    # Forward everything, including keywords: `(*args)` alone would fold
+    # `level: :warn` into a positional hash that ::Logger reads as shift_age,
+    # silently discarding the level
+    def initialize(...)
       super
       @formatter = SimpleFormatter.new
     end

@@ -36,6 +36,13 @@ Also worth stating plainly: `filter_sensitive_data` in the spec helper was
 dutifully scrubbing the string `"ollama"` out of VCR cassettes. Security
 theater for a credential that never existed.
 
+Postscript: setting the default level to `:warn` did nothing at first.
+`Agentic::Logger#initialize(*args)` was folding the `level: :warn` keyword
+into a positional hash — which `::Logger` reads as `shift_age` — so every
+level ever passed to this constructor had been silently discarded and the
+logger always ran at DEBUG. Ruby 3 keyword separation is not optional
+trivia. `initialize(...)` forwards correctly; the INFO chatter is gone.
+
 ## What I did not do (yet), and would
 
 - The gemspec still ships thor + six tty-* gems + ostruct to every library
