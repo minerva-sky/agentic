@@ -86,16 +86,31 @@ module Agentic
     orchestrator.execute_plan(DefaultAgentProvider.new(config))
   end
 
+  # Guards lazy initialization of the agent assembly system
+  ASSEMBLY_LOCK = Mutex.new
+  private_constant :ASSEMBLY_LOCK
+
   # Initialize the core agent self-assembly components
+  #
+  # Thread-safe: concurrent callers initialize the registry, store, and
+  # assembly engine exactly once.
   def self.initialize_agent_assembly
-    # Create registry, store, and assembly engine if not already initialized
-    unless @agent_capability_registry
-      @agent_capability_registry = AgentCapabilityRegistry.instance
-      @agent_store = PersistentAgentStore.new(configuration.agent_store_path, @agent_capability_registry)
-      @agent_assembly_engine = AgentAssemblyEngine.new(@agent_capability_registry, @agent_store)
+    return if @agent_capability_registry
+
+    ASSEMBLY_LOCK.synchronize do
+      # Re-check inside the lock - another thread may have won the race
+      return if @agent_capability_registry
+
+      registry = AgentCapabilityRegistry.instance
+      @agent_store = PersistentAgentStore.new(configuration.agent_store_path, registry)
+      @agent_assembly_engine = AgentAssemblyEngine.new(registry, @agent_store)
 
       # Register standard capabilities
       Capabilities.register_standard_capabilities
+
+      # Assigned last: this ivar doubles as the initialized flag, so it must
+      # only become visible once the store and engine are fully built
+      @agent_capability_registry = registry
 
       logger.info("Initialized agent assembly system")
     end
