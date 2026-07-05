@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "verification_strategy"
-require_relative "verification_result"
-
 module Agentic
   module Verification
     # Verifies task results using an LLM

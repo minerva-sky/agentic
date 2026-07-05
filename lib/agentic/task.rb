@@ -2,9 +2,6 @@
 
 require "securerandom"
 require "json"
-require_relative "observable"
-require_relative "task_definition"
-require_relative "agent_specification"
 
 module Agentic
   # Represents an individual task to be executed by an agent

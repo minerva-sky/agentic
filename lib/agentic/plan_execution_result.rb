@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "task_execution_result"
-
 module Agentic
   # Value object representing the execution result of a plan
   class PlanExecutionResult

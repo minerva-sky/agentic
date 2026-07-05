@@ -1,9 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "learning/execution_history_store"
-require_relative "learning/pattern_recognizer"
-require_relative "learning/strategy_optimizer"
-
 module Agentic
   # The Learning module provides components for capturing execution history,
   # recognizing patterns, and optimizing strategies based on feedback and metrics.

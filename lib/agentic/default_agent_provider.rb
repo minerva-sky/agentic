@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "llm_client"
-require_relative "llm_config"
-
 module Agentic
   # Default implementation of an agent provider for use in the CLI
   # This provider creates agents based on agent specs in tasks

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "thor"
+
 module Agentic
   class CLI < Thor
     # Observer that provides real-time feedback during plan execution

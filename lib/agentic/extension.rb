@@ -1,9 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "extension/domain_adapter"
-require_relative "extension/protocol_handler"
-require_relative "extension/plugin_manager"
-
 module Agentic
   # The Extension module provides extensibility points for the Agentic framework.
   # It includes three main components:

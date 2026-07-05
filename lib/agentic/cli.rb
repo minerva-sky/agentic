@@ -3,7 +3,6 @@
 require "thor"
 require "json"
 require "yaml"
-require_relative "cli/capabilities"
 
 module Agentic
   # Command Line Interface for Agentic

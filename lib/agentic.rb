@@ -1,29 +1,24 @@
 # frozen_string_literal: true
 
 require "zeitwerk"
+
+# Zeitwerk is the single code loader for this gem: every constant under
+# Agentic:: is autoloaded on first reference, including the CLI, so
+# library consumers never pay for Thor or the tty-* UI stack at require
+# time. Files must not require_relative their siblings - reference the
+# constant and let the loader resolve it.
 loader = Zeitwerk::Loader.for_gem
 
 # Configure Zeitwerk to handle the CLI class name properly
 loader.inflector.inflect(
-  "cli" => "CLI"
+  "cli" => "CLI",
+  "ui" => "UI"
 )
 
-# Configure paths that need to be eager loaded or excluded from Zeitwerk
+# The CLI is only autoloaded on demand (exe/agentic), never eager loaded
 loader.do_not_eager_load("#{__dir__}/agentic/cli")
 
 loader.setup
-
-# Explicitly require Thor-related components to avoid Zeitwerk issues with Thor
-# Thor requires subcommands to be loaded before they're referenced
-require_relative "agentic/ui"
-require_relative "agentic/default_agent_provider"
-require_relative "agentic/cli"
-require_relative "agentic/cli/execution_observer"
-require_relative "agentic/extension"
-require_relative "agentic/capabilities"
-require_relative "agentic/agent_assembly_engine"
-require_relative "agentic/llm_assisted_composition_strategy"
-require_relative "agentic/task_output_schemas"
 
 module Agentic
   class Error < StandardError; end

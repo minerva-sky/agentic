@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "llm_client"
-require_relative "llm_config"
-
 module Agentic
   class Agent
     include FactoryMethods

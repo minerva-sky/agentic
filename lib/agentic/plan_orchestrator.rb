@@ -5,9 +5,6 @@ require "set"
 require "async"
 require "async/barrier"
 require "async/semaphore"
-require_relative "task_failure"
-require_relative "task_execution_result"
-require_relative "plan_execution_result"
 
 module Agentic
   # Orchestrates the execution of tasks in a plan, handling dependencies and concurrency

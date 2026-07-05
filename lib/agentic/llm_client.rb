@@ -2,10 +2,6 @@
 
 require "openai"
 require "net/http"
-require_relative "llm_response"
-require_relative "errors/llm_error"
-require_relative "retry_handler"
-require_relative "retry_config"
 
 module Agentic
   # Generic wrapper for LLM API clients

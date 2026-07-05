@@ -1,9 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "../capability_specification"
-require_relative "../capability_provider"
-require_relative "../agent_capability_registry"
-
 module Agentic
   module Capabilities
     # Example capabilities for common tasks

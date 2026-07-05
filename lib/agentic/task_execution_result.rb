@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "task_failure"
-
 module Agentic
   # Value object representing the execution result of a task
   class TaskExecutionResult
