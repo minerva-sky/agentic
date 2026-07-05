@@ -102,24 +102,9 @@ module Agentic
           provider = CapabilityProvider.new(
             capability: spec,
             implementation: lambda do |inputs|
-              # This is a mock implementation
-              # In a real implementation, you would use a search API or web scraping
-
-              query = inputs[:query]
-              num_results = inputs[:num_results] || 3
-
-              results = num_results.times.map do |i|
-                "Result #{i + 1} for query: #{query}"
-              end
-
-              sources = num_results.times.map do |i|
-                "https://example.com/result#{i + 1}"
-              end
-
-              {
-                results: results,
-                sources: sources
-              }
+              # Delegates to the pluggable search backend (DuckDuckGo by
+              # default; see Capabilities::WebSearch to configure your own)
+              WebSearch.search(inputs[:query], num_results: inputs[:num_results] || 3)
             end
           )
 
