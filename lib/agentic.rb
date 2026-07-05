@@ -56,6 +56,36 @@ module Agentic
     LlmClient.new(config)
   end
 
+  # Plan and execute a goal in one call - the 80% path
+  #
+  # @example
+  #   result = Agentic.run("Summarize this week's support tickets")
+  #   puts result.results.values.map(&:output) if result.successful?
+  #
+  # @param goal [String] What you want done, in plain language
+  # @param model [String, nil] Optional LLM model override
+  # @param concurrency [Integer] Maximum number of tasks to run at once
+  # @return [PlanExecutionResult] The structured execution results
+  def self.run(goal, model: nil, concurrency: 5)
+    config = LlmConfig.new
+    config.model = model if model
+
+    plan = TaskPlanner.new(goal, config).plan
+
+    orchestrator = PlanOrchestrator.new(concurrency_limit: concurrency)
+    plan.tasks.each do |task_def|
+      orchestrator.add_task(
+        Task.new(
+          description: task_def.description,
+          agent_spec: task_def.agent,
+          input: {}
+        )
+      )
+    end
+
+    orchestrator.execute_plan(DefaultAgentProvider.new(config))
+  end
+
   # Initialize the core agent self-assembly components
   def self.initialize_agent_assembly
     # Create registry, store, and assembly engine if not already initialized
