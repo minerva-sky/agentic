@@ -594,6 +594,9 @@ module Agentic
               :blue
             )}"
             $stdout.flush
+          elsif total > 0
+            # All tasks accounted for - terminate the carriage-return progress line
+            puts
           end
         end
       end

@@ -11,3 +11,4 @@
 .rspec_status
 # environment variables
 .env
+result-*.json

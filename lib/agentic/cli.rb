@@ -208,7 +208,7 @@ module Agentic
         # Create spinner for agent creation
         agent = UI.with_spinner("Creating agent: #{name}") do
           # Create new agent
-          agent = Agentic::Agent.new do |a|
+          agent = Agentic::Agent.build do |a|
             a.role = options[:role]
             a.purpose = options[:purpose]
             a.backstory = options[:backstory] || ""

@@ -82,7 +82,7 @@ module Agentic
   # @return [CapabilitySpecification] The registered capability
   def self.register_capability(capability, provider)
     initialize_agent_assembly
-    @agent_capability_registry.register(capability, provider)
+    agent_capability_registry.register(capability, provider)
   end
 
   # Assemble an agent for a task
@@ -99,7 +99,7 @@ module Agentic
       strategy = LlmAssistedCompositionStrategy.new
     end
 
-    @agent_assembly_engine.assemble_agent(task, strategy: strategy, store: store)
+    agent_assembly_engine.assemble_agent(task, strategy: strategy, store: store)
   end
 
   # Create an LLM-assisted composition strategy

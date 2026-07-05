@@ -36,8 +36,10 @@ module Agentic
     # @param metadata [Hash] Additional metadata to store with the agent
     # @return [String] The ID of the stored agent
     def store(agent, name: nil, metadata: {})
-      # Generate ID if agent doesn't have one
+      # Generate ID if agent doesn't have one, and assign it back so that
+      # storing the same agent again versions it instead of duplicating it
       id = agent&.id || SecureRandom.uuid
+      agent.id = id if agent&.respond_to?(:id=) && agent.id.nil?
 
       # Generate version
       version = generate_version(id)
@@ -109,6 +111,10 @@ module Agentic
     # @option filter [Hash] :metadata Filter by metadata values
     # @return [Array<Hash>] Array of agent configurations
     def list_all(filter = {})
+      # Support both `all(capability: "x")` and the documented
+      # `all(filter: {capability: "x"})` forms (see ADR-015)
+      filter = filter[:filter] || {} if filter.key?(:filter)
+
       results = []
 
       @index.each do |id, versions|

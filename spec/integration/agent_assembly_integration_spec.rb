@@ -155,7 +155,7 @@ RSpec.describe "Agent Assembly Integration" do
 
     it "finds a stored agent for similar tasks" do
       # 1. Create and store an agent with data_analysis capability
-      original_agent = Agentic::Agent.new do |a|
+      original_agent = Agentic::Agent.build do |a|
         a.role = "Data Analyst"
         a.purpose = "Analyze financial data"
         a.backstory = "I am a data analysis expert"
@@ -222,7 +222,7 @@ RSpec.describe "Agent Assembly Integration" do
       expect(registry.get("comprehensive_analysis")).to eq(composed_capability)
 
       # 3. Create an agent with the composed capability
-      agent = Agentic::Agent.new do |a|
+      agent = Agentic::Agent.build do |a|
         a.role = "Report Generator"
         a.purpose = "Generate comprehensive reports"
       end
