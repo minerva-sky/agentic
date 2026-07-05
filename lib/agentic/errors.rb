@@ -1,7 +1,76 @@
 # frozen_string_literal: true
 
 module Agentic
+  # All Agentic error classes live in this one file so that referencing
+  # Agentic::Errors (or any constant beneath it) loads every error class.
+  # Zeitwerk autoloads a file when its namesake constant is referenced;
+  # sibling constants scattered across files would only load alongside
+  # their namesakes, making `rescue Errors::LlmTimeoutError` a NameError
+  # lottery dependent on load order.
   module Errors
+    # Raised when the library is asked to talk to an LLM without usable
+    # credentials or endpoint configuration. Raised at client construction
+    # time so misconfiguration fails at boot, not at request time.
+    class ConfigurationError < StandardError; end
+
+    # Raised when a capability's inputs or outputs violate its declared
+    # specification. Collects every violation instead of failing on the
+    # first, so callers can fix a bad payload in one round trip.
+    class ValidationError < StandardError
+      # @return [String] The capability whose contract was violated
+      attr_reader :capability
+
+      # @return [Symbol] Which side of the contract failed (:inputs or :outputs)
+      attr_reader :kind
+
+      # @return [Hash{Symbol=>Array<String>}] Violation messages keyed by attribute
+      attr_reader :violations
+
+      # @param capability [String] The capability name
+      # @param kind [Symbol] :inputs or :outputs
+      # @param violations [Hash{Symbol=>Array<String>}] Messages keyed by attribute
+      def initialize(capability:, kind:, violations:)
+        @capability = capability
+        @kind = kind
+        @violations = violations
+
+        details = violations.map { |key, messages| "#{key} #{Array(messages).join(", ")}" }.join("; ")
+        super("Invalid #{kind} for capability '#{capability}': #{details}")
+      end
+    end
+
+    # Base class for agent configuration and capability errors
+    class AgentError < StandardError; end
+
+    # Raised when a capability is requested that the registry or agent
+    # does not know about
+    class CapabilityNotFoundError < AgentError
+      # @return [String] The capability that could not be found
+      attr_reader :capability_name
+
+      # @param capability_name [String] The capability that could not be found
+      # @param context [String, nil] Where the lookup failed
+      def initialize(capability_name, context: nil)
+        @capability_name = capability_name
+        message = "Capability not found: #{capability_name}"
+        message += " (#{context})" if context
+        super(message)
+      end
+    end
+
+    # Raised when a structured-output schema is requested from an agent
+    # whose execution path cannot honor it
+    class SchemaNotSupportedError < AgentError; end
+
+    # Raised when an agent is asked to execute but has neither a
+    # text_generation capability nor an LLM client configured
+    class AgentNotConfiguredError < AgentError
+      def initialize(message = nil)
+        super(message || "Agent not configured with LLM capabilities. " \
+          "Use DefaultAgentProvider or configure llm_client directly.")
+      end
+    end
+
     # Base class for all LLM-related errors
     class LlmError < StandardError
       # @return [Hash, nil] The raw response from the LLM API, if available
@@ -128,7 +197,7 @@ module Agentic
       # @param response [Hash, nil] The raw response from the LLM API
       # @param context [Hash, nil] Additional context about the error
       def initialize(message, response: nil, context: nil)
-        super(message, response: response, context: context)
+        super
       end
 
       # @return [Boolean] Whether this error is retryable
@@ -143,7 +212,7 @@ module Agentic
       # @param response [Hash, nil] The raw response from the LLM API
       # @param context [Hash, nil] Additional context about the error
       def initialize(message, response: nil, context: nil)
-        super(message, response: response, context: context)
+        super
       end
 
       # @return [Boolean] Whether this error is retryable
@@ -157,7 +226,7 @@ module Agentic
       # @param message [String] The error message
       # @param context [Hash, nil] Additional context about the error
       def initialize(message, context: nil)
-        super(message, context: context)
+        super
       end
 
       # @return [Boolean] Whether this error is retryable
@@ -172,7 +241,7 @@ module Agentic
       # @param response [Hash, nil] The raw response from the LLM API
       # @param context [Hash, nil] Additional context about the error
       def initialize(message, response: nil, context: nil)
-        super(message, response: response, context: context)
+        super
       end
 
       # @return [Boolean] Whether this error is retryable

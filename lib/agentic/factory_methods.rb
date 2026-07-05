@@ -9,6 +9,14 @@ module Agentic
     end
 
     module ClassMethods
+      # Subclasses inherit their parent's configurable attributes and
+      # assembly instructions instead of silently starting from nothing
+      def inherited(subclass)
+        super
+        subclass.instance_variable_set(:@configurable_attributes, configurable_attributes.dup)
+        subclass.instance_variable_set(:@assembly_instructions, assembly_instructions.dup)
+      end
+
       def build
         agent = new
         yield(agent) if block_given?
