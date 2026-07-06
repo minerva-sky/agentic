@@ -85,6 +85,47 @@ consulting `failure.retryable?`, and contract value predicates —
 | 9 | Sandi Metz | Graph critic — design review for dependency graphs, pre-execution | `examples/graph_critic.rb` | [round-4/09-sandimetz.md](round-4/09-sandimetz.md) |
 | 10 | Andrew Kane | README verifier — every snippet parsed, every constant resolved (found a 4-round-old broken snippet) | `examples/readme_verifier.rb` | [round-4/10-ankane.md](round-4/10-ankane.md) |
 
+## Round 5 — the ecosystem turn
+
+The round-4 asks shipped as a release (`PlanOrchestrator#graph`,
+`ValidationError#expectations`, cross-field contract `rules:`,
+`Agentic::RateLimit` + `LlmClient limiter:`, jitter-on-by-default), the
+three examples that requested them were modernized onto them, and ten
+more experiments followed:
+
+| # | Persona | Built on the round-5 release | Run it | Field notes |
+|---|---------|------------------------------|--------|-------------|
+| 1 | Matz | Dungeon crawl — the map drawn from the plan itself | `examples/dungeon_crawl.rb` | [round-5/01-matz.md](round-5/01-matz.md) |
+| 2 | DHH | Live kanban — the WIP limit is the concurrency limit | `examples/kanban_board.rb` | [round-5/02-dhh.md](round-5/02-dhh.md) |
+| 3 | Aaron Patterson | Critical path — which task the wall clock is actually about | `examples/critical_path.rb` | [round-5/03-tenderlove.md](round-5/03-tenderlove.md) |
+| 4 | Xavier Noria | Mermaid diagrammer — docs generated from the graph, labeled by `needs:` | `examples/plan_diagram.rb` | [round-5/04-fxn.md](round-5/04-fxn.md) |
+| 5 | Samuel Williams | Burst absorber — `RateLimit` characterized under hostile waves | `examples/burst_absorber.rb` | [round-5/05-ioquatix.md](round-5/05-ioquatix.md) |
+| 6 | Jeremy Evans | Freight desk — a tariff book as cross-field rules, all violations at once | `examples/freight_rules.rb` | [round-5/06-jeremyevans.md](round-5/06-jeremyevans.md) |
+| 7 | Piotr Solnica | 422 generator — one contract-agnostic error renderer from `expectations` | `examples/form_errors.rb` | [round-5/07-solnic.md](round-5/07-solnic.md) |
+| 8 | Mike Perham | Stampede simulator — the jitter default, argued by histogram | `examples/stampede_sim.rb` | [round-5/08-mperham.md](round-5/08-mperham.md) |
+| 9 | Sandi Metz | Three shapes — chain vs star vs staged, chosen by evidence | `examples/three_shapes.rb` | [round-5/09-sandimetz.md](round-5/09-sandimetz.md) |
+| 10 | Andrew Kane | Examples index — self-maintaining signage for a 40-example gallery | `examples/examples_index.rb` | [round-5/10-ankane.md](round-5/10-ankane.md) |
+
+### What round 5 surfaced
+
+1. **The graph accessor compounded immediately**: one round old, it fed
+   a game map, a critical-path analyzer, a Mermaid generator, and a
+   design curriculum. Expose the right projection and an ecosystem
+   assembles itself.
+2. **Named dependencies turned out to be documentation**: `needs:`
+   labels became labeled diagram edges — ergonomics maturing into
+   architecture records.
+3. **Every round-4 feature was characterized under load the round it
+   shipped** — the burst absorber (RateLimit), the stampede histogram
+   (jitter), the freight desk (rules), the 422 generator
+   (expectations).
+4. **Next asks**: `graph[:order]` (topological sort — requested
+   independently by three personas) plus `graph[:edges]` with labels,
+   structured rule identifiers (`{rule: :symbol, fields: [...]}`) so
+   policy violations can point at widgets, a `backoff_jitter: :full`
+   tier, and time-windowed rate limits alongside the concurrency
+   ceiling.
+
 ### What round 4 surfaced
 
 1. **Two more real defects found by examples**: canceled plans reported
