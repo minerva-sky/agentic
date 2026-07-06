@@ -532,7 +532,7 @@ registry.compose(
 
 # Use the composed capability
 agent.add_capability("comprehensive_report")
-result = agent.execute_capability("comprehensive_report", { data: { ... } })
+result = agent.execute_capability("comprehensive_report", { data: { sales: [120, 90, 143] } })
 ```
 
 ## Learning System
