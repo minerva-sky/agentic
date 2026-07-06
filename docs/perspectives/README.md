@@ -9,7 +9,7 @@ each persona proposed**, taking field notes in character along the way.
 > well-known public work and stated philosophies. They are not the actual
 > opinions of the people named.
 
-## The reviews, the builds, the field notes
+## Round 1 — reviewing and repairing the framework
 
 | # | Persona | Lens | What they built | Field notes |
 |---|---------|------|-----------------|-------------|
@@ -24,6 +24,47 @@ each persona proposed**, taking field notes in character along the way.
 | 8 | Mike Perham | Durability, boring reliability | `ExecutionJournal` — crash-surviving plan state | [08-mperham.md](field-notes/08-mperham.md) |
 | 9 | Sandi Metz | Small objects, honest messages | `execute_with_schema` honesty + subclass-safe factory | [09-sandimetz.md](field-notes/09-sandimetz.md) |
 | 10 | Andrew Kane | Practical ML gems | Pluggable `web_search` capability backend | [10-ankane.md](field-notes/10-ankane.md) |
+
+## Round 2 — building *with* the gem
+
+Each persona then built something novel **using** Agentic as a consumer —
+every program under `examples/` runs offline, and the field notes record
+what building on the framework actually felt like.
+
+| # | Persona | Built with the gem | Run it | Field notes |
+|---|---------|--------------------|--------|-------------|
+| 1 | Matz | Renga circle — dependency graphs as poetic form | `examples/renga_circle.rb` | [round-2/01-matz.md](round-2/01-matz.md) |
+| 2 | DHH | HEY-style ticket screener (parallel capability pipeline) | `examples/ticket_screener.rb` | [round-2/02-dhh.md](round-2/02-dhh.md) |
+| 3 | Aaron Patterson | Performance Detective — Prism audits the gem's own methods | `examples/performance_detective.rb` | [round-2/03-tenderlove.md](round-2/03-tenderlove.md) |
+| 4 | Xavier Noria | Namespace Cartographer — maps constant trees, audits conformance | `examples/namespace_cartographer.rb` | [round-2/04-fxn.md](round-2/04-fxn.md) |
+| 5 | Samuel Williams | Latency Lab — measured fan-out scaling + reactor cohabitation | `examples/latency_lab.rb` | [round-2/05-ioquatix.md](round-2/05-ioquatix.md) |
+| 6 | Jeremy Evans | Schema Advisor — deterministic DBA rules as capabilities | `examples/schema_advisor.rb` | [round-2/06-jeremyevans.md](round-2/06-jeremyevans.md) |
+| 7 | Piotr Solnica | Typed ETL pipeline — contracts stop bad data at named boundaries | `examples/typed_pipeline.rb` | [round-2/07-solnic.md](round-2/07-solnic.md) |
+| 8 | Mike Perham | Durable Batch — real `exit!` mid-run, resume without re-paying | `examples/durable_batch.rb` | [round-2/08-mperham.md](round-2/08-mperham.md) |
+| 9 | Sandi Metz | Refactoring Dojo — three critics, one prescribed next step | `examples/refactoring_dojo.rb` | [round-2/09-sandimetz.md](round-2/09-sandimetz.md) |
+| 10 | Andrew Kane | Gem Scout — search + score pipeline on the pluggable backend | `examples/gem_scout.rb` | [round-2/10-ankane.md](round-2/10-ankane.md) |
+
+### What round 2 taught (the consumer's consensus)
+
+Building *with* the gem surfaced different findings than reviewing it:
+
+1. **Tasks need a payload, and the orchestrator should accept agents or
+   callables directly.** Six personas independently wrote the same two
+   workarounds: smuggling domain objects through `task.description` and
+   wrapping an agent they already had in a `get_agent_for_task` provider
+   struct. That's the API's users voting.
+2. **Dependent tasks can't see each other's outputs** (Matz hit it first
+   and hardest): the orchestrator schedules around dependencies but
+   doesn't pipe results into dependents, forcing shared mutable state.
+3. **The concurrency story is real and needs one honest paragraph**:
+   near-ideal scaling for IO-bound tasks (Samuel measured within 10ms of
+   theoretical), nothing for CPU-bound work (Aaron measured that too).
+4. **Capabilities-as-lambdas is the gem's best idea.** Every build used
+   them; contracts (round 1's validator) caught real mistakes during
+   development in three of the ten builds.
+5. **Start with capabilities, add the orchestrator when there's a
+   queue.** The builds that didn't fan out (typed pipeline, gem scout)
+   were better off without it.
 
 ---
 
