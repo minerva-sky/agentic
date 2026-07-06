@@ -44,6 +44,45 @@ what building on the framework actually felt like.
 | 9 | Sandi Metz | Refactoring Dojo — three critics, one prescribed next step | `examples/refactoring_dojo.rb` | [round-2/09-sandimetz.md](round-2/09-sandimetz.md) |
 | 10 | Andrew Kane | Gem Scout — search + score pipeline on the pluggable backend | `examples/gem_scout.rb` | [round-2/10-ankane.md](round-2/10-ankane.md) |
 
+## Round 3 — new experiments on the improved framework
+
+The round-2 consensus was delivered as a release (task payloads, direct
+agents/callables, dependency output piping, provider-optional
+`execute_plan`, composed-capability contracts, journal idempotency keys,
+and the concurrency documentation — plus a scheduler deadlock fix found
+by one of these builds). The personas then built ten *new* things:
+
+| # | Persona | Built with the improved gem | Run it | Field notes |
+|---|---------|------------------------------|--------|-------------|
+| 1 | Matz | Telephone game — piping as the whole program | `examples/telephone_game.rb` | [round-3/01-matz.md](round-3/01-matz.md) |
+| 2 | DHH | Standup digest — parallel collectors fan into one writer | `examples/standup_digest.rb` | [round-3/02-dhh.md](round-3/02-dhh.md) |
+| 3 | Aaron Patterson | Plan Gantt — ASCII execution timeline (found a scheduler deadlock) | `examples/plan_gantt.rb` | [round-3/03-tenderlove.md](round-3/03-tenderlove.md) |
+| 4 | Xavier Noria | Documentation surveyor — 90.2% YARD coverage, fan-in report | `examples/doc_coverage.rb` | [round-3/04-fxn.md](round-3/04-fxn.md) |
+| 5 | Samuel Williams | Live dashboard — hooks → `Async::Queue` → live renderer | `examples/live_dashboard.rb` | [round-3/05-ioquatix.md](round-3/05-ioquatix.md) |
+| 6 | Jeremy Evans | Contract fuzzer — seed-deterministic boundary attack, 34 trials | `examples/contract_fuzzer.rb` | [round-3/06-jeremyevans.md](round-3/06-jeremyevans.md) |
+| 7 | Piotr Solnica | Command bus — commands as contract-bearing compositions | `examples/command_bus.rb` | [round-3/07-solnic.md](round-3/07-solnic.md) |
+| 8 | Mike Perham | Flaky API drill — retries that provably wait, journaled | `examples/flaky_api_drill.rb` | [round-3/08-mperham.md](round-3/08-mperham.md) |
+| 9 | Sandi Metz | Collaboration tracer — plans as sequence diagrams | `examples/collaboration_tracer.rb` | [round-3/09-sandimetz.md](round-3/09-sandimetz.md) |
+| 10 | Andrew Kane | Changelog scout — release notes from real git history | `examples/changelog_scout.rb` | [round-3/10-ankane.md](round-3/10-ankane.md) |
+
+### What round 3 surfaced
+
+1. **The adapter tax is gone.** Zero provider structs, zero
+   string-keyed lookups across all ten builds; several programs are
+   shorter than their round-2 counterparts while doing more.
+2. **A real scheduler deadlock** — fan-in dependencies at a tight
+   concurrency limit deadlocked slot-holders spawning dependents. Found
+   by the Gantt chart, fixed (spawn through the barrier, acquire inside
+   the fiber), regression-tested.
+3. **Piping enabled new shapes**: fan-in aggregation (digest, doc
+   coverage, changelog), observable hand-offs (collaboration tracer),
+   and retry-transparent downstream reads (flaky drill).
+4. **Next asks, in priority order**: named dependencies
+   (`needs: {facts: task}`), a `previous_output` convenience for
+   single-dependency chains, a `task_slot_acquired` hook to split queue
+   time from run time, `failure.retryable?` consulted by retry
+   policies, and richer contract predicates (ranges/enums).
+
 ### What round 2 taught (the consumer's consensus)
 
 Building *with* the gem surfaced different findings than reviewing it:
