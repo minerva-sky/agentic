@@ -65,6 +65,46 @@ by one of these builds). The personas then built ten *new* things:
 | 9 | Sandi Metz | Collaboration tracer — plans as sequence diagrams | `examples/collaboration_tracer.rb` | [round-3/09-sandimetz.md](round-3/09-sandimetz.md) |
 | 10 | Andrew Kane | Changelog scout — release notes from real git history | `examples/changelog_scout.rb` | [round-3/10-ankane.md](round-3/10-ankane.md) |
 
+## Round 4 — the asks become grammar
+
+The round-3 asks shipped as a release (named dependencies via `needs:`,
+`Task#previous_output`, the `task_slot_acquired` hook, retry policies
+consulting `failure.retryable?`, and contract value predicates —
+`enum:`, `min:`/`max:`, `non_empty:`), and ten more experiments followed:
+
+| # | Persona | Built on the round-4 release | Run it | Field notes |
+|---|---------|------------------------------|--------|-------------|
+| 1 | Matz | Exquisite corpse — creature parts assembled by name | `examples/exquisite_corpse.rb` | [round-4/01-matz.md](round-4/01-matz.md) |
+| 2 | DHH | Setup doctor — the onboarding wiki, deleted | `examples/setup_doctor.rb` | [round-4/02-dhh.md](round-4/02-dhh.md) |
+| 3 | Aaron Patterson | Knee finder — measured concurrency recommendations | `examples/knee_finder.rb` | [round-4/03-tenderlove.md](round-4/03-tenderlove.md) |
+| 4 | Xavier Noria | Coupling cartographer — the constant-reference force map | `examples/coupling_cartographer.rb` | [round-4/04-fxn.md](round-4/04-fxn.md) |
+| 5 | Samuel Williams | Shared rate limit — one credential ceiling across two plans | `examples/shared_rate_limit.rb` | [round-4/05-ioquatix.md](round-4/05-ioquatix.md) |
+| 6 | Jeremy Evans | Invariant sentinel — laws checked after every task (found the `:canceled` status bug) | `examples/invariant_sentinel.rb` | [round-4/06-jeremyevans.md](round-4/06-jeremyevans.md) |
+| 7 | Piotr Solnica | Contract state machine — enum guards instead of transition tables | `examples/state_machine.rb` | [round-4/07-solnic.md](round-4/07-solnic.md) |
+| 8 | Mike Perham | Error taxonomy drill — errors testify about their own retryability | `examples/error_taxonomy_drill.rb` | [round-4/08-mperham.md](round-4/08-mperham.md) |
+| 9 | Sandi Metz | Graph critic — design review for dependency graphs, pre-execution | `examples/graph_critic.rb` | [round-4/09-sandimetz.md](round-4/09-sandimetz.md) |
+| 10 | Andrew Kane | README verifier — every snippet parsed, every constant resolved (found a 4-round-old broken snippet) | `examples/readme_verifier.rb` | [round-4/10-ankane.md](round-4/10-ankane.md) |
+
+### What round 4 surfaced
+
+1. **Two more real defects found by examples**: canceled plans reported
+   `:completed` (`overall_status` never consulted the canceled state —
+   fixed, regression-tested), and the README's composition snippet had
+   been syntactically invalid since round 1's review first side-eyed it
+   (fixed; the verifier now guards it).
+2. **Every round-3 ask got exercised the round it shipped** — named
+   deps (corpse, doctor), slot hook (knee finder), `retryable?`
+   (taxonomy drill), predicates (state machine). Tight feedback loops
+   keep features honest.
+3. **The survey/atlas shape is the framework's signature** — parallel
+   facts, one fan-in verdict — now in six examples. It deserves a
+   documented name.
+4. **Next asks**: a read-only `Orchestrator#graph` accessor (three
+   tools have crowbarred `@dependencies`), violation payloads carrying
+   the predicate's expectation (legal enum values), a credential-scoped
+   `RateLimit` class (`LlmClient` accepting `limiter:`), jitter-on by
+   default, and cross-field contract rules.
+
 ### What round 3 surfaced
 
 1. **The adapter tax is gone.** Zero provider structs, zero
