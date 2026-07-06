@@ -12,28 +12,25 @@
 
 require_relative "../lib/agentic"
 require "async"
-require "async/semaphore"
 
 API_CEILING = 3
 
-# The shared credential: a semaphore plus a high-water-mark counter
+# The shared credential: Agentic::RateLimit (this example's original
+# feature request, granted) plus a call log for the interleaving proof
 class RateLimitedApi
-  attr_reader :high_water
+  attr_reader :limit
 
   def initialize(ceiling)
-    @semaphore = Async::Semaphore.new(ceiling)
-    @in_flight = 0
-    @high_water = 0
+    @limit = Agentic::RateLimit.new(ceiling)
     @calls = []
   end
 
+  def high_water = @limit.high_water
+
   def call(plan, name, latency)
-    @semaphore.acquire do
-      @in_flight += 1
-      @high_water = [@high_water, @in_flight].max
+    @limit.acquire do
       @calls << "#{plan}/#{name}"
       sleep(latency)
-      @in_flight -= 1
       "#{name}:ok"
     end
   end

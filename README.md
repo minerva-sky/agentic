@@ -234,11 +234,21 @@ orchestrator.add_task(next_verse, [previous_verse], agent: ->(task) {
 ```
 
 Capability contracts can constrain values beyond type and presence —
-`enum: %w[standard express]`, `min:`/`max:` bounds, and `non_empty: true`
-for strings and arrays. The `task_slot_acquired` lifecycle hook fires when
-a task obtains a concurrency slot (with `waited:` time), separating queue
-wait from run time; and retry policies consult an error's own
-`retryable?` verdict before falling back to the `retryable_errors` list.
+`enum: %w[standard express]`, `min:`/`max:` bounds, `non_empty: true` for
+strings and arrays, and cross-field `rules:` checked over the whole input
+(`rules: {"express max 10 items" => ->(i) { i[:speed] != "express" || i[:quantity] <= 10 }}`).
+`ValidationError#expectations` carries the declared contract for each
+violated key, so error messages can name what would have been legal.
+
+The `task_slot_acquired` lifecycle hook fires when a task obtains a
+concurrency slot (with `waited:` time), separating queue wait from run
+time; retry policies consult an error's own `retryable?` verdict before
+falling back to the `retryable_errors` list, and backoff jitter is on by
+default so fleets don't retry in lockstep. `PlanOrchestrator#graph`
+returns a frozen snapshot of the plan's topology for tools that render or
+review it, and `Agentic::RateLimit` is a credential-scoped concurrency
+ceiling shareable across plans and clients
+(`Agentic::LlmClient.new(config, limiter: rate_limit)`).
 
 ### The concurrency contract
 

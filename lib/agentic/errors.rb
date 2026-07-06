@@ -26,13 +26,21 @@ module Agentic
       # @return [Hash{Symbol=>Array<String>}] Violation messages keyed by attribute
       attr_reader :violations
 
+      # The declared contract for each violated key - type, enum, min/max,
+      # required - so callers can render what WOULD have been legal without
+      # side-channel knowledge of the contract
+      # @return [Hash{Symbol=>Hash}] Declarations keyed by violated attribute
+      attr_reader :expectations
+
       # @param capability [String] The capability name
       # @param kind [Symbol] :inputs or :outputs
       # @param violations [Hash{Symbol=>Array<String>}] Messages keyed by attribute
-      def initialize(capability:, kind:, violations:)
+      # @param expectations [Hash{Symbol=>Hash}] Declarations for violated keys
+      def initialize(capability:, kind:, violations:, expectations: {})
         @capability = capability
         @kind = kind
         @violations = violations
+        @expectations = expectations
 
         details = violations.map { |key, messages| "#{key} #{Array(messages).join(", ")}" }.join("; ")
         super("Invalid #{kind} for capability '#{capability}': #{details}")

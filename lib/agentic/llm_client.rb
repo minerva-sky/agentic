@@ -15,9 +15,12 @@ module Agentic
     # Initializes a new LlmClient
     # @param config [LlmConfig] The configuration for the LLM
     # @param retry_config [RetryConfig, Hash] Configuration for the retry handler
-    def initialize(config, retry_config = {})
+    # @param limiter [RateLimit, nil] A credential-scoped concurrency ceiling;
+    #   share one limiter across every client using the same API key
+    def initialize(config, retry_config = {}, limiter: nil)
       configuration = Agentic.configuration
       configuration.validate!
+      @limiter = limiter
 
       # Local endpoints (Ollama, etc.) ignore the token but the client
       # requires one, so send an explicit placeholder rather than nil
@@ -63,7 +66,12 @@ module Agentic
       parameters.merge!(options)
 
       execution_method = use_retries ? method(:with_retry) : method(:without_retry)
-      execution_method.call(messages, parameters, output_schema, fail_on_error)
+
+      if @limiter
+        @limiter.acquire { execution_method.call(messages, parameters, output_schema, fail_on_error) }
+      else
+        execution_method.call(messages, parameters, output_schema, fail_on_error)
+      end
     end
 
     # Executes the API call with retries for transient errors

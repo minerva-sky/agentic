@@ -18,14 +18,23 @@ module Agentic
     # @param inputs [Hash] The required inputs for the capability
     # @param outputs [Hash] The expected outputs from the capability
     # @param dependencies [Array<Hash>] The dependencies of the capability
-    def initialize(name:, description:, version:, inputs: {}, outputs: {}, dependencies: [])
+    def initialize(name:, description:, version:, inputs: {}, outputs: {}, dependencies: [], rules: {})
       @name = name
       @description = description
       @version = version
       @inputs = inputs
       @outputs = outputs
       @dependencies = dependencies
+      @rules = rules
     end
+
+    # Cross-field input rules: description => predicate over the full
+    # (symbolized) inputs hash. Checked after per-key validation passes:
+    #
+    #   rules: {"express orders max 10 items" => ->(i) { i[:speed] != "express" || i[:quantity] <= 10 }}
+    #
+    # @return [Hash{String=>#call}]
+    attr_reader :rules
 
     # Check if this capability is compatible with another capability
     # @param other [CapabilitySpecification] The other capability

@@ -40,10 +40,11 @@ orchestrator.add_task(tasks["publish"], [tasks["report"]])
 orchestrator.add_task(tasks["lonely"])
 
 # --- the critique ----------------------------------------------------------
-# The graph is private, so the critic borrows a crowbar. A read-only
-# graph view on the orchestrator is this example's feature request.
-dependencies = orchestrator.instance_variable_get(:@dependencies)
-names = orchestrator.tasks.transform_values(&:description)
+# This example's original feature request, granted: a read-only view of
+# the plan's topology. No more crowbar.
+graph = orchestrator.graph
+dependencies = graph[:dependencies]
+names = graph[:tasks].transform_values(&:description)
 
 dependents = Hash.new { |h, k| h[k] = [] }
 dependencies.each { |task_id, deps| deps.each { |dep| dependents[dep] << task_id } }

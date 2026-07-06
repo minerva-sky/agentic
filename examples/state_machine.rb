@@ -57,7 +57,9 @@ class Order
     @history << @state
     [:ok, @state]
   rescue Agentic::Errors::ValidationError => e
-    allowed = TRANSITIONS.fetch(event)[:from]
+    # The violation now carries the contract's expectation - no
+    # side-channel lookup into the transition table needed
+    allowed = e.expectations.dig(:state, :enum) || []
     [:illegal, "cannot #{event} from '#{@state}' (legal from: #{allowed.join(", ")}) - #{e.violations.keys.join(", ")} violated"]
   end
 end

@@ -38,11 +38,15 @@ module Agentic
       @task_agents = {}
       @task_needs = {}
 
-      # Configure retry policy with defaults
+      # Configure retry policy with defaults. Jitter defaults ON: a fleet
+      # retrying an upstream on the same schedule is a synchronized
+      # stampede; pass backoff_jitter: false to opt out (e.g. in tests
+      # that assert exact delays)
       @retry_policy = {
         max_retries: 3,
         retryable_errors: ["TimeoutError"],
-        backoff_strategy: :constant
+        backoff_strategy: :constant,
+        backoff_jitter: true
       }.merge(retry_policy)
 
       # Configure lifecycle hooks with callable defaults (no-ops).
@@ -88,6 +92,18 @@ module Agentic
       @dependencies[task_id] = deps
       @task_agents[task_id] = agent if agent
       @execution_state[:pending].add(task_id)
+    end
+
+    # A read-only snapshot of the plan's topology, for tools that render,
+    # review, or analyze the graph without executing it
+    # @return [Hash] :tasks (id => Task), :dependencies (id => [ids]),
+    #   :needs (id => {name => id})
+    def graph
+      {
+        tasks: @tasks.dup.freeze,
+        dependencies: @dependencies.transform_values { |deps| deps.dup.freeze }.freeze,
+        needs: @task_needs.transform_values { |named| named.dup.freeze }.freeze
+      }.freeze
     end
 
     # Executes the plan, respecting task dependencies and concurrency limits
@@ -241,11 +257,11 @@ module Agentic
         0
       end
 
-      # Apply jitter if configured
+      # Apply jitter (on by default) so fleets don't retry in lockstep
       if @retry_policy[:backoff_jitter]
         jitter_factor = 0.25 # Default 25% jitter
         jitter = rand(-delay * jitter_factor..delay * jitter_factor)
-        delay += jitter
+        delay = [delay + jitter, 0].max
       end
 
       # Sleep in the current task so the retry actually waits; the async
