@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "spec_helper"
+require "timeout"
 
 RSpec.describe Agentic::PlanOrchestrator do
   def task_named(description, payload: nil)
@@ -102,6 +103,27 @@ RSpec.describe Agentic::PlanOrchestrator do
       result = orchestrator.execute_plan
 
       expect(result.results[merge.id].output).to eq(3)
+    end
+
+    it "does not deadlock when slot-holders schedule dependents at a tight concurrency limit" do
+      # Regression: a diamond graph at concurrency 2 used to deadlock when
+      # both slot-holding tasks finished and each blocked spawning its
+      # dependents while waiting for the other's slot
+      orchestrator = described_class.new(concurrency_limit: 2)
+      sources = 3.times.map { |i| task_named("source-#{i}") }
+      joins = 2.times.map { |i| task_named("join-#{i}") }
+      final = task_named("final")
+
+      sources.each { |t| orchestrator.add_task(t, agent: ->(_t) { sleep(0.01) || :ok }) }
+      orchestrator.add_task(joins[0], sources.first(2), agent: ->(_t) { sleep(0.01) || :ok })
+      orchestrator.add_task(joins[1], sources.last(2), agent: ->(_t) { sleep(0.01) || :ok })
+      orchestrator.add_task(final, joins, agent: ->(_t) { :done })
+
+      result = nil
+      Timeout.timeout(5) { result = orchestrator.execute_plan }
+
+      expect(result.status).to eq(:completed)
+      expect(result.results[final.id].output).to eq(:done)
     end
 
     it "accepts Task objects as dependencies" do

@@ -292,82 +292,100 @@ module Agentic
         task: task
       )
 
-      # Schedule task execution with the semaphore
-      async_task = semaphore.async do
-        task_start_time = Time.now
-        begin
-          # Call before_agent_build hook
-          @lifecycle_hooks[:before_agent_build].call(
-            task_id: task_id,
-            task: task
-          )
-
-          agent_build_start = Time.now
-          agent = resolve_agent(task, agent_provider)
-          agent_build_duration = Time.now - agent_build_start
-
-          # Call after_agent_build hook
-          @lifecycle_hooks[:after_agent_build].call(
-            task_id: task_id,
-            task: task,
-            agent: agent,
-            build_duration: agent_build_duration
-          )
-
-          result = task.perform(agent)
-          task_duration = Time.now - task_start_time
-
-          # Record result and update state
-          if result.successful?
-            record_task_success(task_id, result.output)
-
-            # Call after_task_success hook
-            @lifecycle_hooks[:after_task_success].call(
-              task_id: task_id,
-              task: task,
-              result: result,
-              duration: task_duration
-            )
-
-            # Find and schedule dependent tasks
-            schedule_dependent_tasks(task_id, agent_provider, semaphore, barrier)
-          else
-            record_task_failure(task_id, result.failure)
-
-            # Call after_task_failure hook
-            @lifecycle_hooks[:after_task_failure].call(
-              task_id: task_id,
-              task: task,
-              failure: result.failure,
-              duration: task_duration
-            )
-
-            # Handle failure based on policy
-            handle_task_failure(task, result.failure, agent_provider, semaphore, barrier)
-          end
-        rescue => e
-          # Handle unexpected errors
-          failure = TaskFailure.from_exception(e, {
-            task_id: task_id,
-            context_type: "unexpected_error"
-          })
-
-          record_task_failure(task_id, failure)
-
-          # Call after_task_failure hook for unexpected errors
-          @lifecycle_hooks[:after_task_failure].call(
-            task_id: task_id,
-            task: task,
-            failure: failure,
-            duration: Time.now - task_start_time
-          )
-
-          Agentic.logger.error("Unexpected error in task #{task_id}: #{e.message}")
+      # Spawn through the barrier and acquire the semaphore INSIDE the
+      # spawned fiber. Spawning with semaphore.async here would block the
+      # caller when the semaphore is full - and completing tasks schedule
+      # their dependents from within their own slot, so two slot-holders
+      # spawning dependents at a tight concurrency limit would deadlock
+      # waiting for each other's slots.
+      async_task = barrier.async do
+        semaphore.acquire do
+          execute_task_in_slot(task_id, task, agent_provider, semaphore, barrier)
         end
       end
 
       # Store the async task for potential cancellation
       @async_tasks[task_id] = async_task
+    end
+
+    # Runs one task inside an acquired concurrency slot: builds the agent,
+    # performs the task, records the outcome, and fans out to dependents
+    # @param task_id [String] ID of the task
+    # @param task [Task] The task to run
+    # @param agent_provider [Object, nil] Provides agents for task execution
+    # @param semaphore [Async::Semaphore] Controls concurrency
+    # @param barrier [Async::Barrier] Tracks task completion
+    # @return [void]
+    def execute_task_in_slot(task_id, task, agent_provider, semaphore, barrier)
+      task_start_time = Time.now
+
+      # Call before_agent_build hook
+      @lifecycle_hooks[:before_agent_build].call(
+        task_id: task_id,
+        task: task
+      )
+
+      agent_build_start = Time.now
+      agent = resolve_agent(task, agent_provider)
+      agent_build_duration = Time.now - agent_build_start
+
+      # Call after_agent_build hook
+      @lifecycle_hooks[:after_agent_build].call(
+        task_id: task_id,
+        task: task,
+        agent: agent,
+        build_duration: agent_build_duration
+      )
+
+      result = task.perform(agent)
+      task_duration = Time.now - task_start_time
+
+      # Record result and update state
+      if result.successful?
+        record_task_success(task_id, result.output)
+
+        # Call after_task_success hook
+        @lifecycle_hooks[:after_task_success].call(
+          task_id: task_id,
+          task: task,
+          result: result,
+          duration: task_duration
+        )
+
+        # Find and schedule dependent tasks
+        schedule_dependent_tasks(task_id, agent_provider, semaphore, barrier)
+      else
+        record_task_failure(task_id, result.failure)
+
+        # Call after_task_failure hook
+        @lifecycle_hooks[:after_task_failure].call(
+          task_id: task_id,
+          task: task,
+          failure: result.failure,
+          duration: task_duration
+        )
+
+        # Handle failure based on policy
+        handle_task_failure(task, result.failure, agent_provider, semaphore, barrier)
+      end
+    rescue => e
+      # Handle unexpected errors
+      failure = TaskFailure.from_exception(e, {
+        task_id: task_id,
+        context_type: "unexpected_error"
+      })
+
+      record_task_failure(task_id, failure)
+
+      # Call after_task_failure hook for unexpected errors
+      @lifecycle_hooks[:after_task_failure].call(
+        task_id: task_id,
+        task: task,
+        failure: failure,
+        duration: Time.now - task_start_time
+      )
+
+      Agentic.logger.error("Unexpected error in task #{task_id}: #{e.message}")
     end
 
     # Schedules tasks that depend on a completed task
