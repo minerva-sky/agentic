@@ -89,6 +89,20 @@ module Agentic
       @dependency_outputs[task_or_id.respond_to?(:id) ? task_or_id.id : task_or_id]
     end
 
+    # The output of this task's sole (or first-completed) dependency -
+    # the common case in a chain, where naming the dependency is noise
+    # @return [Object, nil] The dependency's output
+    def previous_output
+      @dependency_outputs.values.first
+    end
+
+    # Dependency outputs addressed by the names declared via
+    # add_task(task, needs: {name: dependency})
+    # @return [NamedOutputs]
+    def needs
+      @needs ||= NamedOutputs.new
+    end
+
     # Executes the task using the given agent
     # @param agent [Agent] The agent that will execute this task
     # @return [TaskResult] The result of the task execution
@@ -115,14 +129,9 @@ module Agentic
           output: @output
         )
       rescue => e
-        @failure = TaskFailure.new(
-          message: e.message,
-          type: e.class.name,
-          context: {
-            backtrace: e.backtrace&.first(10),
-            agent_id: agent.respond_to?(:id) ? agent.id : nil
-          }
-        )
+        @failure = TaskFailure.from_exception(e, {
+          agent_id: agent.respond_to?(:id) ? agent.id : nil
+        })
 
         old_status = @status
         @status = :failed

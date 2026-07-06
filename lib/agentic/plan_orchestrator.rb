@@ -36,6 +36,7 @@ module Agentic
       @concurrency_limit = concurrency_limit
       @async_tasks = {}
       @task_agents = {}
+      @task_needs = {}
 
       # Configure retry policy with defaults
       @retry_policy = {
@@ -44,11 +45,14 @@ module Agentic
         backoff_strategy: :constant
       }.merge(retry_policy)
 
-      # Configure lifecycle hooks with callable defaults (no-ops)
+      # Configure lifecycle hooks with callable defaults (no-ops).
+      # Hooks run inline on the task's fiber - anything slower than a hash
+      # insert should hand off (e.g. enqueue onto an Async::Queue).
       @lifecycle_hooks = {
         before_agent_build: ->(task_id:, task:) {},          # Called before an agent is built
         after_agent_build: ->(task_id:, task:, agent:, build_duration:) {}, # Called after an agent is built
-        before_task_execution: ->(task_id:, task:) {},        # Called before a task is executed
+        before_task_execution: ->(task_id:, task:) {},        # Called when the task is scheduled (may still queue)
+        task_slot_acquired: ->(task_id:, task:, waited:) {},  # Called when a concurrency slot is acquired
         after_task_success: ->(task_id:, task:, result:, duration:) {}, # Called after a task succeeds
         after_task_failure: ->(task_id:, task:, failure:, duration:) {}, # Called after a task fails
         plan_completed: ->(plan_id:, status:, execution_time:, tasks:, results:) {} # Called when plan completes
@@ -60,16 +64,28 @@ module Agentic
     # Dependencies may be task ids or Task objects. An agent (anything
     # responding to #execute) or a bare callable (receives the task,
     # returns the output) can be attached directly, making a plan-wide
-    # agent provider optional.
+    # agent provider optional. Named dependencies declared via needs: are
+    # dependencies whose outputs arrive addressable by name:
+    #
+    #   orchestrator.add_task(digest, needs: {shipped: commits, owed: debt})
+    #   # in the agent: task.needs.shipped
     #
     # @param task [Task] The task to add
     # @param dependencies [Array<String, Task>] Tasks (or ids) this task depends on
     # @param agent [#execute, #call, nil] The agent or callable to execute this task
+    # @param needs [Hash{Symbol=>Task,String}, nil] Named dependencies
     # @return [void]
-    def add_task(task, dependencies = [], agent: nil)
+    def add_task(task, dependencies = [], agent: nil, needs: nil)
       task_id = task.id
       @tasks[task_id] = task
-      @dependencies[task_id] = Array(dependencies).map { |dep| dep.respond_to?(:id) ? dep.id : dep }
+      deps = Array(dependencies).map { |dep| dep.respond_to?(:id) ? dep.id : dep }
+
+      if needs
+        @task_needs[task_id] = needs.transform_values { |dep| dep.respond_to?(:id) ? dep.id : dep }
+        deps |= @task_needs[task_id].values
+      end
+
+      @dependencies[task_id] = deps
       @task_agents[task_id] = agent if agent
       @execution_state[:pending].add(task_id)
     end
@@ -185,6 +201,12 @@ module Agentic
       task.retry_count ||= 0
       return false if task.retry_count >= @retry_policy[:max_retries]
 
+      # An error's own retryability verdict outranks the type list -
+      # Errors::LlmRateLimitError knows it's retryable, an
+      # authentication error knows it isn't
+      verdict = failure.respond_to?(:retryable?) ? failure.retryable? : nil
+      return verdict unless verdict.nil?
+
       # Check if error type is in retryable_errors list
       @retry_policy[:retryable_errors].include?(failure.type)
     end
@@ -286,6 +308,12 @@ module Agentic
         end
       end
 
+      # Named dependencies arrive addressable by the caller's chosen name
+      @task_needs[task_id]&.each do |name, dependency_id|
+        dependency_result = @results[dependency_id]
+        task.needs[name] = dependency_result.output if dependency_result&.successful?
+      end
+
       # Call before_task_execution hook
       @lifecycle_hooks[:before_task_execution].call(
         task_id: task_id,
@@ -298,8 +326,14 @@ module Agentic
       # their dependents from within their own slot, so two slot-holders
       # spawning dependents at a tight concurrency limit would deadlock
       # waiting for each other's slots.
+      scheduled_at = Time.now
       async_task = barrier.async do
         semaphore.acquire do
+          @lifecycle_hooks[:task_slot_acquired].call(
+            task_id: task_id,
+            task: task,
+            waited: Time.now - scheduled_at
+          )
           execute_task_in_slot(task_id, task, agent_provider, semaphore, barrier)
         end
       end

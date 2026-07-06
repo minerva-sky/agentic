@@ -60,13 +60,23 @@ module Agentic
           definition ||= {}
           key = definition[:required] ? required(name.to_sym) : optional(name.to_sym)
 
+          # Beyond type and presence, declarations may constrain values:
+          #   enum: [...]      - value must be one of these
+          #   min:/max:        - numeric bounds (inclusive)
+          #   non_empty: true  - strings/arrays must not be empty
+          predicates = {}
+          predicates[:included_in?] = definition[:enum] if definition[:enum]
+          predicates[:gteq?] = definition[:min] if definition[:min]
+          predicates[:lteq?] = definition[:max] if definition[:max]
+          predicates[:min_size?] = 1 if definition[:non_empty]
+
           case definition[:type]
-          when "string" then key.value(:string)
-          when "number", "integer" then key.value(type?: Numeric)
-          when "boolean" then key.value(:bool)
-          when "array" then key.value(:array)
-          when "object", "hash" then key.value(:hash)
-          else key.value(type?: Object)
+          when "string" then key.value(:string, **predicates)
+          when "number", "integer" then key.value(type?: Numeric, **predicates)
+          when "boolean" then key.value(:bool, **predicates)
+          when "array" then key.value(:array, **predicates)
+          when "object", "hash" then key.value(:hash, **predicates)
+          else key.value(type?: Object, **predicates)
           end
         end
       end

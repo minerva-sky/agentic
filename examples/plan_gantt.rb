@@ -30,6 +30,10 @@ hooks = {
     (timeline[task.description] ||= {})[:start] =
       Process.clock_gettime(Process::CLOCK_MONOTONIC) - plan_start
   },
+  task_slot_acquired: ->(task_id:, task:, waited:) {
+    timeline[task.description][:running] =
+      Process.clock_gettime(Process::CLOCK_MONOTONIC) - plan_start
+  },
   after_task_success: ->(task_id:, task:, result:, duration:) {
     timeline[task.description][:finish] =
       Process.clock_gettime(Process::CLOCK_MONOTONIC) - plan_start
@@ -60,13 +64,15 @@ puts "PLAN GANTT (concurrency #{concurrency}, #{(result.execution_time * 1000).r
 puts
 timeline.each do |name, t|
   from = (t[:start] * 100).round
-  width = [((t[:finish] - t[:start]) * 100).round, 1].max
-  bar = ((" " * from) + ("#" * width)).ljust(columns)
+  slot = ((t[:running] || t[:start]) * 100).round
+  queued = [slot - from, 0].max
+  width = [((t[:finish] - (t[:running] || t[:start])) * 100).round, 1].max
+  bar = ((" " * from) + ("." * queued) + ("#" * width)).ljust(columns)
   puts format("  %-16s |%s| %3d-%3dms", name, bar, t[:start] * 1000, t[:finish] * 1000)
 end
 puts
 puts format("  %-16s |%s|", "", (0..columns).step(10).map { |c| (c / 10).to_s.ljust(10) }.join[0, columns + 1])
-puts "  (one column = 10ms; numbers along the base are x100ms)"
+puts "  (one column = 10ms; '.' = queued for a slot, '#' = running)"
 puts
 serial_floor = WORK.values.sum { |w| w[:sleep] }
 puts format("  serial floor %.0fms -> actual %.0fms (%.1fx from the scheduler)",

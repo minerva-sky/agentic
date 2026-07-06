@@ -220,6 +220,26 @@ result = orchestrator.execute_plan        # no provider needed
 A plan-wide block acts as an agent factory when you do want one place that
 builds agents: `orchestrator.execute_plan { |task| build_agent_for(task) }`.
 
+Dependencies can be **named**, so they're declared and consumed under one
+word, and single-dependency chains have a shorthand:
+
+```ruby
+orchestrator.add_task(digest, needs: {shipped: commits, owed: debt}, agent: ->(task) {
+  "#{task.needs.shipped} commits shipped, #{task.needs.owed} TODOs owed"
+})
+
+orchestrator.add_task(next_verse, [previous_verse], agent: ->(task) {
+  answer(task.previous_output)   # the sole dependency's output
+})
+```
+
+Capability contracts can constrain values beyond type and presence —
+`enum: %w[standard express]`, `min:`/`max:` bounds, and `non_empty: true`
+for strings and arrays. The `task_slot_acquired` lifecycle hook fires when
+a task obtains a concurrency slot (with `waited:` time), separating queue
+wait from run time; and retry policies consult an error's own
+`retryable?` verdict before falling back to the `retryable_errors` list.
+
 ### The concurrency contract
 
 Tasks run as fibers inside an [async](https://github.com/socketry/async)
