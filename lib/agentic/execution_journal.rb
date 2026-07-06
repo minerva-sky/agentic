@@ -23,13 +23,21 @@ module Agentic
   class ExecutionJournal
     # Replayed journal state: everything a resuming process needs to know
     ReplayedState = Struct.new(
-      :plan_id, :status, :completed_task_ids, :failed_task_ids, :outputs, :failures, :events,
+      :plan_id, :status, :completed_task_ids, :failed_task_ids, :outputs, :failures, :events, :descriptions,
       keyword_init: true
     ) do
-      # @param task_id [String] The task to check
+      # @param key [String] A task id or a task description (descriptions
+      #   act as idempotency keys across runs, since ids are per-run)
       # @return [Boolean] True if the journal records a success for the task
-      def completed?(task_id)
-        completed_task_ids.include?(task_id)
+      def completed?(key)
+        completed_task_ids.include?(key) || completed_descriptions.include?(key)
+      end
+
+      # Descriptions of every task the journal proves completed - the
+      # resume set for a rerun, where task ids are freshly generated
+      # @return [Array<String>]
+      def completed_descriptions
+        completed_task_ids.filter_map { |task_id| descriptions[task_id] }
       end
     end
 
@@ -52,10 +60,10 @@ module Agentic
           record(:task_started, task_id: task_id, description: task.description)
         end,
         after_task_success: chain(hooks[:after_task_success]) do |task_id:, task:, result:, duration:|
-          record(:task_succeeded, task_id: task_id, duration: duration, output: result.output)
+          record(:task_succeeded, task_id: task_id, description: task.description, duration: duration, output: result.output)
         end,
         after_task_failure: chain(hooks[:after_task_failure]) do |task_id:, task:, failure:, duration:|
-          record(:task_failed, task_id: task_id, duration: duration, error: failure.message, error_type: failure.type)
+          record(:task_failed, task_id: task_id, description: task.description, duration: duration, error: failure.message, error_type: failure.type)
         end,
         plan_completed: chain(hooks[:plan_completed]) do |plan_id:, status:, execution_time:, tasks:, results:|
           record(:plan_completed, plan_id: plan_id, status: status, execution_time: execution_time)
@@ -91,7 +99,8 @@ module Agentic
         failed_task_ids: [],
         outputs: {},
         failures: {},
-        events: []
+        events: [],
+        descriptions: {}
       )
 
       return state unless File.exist?(path)
@@ -102,6 +111,9 @@ module Agentic
 
         entry = JSON.parse(line, symbolize_names: true)
         state.events << entry
+        if entry[:task_id] && entry[:description]
+          state.descriptions[entry[:task_id]] = entry[:description]
+        end
 
         case entry[:event]
         when "task_succeeded"

@@ -51,37 +51,28 @@ Agentic.register_capability(spec, provider)
 detective = Agentic::Agent.build { |a| a.name = "Detective" }
 detective.add_capability("dissect_file")
 
-# Every file is a lead; every lead gets a task
-Casefile = Struct.new(:agent, :evidence) do
-  def get_agent_for_task(task)
-    casefile = self
-    Object.new.tap do |gumshoe|
-      gumshoe.define_singleton_method(:execute) do |_prompt|
-        report = casefile.agent.execute_capability("dissect_file", {path: task.description})
-        casefile.evidence[task.description] = report
-        "#{report[:methods].size} methods"
-      end
-    end
-  end
-end
-
+# Every file is a lead; every lead gets a task with the path as payload
 concurrency = (ARGV.first || 16).to_i
 files = Dir[File.join(LIB, "**", "*.rb")].sort
 
-evidence = {}
 orchestrator = Agentic::PlanOrchestrator.new(concurrency_limit: concurrency)
-files.each do |path|
-  orchestrator.add_task(Agentic::Task.new(
-    description: path,
+tasks = files.map do |path|
+  task = Agentic::Task.new(
+    description: File.basename(path),
     agent_spec: {"name" => "Detective", "instructions" => "Dissect the file"},
-    input: {}
-  ))
+    payload: path
+  )
+  orchestrator.add_task(task, agent: ->(t) {
+    detective.execute_capability("dissect_file", {path: t.payload})
+  })
+  task
 end
 
 started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-result = orchestrator.execute_plan(Casefile.new(detective, evidence))
+result = orchestrator.execute_plan
 elapsed_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
 
+evidence = tasks.to_h { |task| [task.payload, result.results[task.id].output] }
 all_methods = evidence.flat_map do |path, report|
   report[:methods].map { |m| m.merge(file: path.delete_prefix("#{LIB}/")) }
 end

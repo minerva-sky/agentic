@@ -115,13 +115,20 @@ module Agentic
     end
 
     # Compose capabilities into a new capability
+    #
+    # The composition may declare its own inputs/outputs contract; when it
+    # does, the composed capability is validated at its boundary exactly
+    # like a primitive one.
+    #
     # @param name [String] The name of the composed capability
     # @param description [String] Description of the composed capability
     # @param version [String] The version of the composed capability
     # @param capabilities [Array<Hash>] The capabilities to compose
     # @param compose_fn [Proc] The function to use for composition
+    # @param inputs [Hash] Optional declared inputs for the composition as a whole
+    # @param outputs [Hash] Optional declared outputs for the composition as a whole
     # @return [CapabilitySpecification] The composed capability
-    def compose(name, description, version, capabilities, compose_fn)
+    def compose(name, description, version, capabilities, compose_fn, inputs: {}, outputs: {})
       # Get the individual capabilities
       capability_instances = []
       capability_providers = []
@@ -152,6 +159,8 @@ module Agentic
         name: name,
         description: description,
         version: version,
+        inputs: inputs,
+        outputs: outputs,
         dependencies: dependencies
       )
 

@@ -35,6 +35,7 @@ module Agentic
       }
       @concurrency_limit = concurrency_limit
       @async_tasks = {}
+      @task_agents = {}
 
       # Configure retry policy with defaults
       @retry_policy = {
@@ -55,13 +56,21 @@ module Agentic
     end
 
     # Adds a task to the plan with optional dependencies
+    #
+    # Dependencies may be task ids or Task objects. An agent (anything
+    # responding to #execute) or a bare callable (receives the task,
+    # returns the output) can be attached directly, making a plan-wide
+    # agent provider optional.
+    #
     # @param task [Task] The task to add
-    # @param dependencies [Array<String>] Array of task ids that this task depends on
+    # @param dependencies [Array<String, Task>] Tasks (or ids) this task depends on
+    # @param agent [#execute, #call, nil] The agent or callable to execute this task
     # @return [void]
-    def add_task(task, dependencies = [])
+    def add_task(task, dependencies = [], agent: nil)
       task_id = task.id
       @tasks[task_id] = task
-      @dependencies[task_id] = Array(dependencies)
+      @dependencies[task_id] = Array(dependencies).map { |dep| dep.respond_to?(:id) ? dep.id : dep }
+      @task_agents[task_id] = agent if agent
       @execution_state[:pending].add(task_id)
     end
 
@@ -72,9 +81,16 @@ module Agentic
     # current reactor instead of nesting a new event loop; standalone calls
     # still create their own reactor and block until the plan completes.
     #
-    # @param agent_provider [Object] An object that provides agents for task execution
+    # @param agent_provider [Object, nil] An object that provides agents for
+    #   task execution (responds to #get_agent_for_task), or a callable
+    #   factory (receives the task, returns an agent). Optional when every
+    #   task was added with its own agent:, or when a block is given.
+    # @yield [task] Optional agent factory - called per task, returns an agent
     # @return [PlanExecutionResult] The structured execution results
-    def execute_plan(agent_provider)
+    def execute_plan(agent_provider = nil, &agent_factory)
+      agent_provider ||= agent_factory
+      ensure_agents_resolvable!(agent_provider)
+
       @reactor = Sync do |reactor|
         @barrier = Async::Barrier.new
         @semaphore = Async::Semaphore.new(@concurrency_limit, parent: @barrier)
@@ -262,6 +278,14 @@ module Agentic
       task = @tasks[task_id]
       transition_task_state(task_id, from: :pending, to: :in_progress)
 
+      # Pipe completed dependency outputs into the task before it runs
+      @dependencies[task_id].each do |dependency_id|
+        dependency_result = @results[dependency_id]
+        if dependency_result&.successful?
+          task.record_dependency_output(dependency_id, dependency_result.output)
+        end
+      end
+
       # Call before_task_execution hook
       @lifecycle_hooks[:before_task_execution].call(
         task_id: task_id,
@@ -279,7 +303,7 @@ module Agentic
           )
 
           agent_build_start = Time.now
-          agent = agent_provider.get_agent_for_task(task)
+          agent = resolve_agent(task, agent_provider)
           agent_build_duration = Time.now - agent_build_start
 
           # Call after_agent_build hook
@@ -440,6 +464,40 @@ module Agentic
     def record_task_success(task_id, output)
       transition_task_state(task_id, from: :in_progress, to: :completed)
       @results[task_id] = TaskExecutionResult.success(output)
+    end
+
+    # Resolves the agent for a task: per-task agent first, then the
+    # plan-wide provider or factory
+    # @param task [Task] The task needing an agent
+    # @param agent_provider [Object, nil] Plan-wide provider or factory
+    # @return [Object] An agent responding to #execute
+    def resolve_agent(task, agent_provider)
+      per_task = @task_agents[task.id]
+      if per_task
+        # A per-task callable IS the work; wrap it so it receives the task
+        return per_task.respond_to?(:execute) ? per_task : CallableAgent.new(per_task, task)
+      end
+
+      if agent_provider.respond_to?(:get_agent_for_task)
+        agent_provider.get_agent_for_task(task)
+      else
+        # A plan-wide callable is a factory: task in, agent out
+        agent_provider.call(task)
+      end
+    end
+
+    # Fails fast when execute_plan is called with no way to obtain agents
+    # @param agent_provider [Object, nil] Plan-wide provider or factory
+    # @return [void]
+    def ensure_agents_resolvable!(agent_provider)
+      return if agent_provider
+
+      missing = @tasks.keys.reject { |task_id| @task_agents.key?(task_id) }
+      return if missing.empty?
+
+      raise ArgumentError,
+        "#{missing.size} task(s) have no agent. Pass an agent provider (or block) " \
+        "to execute_plan, or add each task with add_task(task, agent: ...)"
     end
 
     # Records a task failure with proper state transition and result storage

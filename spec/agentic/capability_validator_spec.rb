@@ -135,3 +135,38 @@ RSpec.describe Agentic::CapabilityProvider do
     }
   end
 end
+
+RSpec.describe "composed capability contracts" do
+  let(:registry) { Agentic::AgentCapabilityRegistry.instance }
+
+  before do
+    registry.clear
+
+    shout_spec = Agentic::CapabilitySpecification.new(
+      name: "shout", description: "Upcases", version: "1.0.0",
+      inputs: {text: {type: "string", required: true}},
+      outputs: {text: {type: "string", required: true}}
+    )
+    registry.register(shout_spec, Agentic::CapabilityProvider.new(
+      capability: shout_spec, implementation: ->(i) { {text: i[:text].upcase} }
+    ))
+  end
+
+  it "validates the composition's own declared contract at its boundary" do
+    registry.compose(
+      "greeting", "Shouted greeting", "1.0.0",
+      [{name: "shout", version: "1.0.0"}],
+      ->(providers, inputs) { {greeting: providers.first.execute(text: "hi #{inputs[:name]}")[:text]} },
+      inputs: {name: {type: "string", required: true}},
+      outputs: {greeting: {type: "string", required: true}}
+    )
+
+    provider = registry.get_provider("greeting")
+
+    expect(provider.execute(name: "matz")).to eq(greeting: "HI MATZ")
+    expect { provider.execute({}) }.to raise_error(Agentic::Errors::ValidationError) { |error|
+      expect(error.capability).to eq("greeting")
+      expect(error.violations).to have_key(:name)
+    }
+  end
+end

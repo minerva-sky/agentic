@@ -90,15 +90,7 @@ module Agentic
     plan = TaskPlanner.new(goal, config).plan
 
     orchestrator = PlanOrchestrator.new(concurrency_limit: concurrency)
-    plan.tasks.each do |task_def|
-      orchestrator.add_task(
-        Task.new(
-          description: task_def.description,
-          agent_spec: task_def.agent,
-          input: {}
-        )
-      )
-    end
+    plan.tasks.each { |task_def| orchestrator.add_task(task_def.to_task) }
 
     orchestrator.execute_plan(DefaultAgentProvider.new(config))
   end

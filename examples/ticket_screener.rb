@@ -71,43 +71,35 @@ end
 screener = Agentic::Agent.build { |a| a.name = "Screener" }
 %w[screen categorize draft_reply].each { |c| screener.add_capability(c) }
 
-# Each ticket is a task; the orchestrator fans them out in parallel
-TicketDesk = Struct.new(:agent, :inbox) do
-  def get_agent_for_task(task)
-    desk = self
-    ticket = TICKETS.find { |t| t[:id] == task.description }
-    Object.new.tap do |worker|
-      worker.define_singleton_method(:execute) do |_prompt|
-        verdict = desk.agent.execute_capability("screen", ticket.slice(:from, :subject, :body))[:verdict]
-        entry = ticket.slice(:id, :from, :subject).merge(verdict: verdict)
+# Each ticket rides its task as the payload; the work is a callable
+screen_ticket = lambda do |task|
+  ticket = task.payload
+  verdict = screener.execute_capability("screen", ticket.slice(:from, :subject, :body))[:verdict]
+  entry = ticket.slice(:id, :from, :subject).merge(verdict: verdict)
 
-        if verdict == "in"
-          triage = desk.agent.execute_capability("categorize", ticket.slice(:subject, :body))
-          entry[:category] = triage[:category]
-          entry[:urgent] = triage[:urgent]
-          entry[:draft] = desk.agent.execute_capability(
-            "draft_reply", {subject: ticket[:subject], category: triage[:category]}
-          )[:draft]
-        end
-
-        desk.inbox << entry
-        entry
-      end
-    end
+  if verdict == "in"
+    triage = screener.execute_capability("categorize", ticket.slice(:subject, :body))
+    entry[:category] = triage[:category]
+    entry[:urgent] = triage[:urgent]
+    entry[:draft] = screener.execute_capability(
+      "draft_reply", {subject: ticket[:subject], category: triage[:category]}
+    )[:draft]
   end
+
+  entry
 end
 
-inbox = []
 orchestrator = Agentic::PlanOrchestrator.new(concurrency_limit: 5)
 TICKETS.each do |ticket|
   orchestrator.add_task(Agentic::Task.new(
     description: ticket[:id],
     agent_spec: {"name" => "Screener", "instructions" => "Screen this ticket"},
-    input: {}
-  ))
+    payload: ticket
+  ), agent: screen_ticket)
 end
-result = orchestrator.execute_plan(TicketDesk.new(screener, inbox))
+result = orchestrator.execute_plan
 
+inbox = result.results.values.select(&:successful?).map(&:output)
 screened_in = inbox.select { |t| t[:verdict] == "in" }.sort_by { |t| t[:urgent] ? 0 : 1 }
 screened_out = inbox - screened_in
 

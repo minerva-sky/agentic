@@ -87,31 +87,21 @@ critics << critic("name_watcher") do |input|
   {findings: findings}
 end
 
-# The circle convenes: each critic reviews in parallel
-Dojo = Struct.new(:critics, :scrolls, :source) do
-  def get_agent_for_task(task)
-    dojo = self
-    critic = critics.find { |c| c.name == task.description }
-    Object.new.tap do |seat|
-      seat.define_singleton_method(:execute) do |_prompt|
-        dojo.scrolls[critic.name] =
-          critic.execute_capability(critic.name, {source: dojo.source})[:findings]
-        "reviewed"
-      end
-    end
-  end
-end
-
-scrolls = {}
+# The circle convenes: each critic rides its own task and reviews in parallel
 orchestrator = Agentic::PlanOrchestrator.new(concurrency_limit: 3)
-critics.each do |c|
-  orchestrator.add_task(Agentic::Task.new(
+seats = critics.to_h do |c|
+  task = Agentic::Task.new(
     description: c.name,
     agent_spec: {"name" => c.name, "instructions" => "Review the submission"},
-    input: {}
-  ))
+    payload: c
+  )
+  orchestrator.add_task(task, agent: ->(t) {
+    t.payload.execute_capability(t.payload.name, {source: source})[:findings]
+  })
+  [c.name, task]
 end
-orchestrator.execute_plan(Dojo.new(critics, scrolls, source))
+run = orchestrator.execute_plan
+scrolls = seats.transform_values { |task| run.results[task.id].output }
 
 puts "REFACTORING DOJO"
 puts "submission: ##{method_name} (#{lines.size} lines) from #{File.basename(file)}"

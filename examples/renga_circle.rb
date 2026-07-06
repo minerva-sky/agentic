@@ -2,16 +2,14 @@
 
 # A renga circle: three poet agents compose a linked-verse poem, each
 # verse responding to the one before it. The dependency graph IS the
-# poem's form - verse 2 cannot begin until verse 1 exists.
+# poem's form - verse 2 cannot begin until verse 1 exists, and the
+# orchestrator pipes each verse into the poet who answers it.
 #
 #   bundle exec ruby examples/renga_circle.rb
 #
 # Runs offline: each poet's craft is a lambda-backed capability.
 
 require_relative "../lib/agentic"
-
-# The scroll is passed hand to hand; each poet reads what came before
-scroll = []
 
 STYLES = {
   "Basho" => ->(theme, previous) {
@@ -53,53 +51,37 @@ poets = STYLES.to_h do |name, craft|
   [name, poet]
 end
 
-# A poet-agent adapter: when the orchestrator hands it a prompt, it
-# reads the scroll, composes, and appends
-PoetAtTheTable = Struct.new(:poet, :capability, :theme, :scroll) do
-  def execute(_prompt)
-    verse = poet.execute_capability(capability, {
-      theme: theme,
-      previous: scroll.last
-    }.compact)[:verse]
-    scroll << verse
-    verse
-  end
-end
-
-class RengaProvider
-  def initialize(seats)
-    @seats = seats
-  end
-
-  def get_agent_for_task(task)
-    @seats.fetch(task.description)
-  end
-end
-
 theme = ARGV.first || "autumn wind"
 orchestrator = Agentic::PlanOrchestrator.new
 
-seats = {}
-previous_task = nil
+# The circle: each poet's task depends on the previous poet's, and the
+# previous verse arrives through the dependency pipe - no shared state
+tasks = []
 %w[Basho Buson Issa].each do |name|
   task = Agentic::Task.new(
     description: name,
     agent_spec: Agentic::AgentSpecification.new(
       name: name, description: "Renga poet", instructions: "Compose one linked verse"
     ),
-    input: {}
+    payload: theme
   )
-  seats[name] = PoetAtTheTable.new(poets[name], "verse_#{name.downcase}", theme, scroll)
-  orchestrator.add_task(task, previous_task ? [previous_task.id] : [])
-  previous_task = task
+
+  orchestrator.add_task(task, tasks.empty? ? [] : [tasks.last], agent: ->(t) {
+    previous = t.dependency_outputs.values.first
+    poets[t.description].execute_capability(
+      "verse_#{t.description.downcase}",
+      {theme: t.payload, previous: previous}.compact
+    )[:verse]
+  })
+  tasks << task
 end
 
-result = orchestrator.execute_plan(RengaProvider.new(seats))
+result = orchestrator.execute_plan
 
 puts "  ~ a renga on \"#{theme}\" ~"
 puts
-scroll.each_with_index do |verse, i|
-  puts verse.split("\n").map { |line| "  #{line}" }
+tasks.each do |task|
+  puts result.results[task.id].output.split("\n").map { |line| "  #{line}" }
   puts
 end
 puts "  (#{result.status} in #{(result.execution_time * 1000).round}ms)"

@@ -21,13 +21,18 @@ module Agentic
     attr_reader :id, :description, :agent_spec, :input, :output, :status, :failure, :ready_to_execute
     attr_accessor :retry_count, :output_schema_name
 
+    # @return [Object, nil] Arbitrary domain object carried by the task,
+    #   opaque to the framework - available to agents via the task itself
+    attr_accessor :payload
+
     # Initializes a new task
     # @param description [String] Human-readable description of the task
     # @param agent_spec [Hash, AgentSpecification] Requirements for the agent that will execute this task
     # @param input [Hash] Input data for the task
+    # @param payload [Object, nil] Arbitrary domain data for the agent executing this task
     # @param output_schema_name [Symbol, nil] Name of the output schema to use for structured output
     # @return [Task] A new task instance
-    def initialize(description:, agent_spec:, input: {}, output_schema_name: nil)
+    def initialize(description:, agent_spec:, input: {}, payload: nil, output_schema_name: nil)
       @id = SecureRandom.uuid
       @description = description
 
@@ -43,11 +48,13 @@ module Agentic
       end
 
       @input = input
+      @payload = payload
       @output = nil
       @failure = nil
       @status = :pending
       @ready_to_execute = nil
       @output_schema_name = output_schema_name
+      @dependency_outputs = {}
     end
 
     # Creates a task from a TaskDefinition
@@ -60,6 +67,26 @@ module Agentic
         agent_spec: definition.agent,
         input: input
       )
+    end
+
+    # Outputs of completed dependency tasks, keyed by task id. Populated
+    # by the orchestrator before this task executes.
+    # @return [Hash{String=>Object}] Dependency task id => output
+    attr_reader :dependency_outputs
+
+    # Records the output of a completed dependency (called by the orchestrator)
+    # @param dependency_id [String] The dependency task's id
+    # @param output [Object] The dependency's output
+    # @return [void]
+    def record_dependency_output(dependency_id, output)
+      @dependency_outputs[dependency_id] = output
+    end
+
+    # The output a dependency produced, looked up by task or id
+    # @param task_or_id [Task, String] The dependency task (or its id)
+    # @return [Object, nil] The dependency's output
+    def output_of(task_or_id)
+      @dependency_outputs[task_or_id.respond_to?(:id) ? task_or_id.id : task_or_id]
     end
 
     # Executes the task using the given agent

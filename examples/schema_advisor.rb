@@ -109,34 +109,22 @@ RULES = %w[check_missing_indexes check_null_discipline check_money_types check_t
 dba = Agentic::Agent.build { |a| a.name = "DBA" }
 RULES.each { |rule| dba.add_capability(rule) }
 
-Consultation = Struct.new(:agent, :findings) do
-  def get_agent_for_task(task)
-    consultation = self
-    Object.new.tap do |reviewer|
-      reviewer.define_singleton_method(:execute) do |_prompt|
-        table = task.description
-        RULES.each do |rule|
-          result = consultation.agent.execute_capability(rule, {
-            table: table, definition: SCHEMA[table], queries: QUERY_LOG
-          })
-          consultation.findings.concat(result[:advisories])
-        end
-        "reviewed"
-      end
-    end
-  end
-end
-
-findings = []
 orchestrator = Agentic::PlanOrchestrator.new(concurrency_limit: 4)
-SCHEMA.each_key do |table|
+SCHEMA.each do |table, definition|
   orchestrator.add_task(Agentic::Task.new(
     description: table,
     agent_spec: {"name" => "DBA", "instructions" => "Review the table"},
-    input: {}
-  ))
+    payload: definition
+  ), agent: ->(task) {
+    RULES.flat_map do |rule|
+      dba.execute_capability(rule, {
+        table: task.description, definition: task.payload, queries: QUERY_LOG
+      })[:advisories]
+    end
+  })
 end
-result = orchestrator.execute_plan(Consultation.new(dba, findings))
+result = orchestrator.execute_plan
+findings = result.results.values.select(&:successful?).flat_map(&:output)
 
 puts "SCHEMA REVIEW: #{SCHEMA.size} tables, #{QUERY_LOG.size} logged queries, " \
   "#{findings.size} advisories (#{result.status})"

@@ -105,5 +105,30 @@ RSpec.describe Agentic::ExecutionJournal do
       expect(state.failed_task_ids).to be_empty
       expect(state.failures).to be_empty
     end
+
+    it "answers completed? by description, the cross-run idempotency key" do
+      journal.record(:task_succeeded, task_id: "run1-uuid", description: "invoice-3", output: nil)
+
+      state = described_class.replay(path: path)
+
+      expect(state.completed?("invoice-3")).to be true
+      expect(state.completed_descriptions).to eq(["invoice-3"])
+    end
+  end
+
+  describe "descriptions on lifecycle events" do
+    let(:agent) { double("Agent", execute: {"ok" => true}) }
+    let(:provider) { double("AgentProvider", get_agent_for_task: agent) }
+
+    it "records the task description on success events so reruns can resume by name" do
+      orchestrator = Agentic::PlanOrchestrator.new(lifecycle_hooks: journal.lifecycle_hooks)
+      task = Agentic::Task.new(description: "monthly-report", agent_spec: {"instructions" => "x"}, input: {})
+      orchestrator.add_task(task)
+      orchestrator.execute_plan(provider)
+
+      state = described_class.replay(path: path)
+
+      expect(state.completed?("monthly-report")).to be true
+    end
   end
 end

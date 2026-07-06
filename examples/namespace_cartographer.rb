@@ -67,30 +67,21 @@ Agentic.register_capability(spec, Agentic::CapabilityProvider.new(
 surveyor = Agentic::Agent.build { |a| a.name = "Cartographer" }
 surveyor.add_capability("survey_file")
 
-Expedition = Struct.new(:agent, :charts) do
-  def get_agent_for_task(task)
-    expedition = self
-    Object.new.tap do |scout|
-      scout.define_singleton_method(:execute) do |_prompt|
-        expedition.charts[task.description] =
-          expedition.agent.execute_capability("survey_file", {path: task.description})[:defined]
-        "charted"
-      end
-    end
-  end
-end
-
 files = Dir[File.join(LIB, "**", "*.rb")].sort
-charts = {}
 orchestrator = Agentic::PlanOrchestrator.new(concurrency_limit: 8)
-files.each do |path|
-  orchestrator.add_task(Agentic::Task.new(
-    description: path,
+tasks = files.to_h do |path|
+  task = Agentic::Task.new(
+    description: File.basename(path),
     agent_spec: {"name" => "Cartographer", "instructions" => "Survey the file"},
-    input: {}
-  ))
+    payload: path
+  )
+  orchestrator.add_task(task, agent: ->(t) {
+    surveyor.execute_capability("survey_file", {path: t.payload})[:defined]
+  })
+  [path, task]
 end
-result = orchestrator.execute_plan(Expedition.new(surveyor, charts))
+result = orchestrator.execute_plan
+charts = tasks.transform_values { |task| result.results[task.id].output }
 
 # Compare the map against the territory
 deviations = []
