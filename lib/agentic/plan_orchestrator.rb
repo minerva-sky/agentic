@@ -278,6 +278,10 @@ module Agentic
     def overall_status
       if @execution_state[:failed].any?
         :partial_failure
+      elsif @execution_state[:canceled].any?
+        # A plan with canceled tasks did not complete, even if every task
+        # that ran succeeded
+        :canceled
       elsif @execution_state[:pending].empty? && @execution_state[:in_progress].empty?
         :completed
       else

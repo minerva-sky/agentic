@@ -134,6 +134,25 @@ RSpec.describe "round 4 framework features" do
     end
   end
 
+  describe "overall status of canceled plans" do
+    it "reports :canceled instead of :completed when tasks were canceled" do
+      orchestrator = Agentic::PlanOrchestrator.new(
+        concurrency_limit: 1,
+        lifecycle_hooks: {
+          after_task_success: ->(task_id:, task:, result:, duration:) { orchestrator.cancel_plan }
+        }
+      )
+      first = task_named("first")
+      second = task_named("never runs")
+      orchestrator.add_task(first, agent: ->(_t) { :ok })
+      orchestrator.add_task(second, [first], agent: ->(_t) { :ok })
+
+      result = orchestrator.execute_plan
+
+      expect(result.status).to eq(:canceled)
+    end
+  end
+
   describe "contract value predicates" do
     let(:specification) do
       Agentic::CapabilitySpecification.new(
