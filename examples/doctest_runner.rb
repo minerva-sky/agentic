@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
 # The Doctest Runner: Rust taught the industry one enormous docs
-# lesson - EXAMPLES IN DOCS SHOULD EXECUTE. An @example block that
-# has never run is a lie waiting for a reader; one that runs in CI
-# is a test that happens to teach. This harvests every @example
-# from lib/ and every ```ruby fence from the README, runs each in a
-# sandbox subprocess, and reports which docs are alive.
+# lesson - EXAMPLES IN DOCS SHOULD EXECUTE. This harvests every
+# @example from lib/ and every ```ruby fence from the README and runs
+# each in a sandbox subprocess. Since round 14 it is a REFEREE:
+# every example must either run, or carry a deliberate annotation -
+# "(illustrative: reason)" in an @example title, or an HTML comment
+# "<!-- doctest: illustrative (reason) -->" before a README fence.
+# Unannotated failure = exit 1. Docs rot at the speed of a red build.
 #
 #   bundle exec ruby examples/doctest_runner.rb
 #
@@ -32,7 +34,8 @@ def yard_examples
         cursor += 1
       end
       title = lines[start][/@example (.+)/, 1] || "untitled"
-      ["#{File.basename(file)}: #{title}", code.join("\n")]
+      annotation = title[/\(illustrative[:)]?([^)]*)\)?/, 0]
+      ["#{File.basename(file)}: #{title}", code.join("\n"), annotation]
     end
   end
 end
@@ -40,9 +43,13 @@ end
 # Harvest 2: ```ruby fences in the README
 def readme_examples
   readme = File.read(File.join(ROOT, "README.md"), encoding: "UTF-8")
-  readme.scan(/```ruby\n(.*?)```/m).flatten.each_with_index.map { |code, i|
-    ["README.md: fence ##{i + 1}", code]
-  }
+  fences = []
+  readme.scan(/```ruby\n(.*?)```/m) do
+    code = Regexp.last_match(1)
+    annotation = Regexp.last_match.pre_match[/<!-- doctest: (illustrative[^>]*?) -->\s*\z/, 1]
+    fences << ["README.md: fence ##{fences.size + 1}", code, annotation]
+  end
+  fences
 end
 
 def run_snippet(code)
@@ -63,21 +70,34 @@ puts "THE DOCTEST RUNNER (#{snippets.size} documented examples put on trial)"
 puts
 
 alive = 0
-snippets.each do |title, code|
+annotated = 0
+unannotated_failures = []
+snippets.each do |title, code, annotation|
+  if annotation
+    annotated += 1
+    puts format("  %-56s %s", title[0, 56], "annotated - not run (#{annotation[0, 40]})")
+    next
+  end
   ok, err = run_snippet(code)
   alive += 1 if ok
-  puts format("  %-56s %s", title[0, 56], ok ? "RUNS" : "dead: #{err.to_s[0, 40]}")
+  unannotated_failures << title unless ok
+  puts format("  %-56s %s", title[0, 56], ok ? "RUNS" : "DEAD: #{err.to_s[0, 40]}")
 end
 
 puts
-puts format("  %d/%d examples are alive. every dead one is a reader's first", alive, snippets.size)
-puts "  attempt at your library, failing - because the docs were written"
-puts "  as ILLUSTRATION and never promoted to EXECUTION. rust's doctests"
-puts "  changed that culture in one release: when examples run in CI,"
-puts "  docs rot at the speed of a red build instead of the speed of"
-puts "  a confused newcomer's patience. the fix isn't writing more"
-puts "  docs - it's arresting the ones you have: give @example blocks"
-puts "  real receivers and runnable setup, run this in CI, and every"
-puts "  future API change gets caught lying to the README before a"
-puts "  human ever does. love letters are better when the address"
-puts "  still exists."
+puts format("  %d run, %d deliberately illustrative, %d dead.", alive, annotated, unannotated_failures.size)
+puts
+if unannotated_failures.empty?
+  puts "  every example is now runnable-or-annotated: the runnable ones"
+  puts "  execute on every invocation of this referee, and the"
+  puts "  illustrative ones say so ON PURPOSE, with a reason, where the"
+  puts "  reader can see it. that was round 13's ask, delivered - docs"
+  puts "  now rot at the speed of a red build instead of the speed of a"
+  puts "  confused newcomer's patience. love letters are better when"
+  puts "  the address still exists, and these get address-checked in CI."
+else
+  puts "  UNANNOTATED FAILURES: #{unannotated_failures.join("; ")}"
+  puts "  fix them or annotate them - silence is the one option docs"
+  puts "  don't get anymore."
+end
+exit(unannotated_failures.empty? ? 0 : 1)

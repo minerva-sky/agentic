@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "time" # Time#iso8601/Time.parse - require what you use
+
 module Agentic
   # Engine for assembling agents based on task requirements
   # @attr_reader [AgentCapabilityRegistry] registry The capability registry

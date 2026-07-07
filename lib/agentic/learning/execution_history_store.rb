@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "time" # Time#iso8601/Time.parse - require what you use
+
 require "date"
 require "json"
 require "fileutils"
@@ -10,9 +12,9 @@ module Agentic
     # execution metrics and performance data for agent tasks and plans.
     #
     # @example Recording a task execution
-    #   history_store = Agentic::Learning::ExecutionHistoryStore.new
+    #   history_store = Agentic::Learning::ExecutionHistoryStore.new(storage_path: "history")
     #   history_store.record_execution(
-    #     task_id: task.id,
+    #     task_id: "task-123",
     #     agent_type: "research_agent",
     #     duration_ms: 1200,
     #     success: true,
@@ -20,6 +22,7 @@ module Agentic
     #   )
     #
     # @example Retrieving execution history for a specific agent type
+    #   history_store = Agentic::Learning::ExecutionHistoryStore.new(storage_path: "history")
     #   records = history_store.get_history(agent_type: "research_agent")
     #
     class ExecutionHistoryStore
@@ -219,6 +222,11 @@ module Agentic
 
         # Apply filters
         records = filter_records(records, filters)
+
+        # The memory cache and the files overlap by design (cache is the
+        # hot tier, files the durable one) - the same record must not be
+        # counted twice or every metric silently doubles
+        records = records.uniq { |r| r[:id] }
 
         # Sort by timestamp descending
         records.sort_by { |r| r[:timestamp] }.reverse
