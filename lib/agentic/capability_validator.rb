@@ -117,7 +117,10 @@ module Agentic
     # caller sent that the contract doesn't declare, look for a close
     # match among the MISSING violated keys and diagnose the rename
     def typo_hints(declared, given, violations)
-      missing = violations.select { |_, messages| Array(messages).any? { |m| m.include?("missing") } }.keys
+      # Structural, not string-matched: a violated key the caller never
+      # sent is missing by definition (dry-schema's message text is not
+      # an API and must not be load-bearing)
+      missing = violations.keys - given.keys
       extra = given.keys - declared.keys
       extra.filter_map do |sent|
         match = Suggestions.suggest(sent, missing)

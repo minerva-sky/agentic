@@ -44,6 +44,9 @@ RSpec.describe "concurrency contract" do
       }.each(&:join)
 
       expect(admissions.size).to eq(8)
+      # The high-water mark is part of the promise too: counters share
+      # the window mutex, so the mark stays truthful under threads
+      expect(limit.high_water).to be <= 4
     end
   end
 
