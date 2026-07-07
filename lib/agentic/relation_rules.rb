@@ -19,7 +19,51 @@ module Agentic
   module RelationRules
     SUPPORTED = %i[sum_lte requires mutually_exclusive].freeze
 
+    # Field types sum_lte may lawfully add together
+    NUMERIC_TYPES = %w[number integer].freeze
+
     module_function
+
+    # Fail-fast validation of a relation declaration against the
+    # contract's declared inputs. A rule referencing an undeclared
+    # field is a typo that would otherwise fail open (presence
+    # relations) or crash mid-validation in the wrong error class
+    # (sum_lte over a string). Refusing to construct moves the failure
+    # to boot, where it names itself.
+    # @param id [Symbol, String] The rule's id (for the error message)
+    # @param definition [Hash] The rule definition
+    # @param inputs [Hash] The capability's declared inputs
+    # @raise [ArgumentError] For unknown relations, undeclared or
+    #   ill-typed fields, or a missing limit
+    # @return [void]
+    def validate_declaration!(id, definition, inputs)
+      relation = definition[:relation]
+      unless SUPPORTED.include?(relation)
+        raise ArgumentError, "rule :#{id} has unknown relation #{relation.inspect} " \
+          "(supported: #{SUPPORTED.map(&:inspect).join(", ")})"
+      end
+
+      fields = definition[:fields]
+      if !fields.is_a?(Array) || fields.empty?
+        raise ArgumentError, "rule :#{id} (#{relation}) must declare fields: as a non-empty Array"
+      end
+
+      undeclared = fields.reject { |field| inputs.key?(field) }
+      if undeclared.any?
+        raise ArgumentError, "rule :#{id} (#{relation}) references undeclared " \
+          "input#{(undeclared.size == 1) ? "" : "s"} #{undeclared.map(&:inspect).join(", ")}"
+      end
+
+      if relation == :sum_lte
+        raise ArgumentError, "rule :#{id} (sum_lte) must declare limit:" unless definition.key?(:limit)
+
+        non_numeric = fields.reject { |field| NUMERIC_TYPES.include?(inputs[field][:type]) }
+        if non_numeric.any?
+          raise ArgumentError, "rule :#{id} (sum_lte) can only sum declared numbers; " \
+            "#{non_numeric.map(&:inspect).join(", ")} #{(non_numeric.size == 1) ? "is" : "are"} not"
+        end
+      end
+    end
 
     # Builds the predicate a relation declaration describes
     # @param definition [Hash] The rule definition ({relation:, fields:, ...})

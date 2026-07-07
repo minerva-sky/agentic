@@ -90,8 +90,13 @@ puts "  the frontier: {express: nil}"
 puts format("    typed field:   validator %-7s (per-key: nil isn't a boolean)", validator_allows?(validator, frontier) ? "allows" : "rejects")
 puts format("                   schema    %-7s (the property EXISTS - dependencies fire)", schema_allows?(schema, frontier) ? "allows" : "rejects")
 
-# The TRUE divergence needs an untyped field, where nil sails past
-# per-key checks and the two presence semantics finally face off
+# In round 10 an untyped field exposed the true divergence: nil
+# sailed past per-key checks, the validator's relation read it as
+# absent, and the schema's dependencies read null as present. The
+# round-11 release closes it from the projection side: a relation
+# over any UNTYPED field stays out of the draft-07 keywords entirely
+# (it still travels in x-agentic-rules), so the schema never claims
+# a law it can't render faithfully.
 untyped = Agentic::CapabilitySpecification.new(
   name: "connect", description: "x", version: "1.0.0",
   inputs: {express: {}, customs_code: {type: "string"}},
@@ -99,13 +104,16 @@ untyped = Agentic::CapabilitySpecification.new(
 )
 ruby = validator_allows?(Agentic::CapabilityValidator.new(untyped), frontier)
 json = schema_allows?(untyped.to_json_schema, frontier)
+projected = untyped.to_json_schema.key?("dependencies")
 puts format("    untyped field: validator %-7s (nil is ABSENT - rule not triggered)", ruby ? "allows" : "rejects")
-puts format("                   schema    %-7s (null is PRESENT - rule fires)", json ? "allows" : "rejects")
+puts format("                   schema    %-7s (projection %s)", json ? "allows" : "rejects",
+  projected ? "STILL EMITTED - divergence is back!" : "declined - the keyword was never emitted")
 puts
 puts "  on the nil-free plane the projection is faithful, point by point."
-puts "  explicit null is where Ruby's nil and JSON's null part ways - but"
-puts "  only for UNTYPED fields, because typing guards the frontier."
-puts "  senders: omit keys, don't null them. (filed as the round-11 ask:"
-puts "  align or officially document presence semantics at the boundary.)"
+puts "  and at the frontier the projection now knows its own limits: a"
+puts "  relation over untyped fields is not rendered into keywords it"
+puts "  cannot render truthfully - it rides x-agentic-rules instead."
+puts "  a projection that declines is honest; one that guesses is a trap."
+exit(1) if projected
 
 exit(disagreements.zero? ? 0 : 1)

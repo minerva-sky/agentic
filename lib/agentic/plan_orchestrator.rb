@@ -94,6 +94,66 @@ module Agentic
       @execution_state[:pending].add(task_id)
     end
 
+    # Removes a pending task from the plan. Refactoring needs demolition
+    # to be surgical: only tasks that haven't run can leave, and a task
+    # that others depend on refuses to go (name the dependents, make the
+    # caller rewire them first - silent cascade deletes are how plans
+    # lose limbs).
+    # @param task [Task, String] The task (or its id) to remove
+    # @return [Task] The removed task
+    # @raise [ArgumentError] If unknown, already started, or depended upon
+    def remove_task(task)
+      task_id = task.respond_to?(:id) ? task.id : task
+      raise ArgumentError, "unknown task #{task_id}" unless @tasks.key?(task_id)
+      unless @execution_state[:pending].include?(task_id)
+        raise ArgumentError, "task #{task_id} has already started; only pending tasks can be removed"
+      end
+
+      dependents = @dependencies.select { |_, deps| deps.include?(task_id) }.keys
+      if dependents.any?
+        names = dependents.map { |id| @tasks[id].description }
+        raise ArgumentError, "cannot remove #{@tasks[task_id].description}: " \
+          "#{names.join(", ")} depend(s) on it - rewire them first"
+      end
+
+      @execution_state[:pending].delete(task_id)
+      @dependencies.delete(task_id)
+      @task_needs.delete(task_id)
+      @task_agents.delete(task_id)
+      @tasks.delete(task_id)
+    end
+
+    # Replaces a pending task's dependencies in place - the refactoring
+    # seam. Same shapes as add_task: positional dependencies, or needs:
+    # for named (labeled) ones.
+    # @param task [Task, String] The task (or its id) to rewire
+    # @param dependencies [Array<Task, String>] The new dependencies
+    # @param needs [Hash{Symbol=>Task,String}, nil] Named dependencies
+    # @return [void]
+    # @raise [ArgumentError] If unknown, already started, or wired to a
+    #   task that isn't in the plan
+    def rewire_task(task, dependencies = [], needs: nil)
+      task_id = task.respond_to?(:id) ? task.id : task
+      raise ArgumentError, "unknown task #{task_id}" unless @tasks.key?(task_id)
+      unless @execution_state[:pending].include?(task_id)
+        raise ArgumentError, "task #{task_id} has already started; only pending tasks can be rewired"
+      end
+
+      deps = Array(dependencies).map { |dep| dep.respond_to?(:id) ? dep.id : dep }
+      named = needs&.transform_values { |dep| dep.respond_to?(:id) ? dep.id : dep }
+      deps |= named.values if named
+
+      unknown = deps.reject { |dep| @tasks.key?(dep) }
+      raise ArgumentError, "cannot wire to unknown task(s) #{unknown.join(", ")}" if unknown.any?
+
+      @dependencies[task_id] = deps
+      if named
+        @task_needs[task_id] = named
+      else
+        @task_needs.delete(task_id)
+      end
+    end
+
     # A read-only snapshot of the plan's topology, for tools that render,
     # review, or analyze the graph without executing it
     # @return [Hash] :tasks (id => Task), :dependencies (id => [ids]),
@@ -219,19 +279,33 @@ module Agentic
       false
     end
 
-    # Cancels execution of the entire plan
+    # Cancels execution of the entire plan - promptly. Queued work is
+    # marked canceled before the scheduler can start it, and every
+    # scheduled fiber (waiting for a slot or mid-flight) is stopped.
+    # Stopping the fibers rather than the reactor keeps the promise
+    # when execute_plan has joined a host reactor: in-flight agents
+    # stop where they are instead of running to completion and billing
+    # for results nobody will read.
     # @return [void]
     def cancel_plan
-      # Stop the reactor to cancel all async tasks
-      @reactor&.stop
-
-      # Move all pending and in_progress tasks to canceled state
-      @execution_state[:pending].each do |task_id|
+      # ALL bookkeeping first: stopping a fiber releases its concurrency
+      # slot and synchronously admits the next waiter - which must
+      # already read as canceled by then, or it will start (and bill)
+      # in the instant before its own stop arrives
+      @execution_state[:pending].dup.each do |task_id|
         transition_task_state(task_id, from: :pending, to: :canceled)
       end
-
-      @execution_state[:in_progress].each do |task_id|
+      stopping = @execution_state[:in_progress].dup
+      stopping.each do |task_id|
         transition_task_state(task_id, from: :in_progress, to: :canceled)
+      end
+
+      # Then stop every scheduled fiber. Never stop the calling fiber
+      # itself - a lifecycle hook may cancel the plan from inside a task
+      current = Async::Task.current?
+      stopping.each do |task_id|
+        fiber = @async_tasks[task_id]
+        fiber&.stop unless fiber.nil? || fiber == current
       end
     end
 
@@ -406,6 +480,10 @@ module Agentic
       scheduled_at = Time.now
       async_task = barrier.async do
         semaphore.acquire do
+          # A task canceled while waiting for its slot must not run -
+          # its fiber may win the slot race against its own stop
+          next unless @execution_state[:in_progress].include?(task_id)
+
           @lifecycle_hooks[:task_slot_acquired].call(
             task_id: task_id,
             task: task,

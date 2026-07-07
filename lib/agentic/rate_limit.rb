@@ -36,6 +36,10 @@ module Agentic
       @per = per
       @semaphore = Async::Semaphore.new(ceiling) unless per
       @stamps = []
+      # Windowed bookkeeping is check-then-act over shared state; a
+      # real Mutex makes the answer the same on every Ruby VM instead
+      # of relying on the GVL's scheduling habits
+      @window_mutex = Mutex.new
       @in_flight = 0
       @high_water = 0
     end
@@ -53,6 +57,35 @@ module Agentic
 
     # @return [Integer] Acquisitions currently inside the ceiling
     attr_reader :in_flight
+
+    # Non-blocking admission: runs the block (if given) when a slot or
+    # window stamp is available RIGHT NOW, and answers false otherwise
+    # instead of waiting. acquire is for work that must happen; this is
+    # for work that should only happen if capacity is to spare - retry
+    # budgets, best-effort refreshes, opportunistic prefetch. A budget
+    # wants to say no, not to make you wait for a yes.
+    # @yield The admitted work, if any
+    # @return [Boolean] True when admitted (block, if given, was run)
+    def try_acquire(&block)
+      if @per
+        admitted = @window_mutex.synchronize do
+          now = clock
+          @stamps.reject! { |stamp| stamp <= now - @per }
+          @stamps << now if @stamps.size < @ceiling
+        end
+        return false unless admitted
+
+        track { block&.call }
+        return true
+      end
+
+      return false if @semaphore.blocking?
+
+      @semaphore.acquire do
+        track { block&.call }
+      end
+      true
+    end
 
     # Changes the ceiling while the limiter is live - the seam adaptive
     # throttles steer. Raising a concurrency ceiling resumes waiters
@@ -115,26 +148,41 @@ module Agentic
 
     private
 
+    # Counter updates share the window mutex so in_flight/high_water
+    # stay truthful under real threads too; the yielded work itself
+    # runs OUTSIDE the lock (holding it there would serialize all
+    # windowed work, which is the opposite of a rate limit)
     def track
-      @in_flight += 1
-      @high_water = [@high_water, @in_flight].max
+      @window_mutex.synchronize do
+        @in_flight += 1
+        @high_water = [@high_water, @in_flight].max
+      end
       yield
     ensure
-      @in_flight -= 1
+      @window_mutex.synchronize { @in_flight -= 1 }
     end
 
     # Rolling-window admission: wait until fewer than ceiling
-    # acquisitions have started within the last `per` seconds
+    # acquisitions have started within the last `per` seconds. The
+    # check-and-stamp is atomic under the mutex; only the sleep
+    # happens outside it.
     def windowed_acquire
       loop do
-        now = clock
-        @stamps.reject! { |stamp| stamp <= now - @per }
-        break if @stamps.size < @ceiling
+        wait = @window_mutex.synchronize do
+          now = clock
+          @stamps.reject! { |stamp| stamp <= now - @per }
+          if @stamps.size < @ceiling
+            @stamps << now
+            nil
+          else
+            @stamps.first + @per - now
+          end
+        end
+        break if wait.nil?
 
-        sleep(@stamps.first + @per - now)
+        sleep(wait)
       end
 
-      @stamps << clock
       track { yield }
     end
 

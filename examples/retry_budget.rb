@@ -19,22 +19,23 @@ Agentic.logger.level = :fatal
 MAX_RETRIES = 3
 JOBS = 12
 
-# The wallet: a windowed retry allowance with NON-BLOCKING admission.
-# (A RateLimit wants to make you wait; a budget wants to tell you no.
-# Round-11 ask: RateLimit#try_acquire, so this class can retire.)
+# The wallet is a windowed RateLimit asked politely: try_acquire
+# (round 11) answers false RIGHT NOW instead of making the caller
+# wait for capacity - and waiting for retry capacity during an
+# outage would just be the storm with extra steps. The custom
+# budget class this example shipped with has retired.
 class RetryBudget
-  def initialize(allowance)
-    @allowance = allowance
+  def initialize(allowance, per: 60)
+    @wallet = Agentic::RateLimit.new(allowance, per: per)
     @spent = 0
   end
 
   attr_reader :spent
 
   def spend?
-    return false if @spent >= @allowance
-
-    @spent += 1
-    true
+    admitted = @wallet.try_acquire
+    @spent += 1 if admitted
+    admitted
   end
 end
 
@@ -105,4 +106,6 @@ puts "  every retry was doomed anyway. per-job retry policies answer"
 puts "  \"should I try again?\"; the budget answers \"should ANYONE?\" -"
 puts "  round 9's breaker asked that per-upstream, this asks it per-"
 puts "  window, and both read the same journaled verdicts. retries are"
-puts "  a shared resource. give them a wallet, not a habit."
+puts "  a shared resource. give them a wallet, not a habit. (and the"
+puts "  wallet is now a real windowed RateLimit - try_acquire says no"
+puts "  without making anyone wait for it, which is the entire point.)"

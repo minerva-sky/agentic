@@ -316,6 +316,110 @@ followed:
    projection boundary. (`relation_prober.rb` joins the
    exit-1-by-design set.)
 
+## Round 11 — a new cast takes the bench
+
+The round-10 asks shipped as a release: `cancel_plan` is now prompt
+(bookkeeping first, then fiber stops - never the reactor handle, never
+the calling fiber), relation declarations fail fast at validator
+construction (undeclared fields and sum_lte-over-strings refuse to
+boot), `RateLimit#try_acquire` gives non-blocking admission, and
+relations over untyped fields stay out of draft-07 keywords. The two
+exit-1-by-design probers flipped to green acceptance tests, the retry
+budget's wallet became a real windowed RateLimit — and then **ten new
+prolific Rubyists** took over the experiments:
+
+| # | Persona | Built with the gem | Run it | Field notes |
+|---|---------|--------------------|--------|-------------|
+| 1 | Koichi Sasada (ko1) | Allocation audit — exact object counts per operation, via GC.stat | `examples/allocation_audit.rb` | [round-11/01-ko1.md](round-11/01-ko1.md) |
+| 2 | Charles Nutter (headius) | Threads drill — real parallelism vs everything shared; a load-order bug caught | `examples/threads_drill.rb` | [round-11/02-headius.md](round-11/02-headius.md) |
+| 3 | Nate Berkopec | Capacity planner — Little's Law over journal percentiles | `examples/capacity_planner.rb` | [round-11/03-nateberkopec.md](round-11/03-nateberkopec.md) |
+| 4 | Ryan Davis (zenspider) | Plan flog — a pain score per plan; idiom free, coupling priced | `examples/plan_flog.rb` | [round-11/04-zenspider.md](round-11/04-zenspider.md) |
+| 5 | Avdi Grimm | Confident pipeline — ten timid conditionals vs one barricade | `examples/confident_pipeline.rb` | [round-11/05-avdi.md](round-11/05-avdi.md) |
+| 6 | Katrina Owen | Plan kata — red/green/refactor with graph assertions written first | `examples/plan_kata.rb` | [round-11/06-kytrinyx.md](round-11/06-kytrinyx.md) |
+| 7 | Bozhidar Batsov | Contract cop — seven named cops, mechanical autocorrect only | `examples/contract_cop.rb` | [round-11/07-bbatsov.md](round-11/07-bbatsov.md) |
+| 8 | José Valim | Telemetry bus — :telemetry on the hooks; runtime attach/detach, crash isolation | `examples/telemetry_bus.rb` | [round-11/08-josevalim.md](round-11/08-josevalim.md) |
+| 9 | Luca Guidi | Ports and adapters — the domain survives the migration, with a purity scan | `examples/ports_and_adapters.rb` | [round-11/09-jodosha.md](round-11/09-jodosha.md) |
+| 10 | Eileen Uchitelle | Tenant shards — N journals, N limits, one ignorant control plane | `examples/tenant_shards.rb` | [round-11/10-eileencodes.md](round-11/10-eileencodes.md) |
+
+### What round 11 surfaced
+
+1. **Fresh eyes found a fresh class of bug immediately**: headius's
+   bare-journal drill caught `Time#iso8601` used without requiring
+   "time" — a load-order bug nine rounds of fiber-world examples never
+   tripped, fixed in this round's release. New perspectives audit
+   different assumptions.
+2. **The runtime got audited from below**: exact allocation counts
+   (37 objects per happy validation, 11x on rejection, zero GC runs
+   per plan), real-thread verdicts (journal and registry hold on real
+   locks; the windowed limiter coasts on the GVL), and Little's Law
+   turning the journal into a capacity plan whose binding constraint
+   was outside the meeting.
+3. **The teaching seat is real**: the kata (assertions before tasks),
+   the flog score (calibrated so idiom is free), the confident/timid
+   contrast (nil-tolerance launders errors), and the cop (autocorrect
+   only what has one right answer) are all *pedagogy tools* built on
+   the same reflection surfaces the ops tools use.
+4. **The architecture seat approves the seams**: the duck-typed
+   `agent:` seam let a pure domain walk in without signing tenancy
+   (ports-and-adapters with a purity scan), and ten lines bridged the
+   hooks to a :telemetry-style bus with crash isolation - frameworks
+   orchestrate, domains decide, handlers come and go.
+5. **Next asks**: a Mutex around the windowed limiter's stamp
+   bookkeeping so the answer is the same on every Ruby (headius);
+   `remove_task`/rewire so refactoring a plan doesn't mean demolition
+   (Katrina, with the kata as acceptance test); and a multiprocess
+   journal drill to certify the flock claim (headius, follow-up).
+
+## Round 12 — a third cast, and the bill arrives itemized
+
+The round-11 asks shipped as a release: the windowed limiter's stamp
+bookkeeping holds a real Mutex (the threads drill now certifies
+instead of observes), `remove_task`/`rewire_task` make plan
+refactoring surgical (the kata refactors in place), and the process
+drill certifies the flock claim across four forked writers. Then a
+third cast of ten prolific Rubyists took the bench:
+
+| # | Persona | Built with the gem | Run it | Field notes |
+|---|---------|--------------------|--------|-------------|
+| 1 | Yehuda Katz (wycats) | API surface census — 112 methods, 58 earning rent, 54 on loan | `examples/api_surface.rb` | [round-12/01-wycats.md](round-12/01-wycats.md) |
+| 2 | Sarah Mei | Onboarding trail — a house tour computed from who-mentions-whom | `examples/onboarding_trail.rb` | [round-12/02-sarahmei.md](round-12/02-sarahmei.md) |
+| 3 | Richard Schneeman | Require cost report — the bill lands at first touch, not at require | `examples/require_cost.rb` | [round-12/03-schneems.md](round-12/03-schneems.md) |
+| 4 | Vladimir Dementyev | EventProf for plans — task-seconds by tag; llm owns 78% | `examples/event_prof.rb` | [round-12/04-palkan.md](round-12/04-palkan.md) |
+| 5 | Mike Dalessio | Hostile inputs — a torn tail denies ALL recovery; exit 1 until | `examples/hostile_inputs.rb` | [round-12/05-flavorjones.md](round-12/05-flavorjones.md) |
+| 6 | Justin Searls | Honest doubles — fakes show their papers at load time | `examples/honest_doubles.rb` | [round-12/06-searls.md](round-12/06-searls.md) |
+| 7 | Konstantin Haase | Plan DSL — thirty lines of Sinatra over the public API | `examples/plan_dsl.rb` | [round-12/07-rkh.md](round-12/07-rkh.md) |
+| 8 | Obie Fernandez | Self-correcting output — violations become the correction prompt | `examples/self_correcting_output.rb` | [round-12/08-obie.md](round-12/08-obie.md) |
+| 9 | Rafael França | Gentle deprecations — warn once per site, tally, strict on schedule | `examples/gentle_deprecations.rb` | [round-12/09-rafaelfranca.md](round-12/09-rafaelfranca.md) |
+| 10 | Jean Boussier (byroot) | Write path profile — JSON acquitted at 0.4%; the fsync IS the product | `examples/write_path_profile.rb` | [round-12/10-byroot.md](round-12/10-byroot.md) |
+
+### What round 12 surfaced
+
+1. **The stewardship seat spoke**: the census split 112 public
+   methods into earned API and accidental API; the deprecation shim
+   choreographed a rename across three releases; the DSL proved sugar
+   can stay entirely outside the engine. Three different answers to
+   "how does this gem grow old gracefully."
+2. **One real defect, found where parsers meet reality**: a torn
+   journal tail — the exact artifact of the crash the journal exists
+   for — crashes replay in the wrong error class and denies all
+   recovery (`hostile_inputs.rb` exits 1 as the acceptance test).
+3. **Costs arrived itemized**: require costs land at first constant
+   touch, not at require (Zeitwerk's deferral, priced); the journal
+   write is 99.6% fsync and 0.4% JSON, with group commit named as a
+   different promise rather than a faster one; plan time profiles by
+   tag with the barriers indicted, not the budget.
+4. **The AI-application seat matured**: the self-correcting output
+   loop showed the contract doubling as a correction-prompt
+   generator, and honest doubles put load-time verification at the
+   LLM boundary — patterns, not vibes.
+5. **Next asks**: tolerant journal replay — salvage whole lines,
+   report (don't raise on) a torn or mis-encoded tail
+   (`hostile_inputs.rb` is the acceptance test); an optional
+   `fsync_every: n` group-commit mode with its durability trade
+   named in the constructor (byroot); and consider a strict-shapes
+   replay mode for audit tools vs the tolerant recovery default
+   (flavorjones).
+
 ### What round 6 surfaced
 
 1. **Plans became artifacts**: narratable (tour), serializable with an

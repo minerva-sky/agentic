@@ -150,10 +150,19 @@ module Agentic
     # one exists: requires -> dependencies, mutually_exclusive -> a
     # not-required clause per pair. sum_lte has no JSON Schema keyword
     # and lives only in x-agentic-rules.
+    #
+    # Projection requires every referenced field to carry a declared
+    # type. Ruby presence is "given and non-nil" while JSON Schema's
+    # keywords count an explicit null as present; typed fields guard
+    # that frontier (per-key checks reject nil first), untyped fields
+    # would let the two renderings diverge - so for those the rule
+    # stays in x-agentic-rules and out of the keywords.
     # @param schema [Hash] The schema being built (mutated)
     # @param definition [Hash] The relation rule definition
     # @return [void]
     def project_relation!(schema, definition)
+      return unless definition.fetch(:fields).all? { |f| inputs.dig(f, :type) }
+
       fields = definition.fetch(:fields).map(&:to_s)
       case definition[:relation]
       when :requires

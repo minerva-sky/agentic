@@ -3,9 +3,10 @@
 # The Cancel Drill: structured concurrency's core promise is that
 # cancellation is PROMPT - stop means stop, not "finish everything
 # and then agree you'd stopped". Three drills measure what each
-# cancel path actually delivers: the surgical ones keep the promise;
-# the plan-wide one, under a joined reactor, turns out to be
-# bookkeeping wearing a stop sign.
+# cancel path actually delivers. In round 10 this drill caught
+# plan-wide cancel billing for every canceled task; the round-11
+# release fixed it, and this file is the acceptance test that keeps
+# it fixed.
 #
 #   bundle exec ruby examples/cancel_drill.rb
 #
@@ -97,14 +98,17 @@ Sync do
   wall = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
 end
 puts "  drill 3 - cancel_plan at 30ms:"
-puts "    status flipped to :canceled by #{flip_ms}ms - and then the plan ran"
-puts "    #{(wall * 1000).round}ms anyway, with #{runs3.size}/6 agents executing (#{states(orchestrator3)})."
+puts "    status flipped to :canceled by #{flip_ms}ms, the plan returned in #{(wall * 1000).round}ms,"
+puts "    and only #{runs3.size}/6 agents ever ran (#{states(orchestrator3)}) - the two that"
+puts "    were mid-flight when the order came. before round 11 this row"
+puts "    read \"301ms, 6/6 agents executing\": every task reported"
+puts "    :canceled while every agent ran to completion and billed."
 puts
-puts "  the drill's verdict: task-level cancel keeps the structured-"
-puts "  concurrency promise - stop is prompt, lanes are freed, unstarted"
-puts "  work stays unstarted. plan-level cancel under a joined reactor"
-puts "  is bookkeeping wearing a stop sign: every task reports :canceled"
-puts "  while every agent runs to completion and bills you, results"
-puts "  discarded. that's the worst trade available - full cost, zero"
-puts "  product. filed as the round-11 ask: cancel_plan must stop the"
-puts "  scheduler and the in-flight fibers, not just restate their status."
+puts "  the drill's verdict, updated: all three cancel paths now keep"
+puts "  the structured-concurrency promise. the round-11 fix stops the"
+puts "  fibers instead of the reactor handle - and does its bookkeeping"
+puts "  FIRST, because stopping a fiber frees its slot and synchronously"
+puts "  admits the next waiter, which must already read as canceled in"
+puts "  that instant. cancellation is a race against your own scheduler;"
+puts "  this drill is the finish-line camera, and it stays in the repo"
+puts "  so the race gets re-run on every change."

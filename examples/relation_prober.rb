@@ -4,13 +4,14 @@
 # predicates deserve hostility. Each relation is probed with edge
 # inputs - zeros, negatives, floats, missing keys, nils - and every
 # verdict is checked against an independent hand-written oracle.
-# The prober also walks off the paved road on purpose: a rule that
-# references an undeclared field meets a string, and the resulting
-# TypeError escapes raw. Exit 1 by design - the sharp edge is real.
+# The prober also walks off the paved road on purpose: in round 10
+# a rule referencing an undeclared field met a string and escaped as
+# a raw TypeError; the round-11 release files that edge down, and
+# this prober is the acceptance test that proves it stays down.
 #
 #   bundle exec ruby examples/relation_prober.rb
 #
-# Runs offline; exits 1 because the last probe draws blood.
+# Runs offline; exits 1 if any probe draws blood again.
 
 require_relative "../lib/agentic"
 
@@ -75,31 +76,40 @@ puts "  #{PROBES.size} probes, #{divergences} divergence(s) on the paved road."
 puts
 
 # --- off the paved road ---------------------------------------------------------
-# A rule may reference a field the contract never declared. Per-key
-# validation can't type-check what isn't declared, so a string sails
-# through to sum_lte's arithmetic - and the failure is a raw
-# TypeError, not a ValidationError. Callers rescuing the documented
-# error class will not catch this.
-sharp = spec_for(
-  {r: {relation: :sum_lte, fields: [:a, :undeclared], limit: 10}},
-  {a: {type: "number"}}
-)
-puts "  off the road: sum_lte over an UNDECLARED field, fed a string"
-begin
-  Agentic::CapabilityValidator.new(sharp).validate_inputs!(a: 5, undeclared: "5")
-  puts "    ...allowed?! the prober expected blood and found none"
-  exit(divergences.zero? ? 0 : 1)
-rescue Agentic::Errors::ValidationError
-  puts "    rejected with ValidationError - the edge has been filed down"
-  exit(divergences.zero? ? 0 : 1)
-rescue TypeError => e
-  puts "    RAW #{e.class}: #{e.message.inspect}"
-  puts
-  puts "    a validator's one job is to convert bad input into its OWN"
-  puts "    error type. here, bad input crashes the validator instead -"
-  puts "    rescue Agentic::Errors::ValidationError won't catch it, so"
-  puts "    the 422 path becomes a 500 path. filed as the round-11 ask:"
-  puts "    relation rules must either type-check their fields at"
-  puts "    declaration time or wrap evaluation failures. exit 1 until."
-  exit(1)
+# In round 10, a rule referencing an undeclared field let a string
+# reach sum_lte's arithmetic: raw TypeError, a 422 path turned 500
+# path. The round-11 fix refuses at CONSTRUCTION - the typo fails at
+# boot, where it names itself, before any request can find it.
+edges = {
+  "sum_lte over an UNDECLARED field" =>
+    [{r: {relation: :sum_lte, fields: [:a, :undeclared], limit: 10}}, {a: {type: "number"}}],
+  "sum_lte over a declared STRING" =>
+    [{r: {relation: :sum_lte, fields: [:a, :b], limit: 10}}, {a: {type: "number"}, b: {type: "string"}}],
+  "requires with a typo'd field (fail-open)" =>
+    [{r: {relation: :requires, fields: [:a, :customs_kode]}}, {a: {type: "number"}, customs_code: {type: "string"}}]
+}
+
+blood = 0
+puts "  off the paved road: rules that must refuse to construct"
+edges.each do |name, (rules, inputs)|
+  Agentic::CapabilityValidator.new(spec_for(rules, inputs))
+  blood += 1
+  puts format("    %-42s CONSTRUCTED - the edge is back", name)
+rescue ArgumentError => e
+  puts format("    %-42s refused at boot: %s", name, e.message[0, 40] + "...")
+rescue => e
+  blood += 1
+  puts format("    %-42s wrong uniform: %s", name, e.class)
 end
+
+puts
+if divergences.zero? && blood.zero?
+  puts "  the paved road holds and the roadside refuses construction."
+  puts "  note the third edge: a typo'd field in requires used to fail"
+  puts "  OPEN - the rule just never fired, which no test of valid inputs"
+  puts "  would ever notice. now the typo can't boot. a validator's"
+  puts "  errors must wear its uniform, and its typos must not compile."
+else
+  puts "  BLOOD DRAWN: #{divergences} divergence(s), #{blood} escaped edge(s)."
+end
+exit((divergences + blood).zero? ? 0 : 1)

@@ -16,9 +16,14 @@ module Agentic
   # must be present.
   class CapabilityValidator
     # @param specification [CapabilitySpecification] The capability specification
+    # @raise [ArgumentError] When a relation-typed rule is ill-declared
+    #   (unknown relation, undeclared fields, sum_lte over non-numbers) -
+    #   bad rules fail at construction, not mid-validation in the wrong
+    #   error class
     def initialize(specification)
       @specification = specification
       @schemas = {}
+      validate_rule_declarations!
     end
 
     # Validates inputs against the capability's declared inputs
@@ -105,6 +110,19 @@ module Agentic
         violations: {base: broken.map { |b| b[:message] }},
         rule_violations: broken
       )
+    end
+
+    # Fail-fast check of every relation-typed rule against the declared
+    # inputs, at construction time
+    def validate_rule_declarations!
+      rules = @specification.respond_to?(:rules) ? @specification.rules : nil
+      return if rules.nil? || rules.empty?
+
+      rules.each do |key, definition|
+        next if definition.respond_to?(:call) || !definition[:relation]
+
+        RelationRules.validate_declaration!(key, definition, @specification.inputs)
+      end
     end
 
     def schema_for(kind, declared)
