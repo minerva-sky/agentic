@@ -44,6 +44,8 @@ Gem::Specification.new do |spec|
   spec.add_dependency "tty-cursor", "~> 0.7"
   spec.add_dependency "pastel", "~> 0.8"
   spec.add_dependency "ostruct"
+  spec.add_dependency "logger" # bundled gem as of Ruby 3.5 - declare what you require
+  spec.add_dependency "cgi"    # trimmed to a bundled gem in Ruby 3.5; used for CGI.escape
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html

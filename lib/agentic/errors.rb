@@ -13,6 +13,22 @@ module Agentic
     # time so misconfiguration fails at boot, not at request time.
     class ConfigurationError < StandardError; end
 
+    # Raised by strict-mode journal replay when a line is torn,
+    # mis-encoded, or (for task events) missing its identifying keys.
+    # Tolerant replay - the recovery default - reports damage on the
+    # replayed state instead of raising.
+    class JournalDamagedError < StandardError
+      # @return [Integer] 1-based line number of the damaged line
+      attr_reader :line_number
+
+      # @param message [String] What was wrong
+      # @param line_number [Integer] Where it was wrong
+      def initialize(message, line_number:)
+        @line_number = line_number
+        super("#{message} (line #{line_number})")
+      end
+    end
+
     # Raised when a capability's inputs or outputs violate its declared
     # specification. Collects every violation instead of failing on the
     # first, so callers can fix a bad payload in one round trip.
@@ -38,19 +54,29 @@ module Agentic
       # @return [Array<Hash>] [{rule:, message:, fields:}, ...]
       attr_reader :rule_violations
 
+      # Typo diagnoses: when a sent key is close to a missing declared
+      # key, the error says so - "you sent :weight_kilo - did you mean
+      # :weight_kg?". Missing-plus-similar-extra is a typo's signature,
+      # and the correction costs one Levenshtein pass at raise time.
+      # @return [Array<String>] Human hint sentences (possibly empty)
+      attr_reader :hints
+
       # @param capability [String] The capability name
       # @param kind [Symbol] :inputs or :outputs
       # @param violations [Hash{Symbol=>Array<String>}] Messages keyed by attribute
       # @param expectations [Hash{Symbol=>Hash}] Declarations for violated keys
       # @param rule_violations [Array<Hash>] Structured broken-rule records
-      def initialize(capability:, kind:, violations:, expectations: {}, rule_violations: [])
+      # @param hints [Array<String>] Typo diagnoses to append to the message
+      def initialize(capability:, kind:, violations:, expectations: {}, rule_violations: [], hints: [])
         @capability = capability
         @kind = kind
         @violations = violations
         @expectations = expectations
         @rule_violations = rule_violations
+        @hints = hints
 
         details = violations.map { |key, messages| "#{key} #{Array(messages).join(", ")}" }.join("; ")
+        details += ". #{hints.join(" ")}" unless hints.empty?
         super("Invalid #{kind} for capability '#{capability}': #{details}")
       end
     end

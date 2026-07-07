@@ -420,6 +420,176 @@ third cast of ten prolific Rubyists took the bench:
    replay mode for audit tools vs the tolerant recovery default
    (flavorjones).
 
+## Round 13 — a fourth cast, and the docs go on trial
+
+The round-12 asks shipped as a release: journal replay is
+tolerant-by-default (whole lines salvaged, damage reported with line
+and reason on `state.damage`), a strict mode raises
+`JournalDamagedError` for audit tools, and `fsync_every:` makes group
+commit an explicit constructor choice with its durability trade
+named. The hostile-inputs probe flipped green; the write-path profile
+benches the real knob. Then a fourth cast of ten took the bench:
+
+| # | Persona | Built with the gem | Run it | Field notes |
+|---|---------|--------------------|--------|-------------|
+| 1 | Piotr Murach | TTY status board — badge, gauge, tree, frame, composed | `examples/tty_status.rb` | [round-13/01-piotrmurach.md](round-13/01-piotrmurach.md) |
+| 2 | John Nunemaker | Feature flags — the experimental step is a plan shape, not an if | `examples/feature_flags.rb` | [round-13/02-jnunemaker.md](round-13/02-jnunemaker.md) |
+| 3 | Akira Matsuda | Journal tail pager — page 1 costs 16KB of a 2.5MB file | `examples/journal_tail.rb` | [round-13/03-amatsuda.md](round-13/03-amatsuda.md) |
+| 4 | David Bryant Copeland | CLI contract — four channels, EX_USAGE distinct from failure | `examples/cli_contract.rb` | [round-13/04-davetron5000.md](round-13/04-davetron5000.md) |
+| 5 | Hiroshi Shibata | Stdlib census — logger and cgi caught before the 3.5 wave | `examples/stdlib_census.rb` | [round-13/05-hsbt.md](round-13/05-hsbt.md) |
+| 6 | Noel Rappin | Money discipline — integer cents as a tripwire type | `examples/money_discipline.rb` | [round-13/06-noelrap.md](round-13/06-noelrap.md) |
+| 7 | Tom Stuart | Plans as automata — completion proved total by exhaustion | `examples/plans_as_automata.rb` | [round-13/07-tomstuart.md](round-13/07-tomstuart.md) |
+| 8 | Chris Oliver | Job adapter — retry_on/discard_on in forty lines | `examples/job_adapter.rb` | [round-13/08-excid3.md](round-13/08-excid3.md) |
+| 9 | Kasper Timm Hansen | API riffs — three shapes for fsync_every, judged at the call site | `examples/api_riffs.rb` | [round-13/09-kaspth.md](round-13/09-kaspth.md) |
+| 10 | Steve Klabnik | Doctest runner — 11 of 30 documented examples are alive | `examples/doctest_runner.rb` | [round-13/10-steveklabnik.md](round-13/10-steveklabnik.md) |
+
+### What round 13 surfaced
+
+1. **Two more live hazards fixed in-round**: the stdlib census caught
+   `logger` (bundled-gem promotion in Ruby 3.5) and `cgi` (trimmed in
+   3.5) required-but-undeclared — both now in the gemspec with
+   reasons. Same law as round 11's "time" bug: a transitive require
+   is a loan, and rubies refinance.
+2. **The docs went on trial and lost**: the doctest runner executed
+   all 30 documented examples (YARD @example blocks + README fences)
+   in sandboxes — 11 run, 19 are dead from missing setup or API
+   drift. Dead docs cluster around dead-ish code corners.
+3. **The release's own features were immediately load-bearing**:
+   `rewire_task` spliced flag-gated steps (Nunemaker), `fsync_every`
+   made the pager's 20k-event fixture affordable and got its API
+   shape riffed and vindicated (kaspth), and `hopeless?` backstopped
+   `discard_on` in the job adapter.
+4. **The theory seat earned its keep**: enumerating the diamond's
+   six-state space proves completion totally rather than sampling
+   it, and exhibits the cycle as an empty machine — giving precise
+   content to two earlier rounds' cycle intuitions. Know which
+   regime you're in: enumeration for small machines, invariant
+   provers past forty tasks.
+5. **Next asks**: runnable-or-annotated docs — every README fence
+   and @example either executes in CI via the doctest runner or
+   carries a deliberate "illustrative" marker (Klabnik); and revive
+   or retire the learning-system corner whose examples all died with
+   LoadErrors (the census-adjacent smell).
+
+## Round 14 — the docs go green, and a fifth cast arrives
+
+The round-13 asks shipped as a release: the doctest runner is now a
+referee (every doc example runs or carries a deliberate
+"illustrative" annotation — 26 run, 4 annotated, 0 dead), the drifted
+README fences were fixed against current APIs, and the learning
+corner was **revived**, not retired: three more missing stdlib
+requires, a double-counting history store (memory cache + files now
+deduped by id), and the never-functional `register_with_orchestrator`
+replaced by `Learning.lifecycle_hooks` — the same construction-time
+seam the journal uses. Then a fifth cast took the bench:
+
+| # | Persona | Built with the gem | Run it | Field notes |
+|---|---------|--------------------|--------|-------------|
+| 1 | Evan Phoenix | Plan server — thread pool, shared quota, a drain with dignity | `examples/plan_server.rb` | [round-14/01-evanphx.md](round-14/01-evanphx.md) |
+| 2 | André Arko | Capability resolver — the dependencies: field, finally resolved | `examples/capability_resolver.rb` | [round-14/02-indirect.md](round-14/02-indirect.md) |
+| 3 | Soutaro Matsumoto | RBS export — shape from contracts; the validator keeps the law | `examples/rbs_export.rb` | [round-14/03-soutaro.md](round-14/03-soutaro.md) |
+| 4 | Benoit Daloze | Behavior spec — six boundary choices, pinned in a 30-line mspec | `examples/behavior_spec.rb` | [round-14/04-eregon.md](round-14/04-eregon.md) |
+| 5 | Yuki Nishijima | Did you mean — three error seams finish your sentence | `examples/did_you_mean.rb` | [round-14/05-yuki24.md](round-14/05-yuki24.md) |
+| 6 | Sam Saffron | Always-on profiler — a badge per plan, budgets that assign work | `examples/always_on_profiler.rb` | [round-14/06-samsaffron.md](round-14/06-samsaffron.md) |
+| 7 | Ryan Tomayko | Unix workers — fork, pipe, kill, wait; 9/9 served, 3/3/3 | `examples/unix_workers.rb` | [round-14/07-rtomayko.md](round-14/07-rtomayko.md) |
+| 8 | Marc-André Lafortune | Ractor audit — send facts, keep machines | `examples/ractor_shareability.rb` | [round-14/08-marcandre.md](round-14/08-marcandre.md) |
+| 9 | Rosa Gutiérrez | Concurrency key — one per tenant, tenants in parallel, judged | `examples/concurrency_key.rb` | [round-14/09-rosa.md](round-14/09-rosa.md) |
+| 10 | Janko Marohnić | Attachment pipeline — cache instantly, promote via journaled plan | `examples/attachment_pipeline.rb` | [round-14/10-janko.md](round-14/10-janko.md) |
+
+### What round 14 surfaced
+
+1. **The learning corner's autopsy generalized round 11's lesson**:
+   three more files used stdlib without requiring it, a store
+   double-counted its own records, and a public API called a method
+   that never existed — dead docs had been pointing at dead-ish code
+   all along, and reviving the docs revived the code.
+2. **The dormant metadata kept paying**: the `dependencies:` field
+   (unused since round 1) became a Bundler-style resolver;
+   contracts became RBS signatures with the shape/law boundary drawn
+   on principle; `try_acquire` became cron-guard semantics
+   (`skip_if_running`); the journal became an upload promotion log.
+3. **Process-grade patterns joined the catalog**: a real socket
+   server with a measured graceful drain, preforked workers reaped
+   by pid, per-tenant serialization with judged interleavings, and a
+   Ractor audit whose one refusal (the mutex-holding limiter) is
+   load-bearing: send facts, keep machines.
+4. **Seventh consecutive round of tools correcting authors**: the
+   burst-fed pipe wasn't fair (9/0/0 until arrivals were paced), the
+   Ractor auditor froze its own evidence, and the Unix example
+   committed the exact missing-require sin the census preaches
+   against. The streak is the methodology.
+5. **Next asks**: thread did-you-mean suggestions into
+   ValidationError and the rewire/remove errors (the candidate lists
+   are already in scope at every raise site — yuki24); and pin
+   fiber-vs-thread safety guarantees per public method as behavior
+   specs, not just drills (eregon).
+
+## Round 15 — the closing release
+
+The final round delivers the round-14 asks and closes the loop with
+no new asks outstanding:
+
+- **Did-you-mean became infrastructure** (`Agentic::Suggestions`): a
+  conservative Levenshtein engine threaded into the framework's own
+  errors. `ValidationError` now diagnoses renamed keys from
+  missing-plus-similar-extra ("You sent :weight_kilo - did you mean
+  :weight_kg?", in the message and as structured `hints`), and the
+  rewire/remove errors suggest close task names. The engine stays
+  silent past a length-scaled threshold - a wrong suggestion is worse
+  than none. `did_you_mean.rb` flipped from retrofit to native
+  demonstration.
+- **The concurrency contract is pinned, not just drilled**:
+  `spec/agentic/concurrency_contract_spec.rb` promises per-method
+  guarantees (journal writes thread-safe and cross-process safe,
+  windowed limiter thread-safe, concurrency-mode limiter
+  fiber-scoped, registry thread-safe), and the methods themselves
+  carry `@note Concurrency contract:` documentation.
+
+Suite at 610 examples, 0 failures; 131 runnable example programs;
+every doc example runs or says why it doesn't.
+
+## The series, closed out
+
+Fifteen rounds. Fifty personas across five casts. Thirteen releases,
+each built from the previous round's in-character field notes. What
+the experiment demonstrated:
+
+1. **The loop worked.** Personas building *with* the gem generated
+   asks; shipping the asks made the next builds possible; the new
+   builds found the next seams. Features that emerged this way -
+   the graph API, the journal's percentiles and tolerant replay,
+   relation rules, resize/try_acquire, remove/rewire, suggestions -
+   all arrived pre-validated by a consumer that already existed.
+2. **Examples are a defect detector.** The builds surfaced real bugs
+   the suite never touched: a truncated test run, a scheduler
+   deadlock, canceled plans that billed anyway, relation rules
+   crashing in the wrong error class, a torn journal tail denying
+   all recovery, six files using stdlib without requiring it, a
+   history store double-counting itself, and a public API calling a
+   method that never existed. Every one was found by *using* the
+   thing, and fixed with the finding example as the acceptance test.
+3. **Declarations compound.** The single biggest return came from
+   making things data: contract declarations bought validation,
+   docs, schemas, fixtures, semver, RBS, 422s, polite forms, and a
+   resolver; relation rules bought enforcement, generation,
+   projection, and diffing; the graph bought drawing, testing,
+   merging, linting, and flogging. Code keeps secrets; data makes
+   friends - the series' most-repeated lesson because it kept being
+   re-earned.
+4. **Tools correct their authors.** Eight consecutive rounds ended
+   with an example's own output overruling the prose its author had
+   drafted. Measurement-over-narrative wasn't a value we asserted;
+   it was a pattern the artifacts enforced.
+5. **The referee pattern scales.** Exit-code-gated honesty tools
+   (probers, provers, drills, the doctest runner) turned findings
+   into acceptance tests: each round's sharpest complaint became the
+   next round's green check, and stays in the repo re-running.
+
+The catalog stands at 131 offline example programs, ten field-note
+directories, and a framework whose contracts, journals, limiters,
+and plans all testify about themselves. The bench is cleared; the
+asks list is empty; everything the room asked for was shipped.
+
 ### What round 6 surfaced
 
 1. **Plans became artifacts**: narratable (tour), serializable with an

@@ -45,6 +45,12 @@ module Agentic
     end
 
     # Runs the block inside the ceiling, waiting for a slot if necessary
+    #
+    # @note Concurrency contract: windowed mode (per:) is thread-safe -
+    #   stamp bookkeeping holds a Mutex, and waiting sleeps the calling
+    #   thread or fiber. Concurrency mode (no per:) is FIBER-scoped: it
+    #   waits via Async::Semaphore, so blocking acquisition belongs
+    #   inside one reactor; it is not a cross-thread primitive.
     # @yield The rate-limited work
     # @return [Object] The block's return value
     def acquire
@@ -64,6 +70,11 @@ module Agentic
     # for work that should only happen if capacity is to spare - retry
     # budgets, best-effort refreshes, opportunistic prefetch. A budget
     # wants to say no, not to make you wait for a yes.
+    #
+    # @note Concurrency contract: thread-safe in windowed mode (mutexed
+    #   stamps); in concurrency mode the non-blocking check is safe to
+    #   CALL from any thread but admission is only meaningful within
+    #   the semaphore's reactor.
     # @yield The admitted work, if any
     # @return [Boolean] True when admitted (block, if given, was run)
     def try_acquire(&block)

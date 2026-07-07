@@ -2,14 +2,15 @@
 
 # Hostile Inputs: a parser's real spec is what it does with input
 # nobody intended. The journal's replay parses a file that - by the
-# journal's own reason for existing - may end mid-write. This probe
-# feeds replay the whole rogues' gallery: torn tails, binary garbage,
-# giant lines, wrong-shaped JSON. The verdict on the torn tail is the
-# one that matters, and today it draws blood. Exit 1 by design.
+# journal's own reason for existing - may end mid-write. In round 12
+# this probe caught the torn tail denying ALL recovery; the round-13
+# release made replay tolerant-by-default (salvage whole lines,
+# REPORT damage) with a strict mode for auditors. This probe is now
+# the acceptance test that keeps it that way.
 #
 #   bundle exec ruby examples/hostile_inputs.rb
 #
-# Runs offline; exits 1 until torn-tail recovery ships.
+# Runs offline; exits 1 if any hostile file draws blood again.
 
 require_relative "../lib/agentic"
 require "tmpdir"
@@ -21,9 +22,9 @@ def replay_verdict(lines)
   path = File.join(Dir.tmpdir, "agentic_hostile.jsonl")
   File.write(path, lines.join("\n"))
   state = Agentic::ExecutionJournal.replay(path: path)
-  [:recovered, state.completed_task_ids.size]
+  [:recovered, state.completed_task_ids.size, state.damage]
 rescue => e
-  [:crashed, e.class.to_s]
+  [:crashed, e.class.to_s, []]
 end
 
 PROBES = {
@@ -41,29 +42,42 @@ puts "HOSTILE INPUTS (#{PROBES.size} probes against ExecutionJournal.replay)"
 puts
 blood = []
 PROBES.each do |name, lines|
-  verdict, detail = replay_verdict(lines)
+  verdict, detail, damage = replay_verdict(lines)
   ok = verdict == :recovered
   blood << name unless ok
+  report = damage.map { |d| "line #{d[:line]}: #{d[:reason]}" }.join(", ")
   puts format("  %-30s %s", name,
-    ok ? "recovered (#{detail} task(s) salvaged)" : "CRASHED: #{detail} - ALL recovery denied")
+    if ok
+      "recovered (#{detail} salvaged#{damage.any? ? "; damage reported: #{report}" : ""})"
+    else
+      "CRASHED: #{detail}"
+    end)
+end
+
+# The auditor's door: strict mode must still refuse damage, loudly
+puts
+strict_path = File.join(Dir.tmpdir, "agentic_hostile_strict.jsonl")
+File.write(strict_path, [GOOD, %({"event":"task_succ)].join("\n"))
+begin
+  Agentic::ExecutionJournal.replay(path: strict_path, mode: :strict)
+  blood << "strict mode accepted damage"
+  puts "  strict mode: ACCEPTED a torn line - auditors are flying blind"
+rescue Agentic::Errors::JournalDamagedError => e
+  puts "  strict mode: refused, in uniform - #{e.class.name.split("::").last}: #{e.message}"
 end
 
 puts
 if blood.empty?
-  puts "  every probe salvaged what was salvageable. the tail is tolerated."
+  puts "  every hostile file was survived, every whole line salvaged, and"
+  puts "  every wound REPORTED - state.damage names the line and the"
+  puts "  reason, so recovery tools can say \"resumed 47 tasks; 1 torn"
+  puts "  line at the tail\" instead of either crashing or lying. and the"
+  puts "  same file offers two doors: tolerant for recovery (salvage"
+  puts "  maximally, report honestly), strict for audits (refuse damage,"
+  puts "  in the journal's own error class, with the line number). one"
+  puts "  format, two reader postures, both legitimate - that was the"
+  puts "  round-12 ask, verbatim, and this probe keeps it delivered."
 else
-  puts "  #{blood.size} probe(s) drew blood: #{blood.join("; ")}."
-  puts
-  puts "  the torn tail is the indefensible one. a journal exists FOR the"
-  puts "  crash - fsync guarantees completed lines survive, but the line"
-  puts "  being written AT the crash may land torn, and that is the exact"
-  puts "  file every real recovery will read. today one torn byte at the"
-  puts "  tail throws JSON::ParserError past every rescue that says"
-  puts "  ValidationError, and 100% of the events that WERE durable"
-  puts "  become unreachable. nokogiri's whole life is this lesson:"
-  puts "  parsers meet real input, and real input is damaged. filed as"
-  puts "  the round-13 ask: replay must salvage every whole line and"
-  puts "  report (not raise on) a torn tail - recovery tools don't get"
-  puts "  to be the second thing that fails. exit 1 until."
+  puts "  BLOOD: #{blood.join("; ")} - the tail is no longer tolerated."
 end
 exit(blood.empty? ? 0 : 1)

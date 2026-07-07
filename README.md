@@ -158,21 +158,22 @@ end
 
 ```ruby
 # Create an orchestrator
-orchestrator = Agentic::PlanOrchestrator.new(
-  concurrency_limit: 5,
-  continue_on_failure: true
+orchestrator = Agentic::PlanOrchestrator.new(concurrency_limit: 5)
+
+# Add tasks (each with its own agent - see the next section for providers)
+collect = Agentic::Task.new(
+  description: "collect entries",
+  agent_spec: {"name" => "Collector", "instructions" => "collect"}
 )
-
-# Add tasks to the orchestrator
-tasks.each do |task|
-  orchestrator.add_task(task)
-end
-
-# Create an agent provider
-agent_provider = Agentic::DefaultAgentProvider.new
+report = Agentic::Task.new(
+  description: "write the report",
+  agent_spec: {"name" => "Reporter", "instructions" => "report"}
+)
+orchestrator.add_task(collect, agent: ->(_task) { %w[alpha beta gamma] })
+orchestrator.add_task(report, [collect], agent: ->(task) { "#{task.previous_output.size} entries reported" })
 
 # Execute the plan
-result = orchestrator.execute_plan(agent_provider)
+result = orchestrator.execute_plan
 
 # Process the results
 if result.successful?
@@ -194,6 +195,15 @@ You don't need an agent provider to run a plan. Tasks carry an arbitrary
 outputs of the tasks they depend on:
 
 ```ruby
+# Stand-ins for your app's objects:
+module OrderApi
+  def self.fetch(id) = {id: id, status: "shipped"}
+end
+module Mailer
+  def self.deliver(order) = "notified customer for order #{order[:id]}"
+end
+order_id = 42
+
 orchestrator = Agentic::PlanOrchestrator.new
 
 fetch = Agentic::Task.new(
@@ -224,12 +234,20 @@ Dependencies can be **named**, so they're declared and consumed under one
 word, and single-dependency chains have a shorthand:
 
 ```ruby
+orchestrator = Agentic::PlanOrchestrator.new
+new_task = ->(name) { Agentic::Task.new(description: name, agent_spec: {"name" => name, "instructions" => name}) }
+commits, debt, digest = new_task["commits"], new_task["debt"], new_task["digest"]
+
+orchestrator.add_task(commits, agent: ->(_t) { 12 })
+orchestrator.add_task(debt, agent: ->(_t) { 3 })
 orchestrator.add_task(digest, needs: {shipped: commits, owed: debt}, agent: ->(task) {
   "#{task.needs.shipped} commits shipped, #{task.needs.owed} TODOs owed"
 })
 
+previous_verse, next_verse = new_task["first verse"], new_task["second verse"]
+orchestrator.add_task(previous_verse, agent: ->(_t) { "an old pond" })
 orchestrator.add_task(next_verse, [previous_verse], agent: ->(task) {
-  answer(task.previous_output)   # the sole dependency's output
+  "#{task.previous_output} / a frog leaps in"   # the sole dependency's output
 })
 ```
 
@@ -357,17 +375,22 @@ The Plugin Manager handles third-party extensions and their lifecycle:
 # Get the plugin manager
 manager = Agentic::Extension.plugin_manager
 
-# Register a plugin
-plugin = MyPlugin.new
-manager.register("my_plugin", plugin, { version: "1.0.0" })
+# A plugin is any object with #initialize_plugin and #call
+class GreeterPlugin
+  def initialize_plugin(context = {}) = true
+  def call(name) = "hello, #{name}"
+end
+
+# Register a plugin (register! replaces an existing registration)
+manager.register!("greeter", GreeterPlugin.new, { version: "1.0.0" })
 
 # Get and use a plugin
-if plugin = manager.get("my_plugin")
-  result = plugin.call(arg1, arg2)
+if (plugin = manager.get("greeter"))
+  result = plugin.call("agentic")
 end
 
 # Disable a plugin
-manager.disable("my_plugin")
+manager.disable("greeter")
 ```
 
 ## Agent Specification and Task Definition
@@ -398,6 +421,10 @@ agent_spec_from_hash = Agentic::AgentSpecification.from_hash(hash)
 The TaskDefinition defines a task to be performed by an agent:
 
 ```ruby
+agent_spec = Agentic::AgentSpecification.new(
+  name: "ResearchAgent", description: "Researches topics", instructions: "Research thoroughly"
+)
+
 # Create a task definition
 task_def = Agentic::TaskDefinition.new(
   description: "Research AI trends",
@@ -416,6 +443,11 @@ task_def_from_hash = Agentic::TaskDefinition.from_hash(hash)
 The ExecutionPlan represents a plan with tasks and expected answer format:
 
 ```ruby
+agent_spec = Agentic::AgentSpecification.new(
+  name: "ResearchAgent", description: "Researches topics", instructions: "Research thoroughly"
+)
+task_def = Agentic::TaskDefinition.new(description: "Research AI trends", agent: agent_spec)
+
 # Create an expected answer format
 expected_answer = Agentic::ExpectedAnswerFormat.new(
   format: "PDF",
@@ -517,6 +549,7 @@ agent = Agentic.assemble_agent(task)
 
 Agents can be stored and retrieved for future use:
 
+<!-- doctest: illustrative (requires an assembled agent, i.e. LLM credentials) -->
 ```ruby
 # Store an agent for future use
 agent_id = Agentic.agent_store.store(agent, name: "report_generator")
@@ -536,7 +569,14 @@ agents = Agentic.agent_store.all
 Capabilities can be composed into higher-level capabilities:
 
 ```ruby
-registry = Agentic.agent_capability_registry
+registry = Agentic::AgentCapabilityRegistry.instance
+
+# Register the two base capabilities (bare lambdas are providers)
+[["text_generation", ->(i) { {response: "report on: #{i[:prompt]}"} }],
+ ["data_analysis", ->(i) { {summary: "avg sales #{i[:data][:sales].sum / i[:data][:sales].size}"} }]].each do |name, impl|
+  spec = Agentic::CapabilitySpecification.new(name: name, description: name, version: "1.0.0")
+  Agentic.register_capability(spec, Agentic::CapabilityProvider.new(capability: spec, implementation: impl))
+end
 
 # Compose multiple capabilities into a new one
 registry.compose(
@@ -548,16 +588,15 @@ registry.compose(
     { name: "data_analysis", version: "1.0.0" }
   ],
   ->(providers, inputs) {
-    # Implementation that uses both capabilities
     analysis = providers[1].execute(data: inputs[:data])
     report = providers[0].execute(prompt: "Generate a report on: #{analysis[:summary]}")
     { report: report[:response], analysis: analysis }
   }
 )
 
-# Use the composed capability
-agent.add_capability("comprehensive_report")
-result = agent.execute_capability("comprehensive_report", { data: { sales: [120, 90, 143] } })
+# Use the composed capability like any other
+provider = registry.get_provider("comprehensive_report")
+result = provider.execute(data: { sales: [120, 90, 143] })
 ```
 
 ## Learning System
@@ -597,6 +636,12 @@ avg_tokens = history_store.get_metric(:tokens_used, { agent_type: "research_agen
 The PatternRecognizer analyzes execution history to identify patterns and optimization opportunities:
 
 ```ruby
+history_store = Agentic::Learning::ExecutionHistoryStore.new(storage_path: "history")
+15.times do |i|
+  history_store.record_execution(task_id: "t#{i}", agent_type: "research_agent",
+    duration_ms: 1000 + i * 20, success: i % 4 != 0, metrics: {tokens_used: 1500 + i})
+end
+
 # Create a pattern recognizer
 recognizer = Agentic::Learning::PatternRecognizer.new(
   history_store: history_store,
@@ -618,11 +663,17 @@ recommendations = recognizer.recommend_optimizations("research_agent")
 The StrategyOptimizer generates improvements for prompts, parameters, and task sequences:
 
 ```ruby
-# Create a strategy optimizer
+history_store = Agentic::Learning::ExecutionHistoryStore.new(storage_path: "history")
+15.times do |i|
+  history_store.record_execution(task_id: "t#{i}", agent_type: "research_agent",
+    duration_ms: 1000 + i * 20, success: i % 4 != 0, metrics: {tokens_used: 1500 + i})
+end
+recognizer = Agentic::Learning::PatternRecognizer.new(history_store: history_store)
+
+# Create a strategy optimizer (add llm_client: for LLM-enhanced optimizations)
 optimizer = Agentic::Learning::StrategyOptimizer.new(
   pattern_recognizer: recognizer,
-  history_store: history_store,
-  llm_client: llm_client # Optional, for LLM-enhanced optimizations
+  history_store: history_store
 )
 
 # Optimize a prompt template
@@ -649,18 +700,22 @@ The Learning System can be automatically integrated with the PlanOrchestrator:
 ```ruby
 # Create the learning system
 learning_system = Agentic::Learning.create(
-  storage_path: "~/.agentic/history",
-  llm_client: llm_client,
+  storage_path: "history",
   auto_optimize: false
 )
 
-# Create a plan orchestrator
-orchestrator = Agentic::PlanOrchestrator.new
+# Hooks are a construction-time seam: pass the learning system's hooks
+# to the orchestrator (chaining any hooks you already have)
+orchestrator = Agentic::PlanOrchestrator.new(
+  lifecycle_hooks: Agentic::Learning.lifecycle_hooks(learning_system)
+)
 
-# Register the learning system with the orchestrator
-Agentic::Learning.register_with_orchestrator(orchestrator, learning_system)
+# The orchestrator now records execution metrics automatically
+task = Agentic::Task.new(description: "work", agent_spec: {"name" => "w", "instructions" => "w"})
+orchestrator.add_task(task, agent: ->(_t) { :done })
+orchestrator.execute_plan
 
-# The orchestrator will now automatically record execution metrics
+learning_system[:history_store].get_history.size # => 1
 ```
 
 ## Configuration
@@ -692,6 +747,7 @@ You can configure the OpenAI API key in several ways:
 
 You can customize the LLM behavior:
 
+<!-- doctest: illustrative (constructing a client requires credentials) -->
 ```ruby
 config = Agentic::LlmConfig.new(
   model: "gpt-4o-mini",

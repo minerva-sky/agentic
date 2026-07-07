@@ -24,9 +24,17 @@ module Agentic
   class ExecutionJournal
     # Replayed journal state: everything a resuming process needs to know
     ReplayedState = Struct.new(
-      :plan_id, :status, :completed_task_ids, :failed_task_ids, :outputs, :failures, :events, :descriptions, :durations, :duration_samples,
+      :plan_id, :status, :completed_task_ids, :failed_task_ids, :outputs, :failures, :events, :descriptions, :durations, :duration_samples, :damage,
       keyword_init: true
     ) do
+      # Whether any lines were torn, mis-encoded, or shape-broken.
+      # Tolerant replay salvages around damage and reports it here;
+      # a recovery tool should check this and say so out loud.
+      # @return [Boolean]
+      def damaged?
+        !damage.empty?
+      end
+
       # Task durations keyed by description - the natural baseline source
       # for performance regression tooling
       # @return [Hash{String=>Float}] Description => seconds (latest wins)
@@ -70,9 +78,25 @@ module Agentic
     # @return [String] Absolute path of the journal file
     attr_reader :path
 
+    # @return [Integer] Events per fsync (1 = every event is durable
+    #   before record returns)
+    attr_reader :fsync_every
+
     # @param path [String] Where to write the journal (created on first event)
-    def initialize(path:)
+    # @param fsync_every [Integer] Group-commit knob. 1 (the default) is
+    #   the strong promise: a crash cannot unwrite what record returned
+    #   from. n > 1 amortizes the fsync across n events for ~n-fold write
+    #   throughput - AND a crash may lose up to n-1 acknowledged events.
+    #   That is a different durability contract, not a faster same one;
+    #   choose it only where your recovery story tolerates the gap.
+    def initialize(path:, fsync_every: 1)
+      unless fsync_every.is_a?(Integer) && fsync_every >= 1
+        raise ArgumentError, "fsync_every must be a positive Integer, got #{fsync_every.inspect}"
+      end
+
       @path = File.expand_path(path)
+      @fsync_every = fsync_every
+      @writes = 0
       @mutex = Mutex.new
       FileUtils.mkdir_p(File.dirname(@path))
     end
@@ -100,6 +124,11 @@ module Agentic
     end
 
     # Appends an event to the journal - locked, flushed, and fsynced
+    #
+    # @note Concurrency contract: thread-safe (a Mutex serializes
+    #   writers in-process) AND cross-process safe (flock serializes
+    #   writers across processes). Pinned by the concurrency contract
+    #   spec and the threads/process drills.
     # @param event [Symbol, String] The event name
     # @param payload [Hash] Event data (must be JSON-serializable)
     # @return [void]
@@ -111,15 +140,35 @@ module Agentic
           file.flock(File::LOCK_EX)
           file.puts(line)
           file.flush
-          file.fsync
+          file.fsync if ((@writes += 1) % @fsync_every).zero?
         end
       end
     end
 
-    # Replays a journal file into resumable state
+    # Forces durability of everything written so far - call before
+    # relying on a group-committed journal (e.g. at plan completion)
+    # @return [void]
+    def sync
+      @mutex.synchronize do
+        File.open(@path, "a") { |file| file.fsync } if File.exist?(@path)
+      end
+    end
+
+    # Replays a journal file into resumable state.
+    #
+    # The default mode is :tolerant, because the file being replayed
+    # is - by this class's reason for existing - a file that may end
+    # mid-write: every whole line is salvaged, and torn, mis-encoded,
+    # or shape-broken lines are recorded on state.damage instead of
+    # raising. Recovery tools must never be the second thing that
+    # fails. Audit tools that WANT to fail on damage pass
+    # mode: :strict and get a JournalDamagedError naming the line.
+    #
     # @param path [String] The journal file to replay
+    # @param mode [Symbol] :tolerant (salvage + report) or :strict (raise)
     # @return [ReplayedState] What completed, what failed, and what it produced
-    def self.replay(path:)
+    # @raise [Errors::JournalDamagedError] In :strict mode, on the first damaged line
+    def self.replay(path:, mode: :tolerant)
       state = ReplayedState.new(
         plan_id: nil,
         status: nil,
@@ -130,16 +179,36 @@ module Agentic
         events: [],
         descriptions: {},
         durations: {},
-        duration_samples: Hash.new { |h, k| h[k] = [] }
+        duration_samples: Hash.new { |h, k| h[k] = [] },
+        damage: []
       )
 
       return state unless File.exist?(path)
 
+      line_number = 0
       File.foreach(path) do |line|
-        line = line.strip
-        next if line.empty?
+        line_number += 1
+        entry = begin
+          stripped = line.scrub("�").strip
+          next if stripped.empty?
 
-        entry = JSON.parse(line, symbolize_names: true)
+          JSON.parse(stripped, symbolize_names: true)
+        rescue JSON::ParserError, EncodingError => e
+          if mode == :strict
+            raise Errors::JournalDamagedError.new("unparseable journal line: #{e.message[0, 60]}", line_number: line_number)
+          end
+          state.damage << {line: line_number, reason: e.class.name}
+          next
+        end
+
+        if %w[task_succeeded task_failed task_started].include?(entry[:event]) && !entry[:task_id].is_a?(String)
+          if mode == :strict
+            raise Errors::JournalDamagedError.new("#{entry[:event]} line missing a String task_id", line_number: line_number)
+          end
+          state.damage << {line: line_number, reason: "missing task_id"}
+          next
+        end
+
         state.events << entry
         if entry[:task_id] && entry[:description]
           state.descriptions[entry[:task_id]] = entry[:description]

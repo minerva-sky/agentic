@@ -75,10 +75,12 @@ optimizer = learning_system[:strategy_optimizer]
 The Learning System can be integrated with the PlanOrchestrator to automatically record execution data:
 
 ```ruby
-orchestrator = Agentic::PlanOrchestrator.new
-learning_system = Agentic::Learning.create
+learning_system = Agentic::Learning.create(storage_path: "history")
 
-Agentic::Learning.register_with_orchestrator(orchestrator, learning_system)
+orchestrator = Agentic::PlanOrchestrator.new(
+  lifecycle_hooks: Agentic::Learning.lifecycle_hooks(learning_system)
+)
 ```
 
-This will register event handlers to automatically record task and plan executions.
+Hooks are a construction-time seam; the learning system's hooks record every
+task success and failure (and chain any hooks you already pass).

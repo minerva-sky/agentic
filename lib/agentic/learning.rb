@@ -6,7 +6,7 @@ module Agentic
   #
   # @example Using the Learning System components
   #   # Initialize components
-  #   history_store = Agentic::Learning::ExecutionHistoryStore.new
+  #   history_store = Agentic::Learning::ExecutionHistoryStore.new(storage_path: "history")
   #   recognizer = Agentic::Learning::PatternRecognizer.new(history_store: history_store)
   #   optimizer = Agentic::Learning::StrategyOptimizer.new(
   #     pattern_recognizer: recognizer,
@@ -27,8 +27,8 @@ module Agentic
   #
   #   # Optimize strategies
   #   improved_prompt = optimizer.optimize_prompt_template(
-  #     original_template: "Please research the topic: {topic}",
-  #     agent_type: "research_agent"
+  #     "Please research the topic: {topic}",
+  #     "research_agent"
   #   )
   module Learning
     # Factory method to create a complete learning system
@@ -68,60 +68,43 @@ module Agentic
       }
     end
 
-    # Register a learning system with a plan orchestrator
+    # Lifecycle hooks that feed a learning system from plan execution,
+    # in the same shape ExecutionJournal uses: pass them to
+    # PlanOrchestrator.new(lifecycle_hooks:), optionally chaining hooks
+    # you already have.
     #
-    # @param plan_orchestrator [PlanOrchestrator] The plan orchestrator to integrate with
-    # @param learning_system [Hash] The learning system components from Learning.create
-    # @return [Boolean] true if successfully registered
-    def self.register_with_orchestrator(plan_orchestrator, learning_system)
-      # Register execution history tracking
-      plan_orchestrator.on(:task_completed) do |task, result|
-        learning_system[:history_store].record_execution(
-          task_id: task.id,
-          plan_id: task.context[:plan_id],
-          agent_type: task.agent_spec&.type,
-          duration_ms: result.metrics[:duration_ms],
-          success: result.success?,
-          metrics: result.metrics,
-          context: {
-            task_description: task.description,
-            task_type: task.type,
-            input_size: task.input ? task.input.to_s.length : 0
-          }
+    # (This replaces the never-functional register_with_orchestrator,
+    # which called an #on API the orchestrator never had - hooks are a
+    # construction-time seam, so the learning system meets the
+    # orchestrator there.)
+    #
+    # @param learning_system [Hash] Components from Learning.create
+    # @param hooks [Hash] Existing hooks to invoke after recording
+    # @return [Hash] Lifecycle hooks for PlanOrchestrator.new
+    def self.lifecycle_hooks(learning_system, hooks = {})
+      store = learning_system.fetch(:history_store)
+      record = lambda do |task_id:, task:, duration:, success:, metrics: {}|
+        store.record_execution(
+          task_id: task_id,
+          agent_type: task.agent_spec.is_a?(Hash) ? task.agent_spec["name"] : task.agent_spec&.name,
+          duration_ms: (duration * 1000).round,
+          success: success,
+          metrics: metrics,
+          context: {task_description: task.description}
         )
       end
 
-      plan_orchestrator.on(:plan_completed) do |plan, results|
-        # Record overall plan execution
-        task_durations = {}
-        task_dependencies = {}
-
-        results.each do |task_id, result|
-          task_durations[task_id] = result.metrics[:duration_ms] if result.metrics[:duration_ms]
+      {
+        after_task_success: lambda do |task_id:, task:, result:, duration:|
+          record.call(task_id: task_id, task: task, duration: duration, success: true)
+          hooks[:after_task_success]&.call(task_id: task_id, task: task, result: result, duration: duration)
+        end,
+        after_task_failure: lambda do |task_id:, task:, failure:, duration:|
+          record.call(task_id: task_id, task: task, duration: duration, success: false,
+            metrics: {failure_type: failure.type})
+          hooks[:after_task_failure]&.call(task_id: task_id, task: task, failure: failure, duration: duration)
         end
-
-        # Extract dependencies from plan
-        plan.tasks.each do |task|
-          task_dependencies[task.id] = task.dependencies if task.dependencies&.any?
-        end
-
-        learning_system[:history_store].record_execution(
-          plan_id: plan.id,
-          success: results.values.all?(&:success?),
-          duration_ms: results.values.sum { |r| r.metrics[:duration_ms] || 0 },
-          metrics: {
-            total_tasks: results.size,
-            successful_tasks: results.values.count(&:success?),
-            failed_tasks: results.values.count { |r| !r.success? }
-          },
-          context: {
-            task_durations: task_durations,
-            task_dependencies: task_dependencies
-          }
-        )
-      end
-
-      true
+      }
     end
   end
 end

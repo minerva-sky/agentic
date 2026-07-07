@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "time" # Time#iso8601/Time.parse - require what you use
+
 require "date"
 require "json"
 require "fileutils"

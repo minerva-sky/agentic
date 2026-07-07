@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require "time" # Time#iso8601/Time.parse - require what you use
+require "digest" # Digest::MD5 - require what you use
+
 module Agentic
   module Learning
     # StrategyOptimizer improves execution strategies based on historical performance data.
@@ -7,7 +10,7 @@ module Agentic
     # strategies for tasks, agents, and plans.
     #
     # @example Optimizing a prompt template
-    #   history_store = Agentic::Learning::ExecutionHistoryStore.new
+    #   history_store = Agentic::Learning::ExecutionHistoryStore.new(storage_path: "history")
     #   recognizer = Agentic::Learning::PatternRecognizer.new(history_store: history_store)
     #   optimizer = Agentic::Learning::StrategyOptimizer.new(
     #     pattern_recognizer: recognizer,
@@ -15,8 +18,8 @@ module Agentic
     #   )
     #
     #   improved_prompt = optimizer.optimize_prompt_template(
-    #     original_template: "Please research the following topic: {topic}",
-    #     agent_type: "research_agent"
+    #     "Please research the following topic: {topic}",
+    #     "research_agent"
     #   )
     #
     class StrategyOptimizer

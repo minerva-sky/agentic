@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "time" # Time#iso8601/Time.parse - require what you use
+
 module Agentic
   # Represents a failure that occurred during task execution
   # @attr_reader [String] message The failure message

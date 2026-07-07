@@ -75,7 +75,7 @@ module Agentic
 
   # Plan and execute a goal in one call - the 80% path
   #
-  # @example
+  # @example Plan and execute a goal (illustrative: requires LLM credentials)
   #   result = Agentic.run("Summarize this week's support tickets")
   #   puts result.results.values.map(&:output) if result.successful?
   #

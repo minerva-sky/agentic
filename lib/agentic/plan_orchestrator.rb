@@ -104,7 +104,10 @@ module Agentic
     # @raise [ArgumentError] If unknown, already started, or depended upon
     def remove_task(task)
       task_id = task.respond_to?(:id) ? task.id : task
-      raise ArgumentError, "unknown task #{task_id}" unless @tasks.key?(task_id)
+      unless @tasks.key?(task_id)
+        known = @tasks.keys + @tasks.values.map(&:description)
+        raise ArgumentError, "unknown task #{task_id}#{Suggestions.hint(task_id, known)}"
+      end
       unless @execution_state[:pending].include?(task_id)
         raise ArgumentError, "task #{task_id} has already started; only pending tasks can be removed"
       end
@@ -134,7 +137,10 @@ module Agentic
     #   task that isn't in the plan
     def rewire_task(task, dependencies = [], needs: nil)
       task_id = task.respond_to?(:id) ? task.id : task
-      raise ArgumentError, "unknown task #{task_id}" unless @tasks.key?(task_id)
+      unless @tasks.key?(task_id)
+        known = @tasks.keys + @tasks.values.map(&:description)
+        raise ArgumentError, "unknown task #{task_id}#{Suggestions.hint(task_id, known)}"
+      end
       unless @execution_state[:pending].include?(task_id)
         raise ArgumentError, "task #{task_id} has already started; only pending tasks can be rewired"
       end
@@ -144,7 +150,11 @@ module Agentic
       deps |= named.values if named
 
       unknown = deps.reject { |dep| @tasks.key?(dep) }
-      raise ArgumentError, "cannot wire to unknown task(s) #{unknown.join(", ")}" if unknown.any?
+      if unknown.any?
+        known = @tasks.keys + @tasks.values.map(&:description)
+        diagnosed = unknown.map { |dep| "#{dep}#{Suggestions.hint(dep, known)}" }
+        raise ArgumentError, "cannot wire to unknown task(s) #{diagnosed.join(", ")}"
+      end
 
       @dependencies[task_id] = deps
       if named
@@ -215,7 +225,7 @@ module Agentic
         @semaphore = Async::Semaphore.new(@concurrency_limit, parent: @barrier)
 
         # Track execution start time
-        @execution_start_time = Time.now
+        @execution_start_time = monotonic_now
 
         # Start with tasks that have no dependencies
         eligible_tasks = find_eligible_tasks
@@ -229,7 +239,7 @@ module Agentic
         @barrier.wait
 
         # Track execution completion time
-        @execution_end_time = Time.now
+        @execution_end_time = monotonic_now
 
         # Call plan completion hook
         @lifecycle_hooks[:plan_completed].call(
@@ -242,7 +252,7 @@ module Agentic
       ensure
         @barrier&.stop
         # Ensure execution_end_time is set even if an exception occurred
-        @execution_end_time ||= Time.now
+        @execution_end_time ||= monotonic_now
       end
 
       # Create and return a PlanExecutionResult
@@ -477,7 +487,7 @@ module Agentic
       # their dependents from within their own slot, so two slot-holders
       # spawning dependents at a tight concurrency limit would deadlock
       # waiting for each other's slots.
-      scheduled_at = Time.now
+      scheduled_at = monotonic_now
       async_task = barrier.async do
         semaphore.acquire do
           # A task canceled while waiting for its slot must not run -
@@ -487,7 +497,7 @@ module Agentic
           @lifecycle_hooks[:task_slot_acquired].call(
             task_id: task_id,
             task: task,
-            waited: Time.now - scheduled_at
+            waited: monotonic_now - scheduled_at
           )
           execute_task_in_slot(task_id, task, agent_provider, semaphore, barrier)
         end
@@ -506,7 +516,7 @@ module Agentic
     # @param barrier [Async::Barrier] Tracks task completion
     # @return [void]
     def execute_task_in_slot(task_id, task, agent_provider, semaphore, barrier)
-      task_start_time = Time.now
+      task_start_time = monotonic_now
 
       # Call before_agent_build hook
       @lifecycle_hooks[:before_agent_build].call(
@@ -514,9 +524,9 @@ module Agentic
         task: task
       )
 
-      agent_build_start = Time.now
+      agent_build_start = monotonic_now
       agent = resolve_agent(task, agent_provider)
-      agent_build_duration = Time.now - agent_build_start
+      agent_build_duration = monotonic_now - agent_build_start
 
       # Call after_agent_build hook
       @lifecycle_hooks[:after_agent_build].call(
@@ -527,7 +537,7 @@ module Agentic
       )
 
       result = task.perform(agent)
-      task_duration = Time.now - task_start_time
+      task_duration = monotonic_now - task_start_time
 
       # Record result and update state
       if result.successful?
@@ -571,7 +581,7 @@ module Agentic
         task_id: task_id,
         task: task,
         failure: failure,
-        duration: Time.now - task_start_time
+        duration: monotonic_now - task_start_time
       )
 
       Agentic.logger.error("Unexpected error in task #{task_id}: #{e.message}")
@@ -721,6 +731,13 @@ module Agentic
     # @param from: [Symbol] Current state of the task
     # @param to: [Symbol] Target state for the task
     # @return [void]
+    # Durations are deltas of the monotonic clock, not wall time -
+    # wall clocks step under NTP, and every baseline downstream
+    # (journal durations, percentiles) would eat that noise
+    def monotonic_now
+      Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    end
+
     def transition_task_state(task_id, from:, to:)
       return unless @execution_state[from].include?(task_id)
 

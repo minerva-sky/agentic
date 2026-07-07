@@ -5,7 +5,7 @@ module Agentic
     # CapabilityOptimizer improves capability implementations and composition
     # based on execution history and performance metrics.
     #
-    # @example Optimizing a capability implementation
+    # @example Optimizing a capability implementation (illustrative: needs a populated capability registry)
     #   history_store = Agentic::Learning::ExecutionHistoryStore.new
     #   recognizer = Agentic::Learning::PatternRecognizer.new(history_store: history_store)
     #   optimizer = Agentic::Learning::CapabilityOptimizer.new(
