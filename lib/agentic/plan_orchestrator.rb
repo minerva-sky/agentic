@@ -107,12 +107,27 @@ module Agentic
         deps.map { |dep_id| {from: dep_id, to: task_id, label: labels[[dep_id, task_id]]}.freeze }
       }.freeze
 
+      order = topological_order
+
+      # Structural stats, computed once so every graph tool stops
+      # hand-rolling the same walk: per-task depth (1 = root), the
+      # longest chain, and the widest fan-in
+      depth = {}
+      order.each do |task_id|
+        depth[task_id] = 1 + (@dependencies[task_id].map { |dep| depth[dep] || 0 }.max || 0)
+      end
+
       {
         tasks: @tasks.dup.freeze,
         dependencies: @dependencies.transform_values { |deps| deps.dup.freeze }.freeze,
         needs: @task_needs.transform_values { |named| named.dup.freeze }.freeze,
-        order: topological_order.freeze,
-        edges: edges
+        order: order.freeze,
+        edges: edges,
+        stats: {
+          depth: depth.freeze,
+          max_depth: depth.values.max || 0,
+          max_fan_in: @dependencies.values.map(&:size).max || 0
+        }.freeze
       }.freeze
     end
 
@@ -269,13 +284,16 @@ module Agentic
 
       # Apply jitter (on by default) so fleets don't retry in lockstep.
       # true = equal jitter (+/-25%); :full = full jitter (uniform over
-      # [0, delay]), which flattens synchronized herds much harder
+      # [0, delay]), which flattens synchronized herds much harder.
+      # An injected rng: (any object with #rand) makes timing testable.
+      rng = @retry_policy[:rng]
       case @retry_policy[:backoff_jitter]
       when :full
-        delay = rand(0.0..delay)
+        delay = rng ? rng.rand(0.0..delay) : rand(0.0..delay)
       when true
         jitter_factor = 0.25 # Default 25% jitter
-        jitter = rand(-delay * jitter_factor..delay * jitter_factor)
+        band = -delay * jitter_factor..delay * jitter_factor
+        jitter = rng ? rng.rand(band) : rand(band)
         delay = [delay + jitter, 0].max
       end
 

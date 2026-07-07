@@ -43,17 +43,16 @@ def build(deps)
   orchestrator
 end
 
+# The depth/fan-in walk this example used to hand-roll now ships as
+# graph[:stats] - the critique is just thresholds over facts
 def critique(graph)
-  dependencies = graph[:dependencies]
+  stats = graph[:stats]
   smells = []
-  dependencies.each do |id, deps|
+  graph[:dependencies].each do |_id, deps|
     smells << "god task (#{deps.size} deps)" if deps.size >= 4
   end
-  depth = {}
-  measure = ->(id) { depth[id] ||= 1 + (dependencies[id].map { |d| measure.call(d) }.max || 0) }
-  max_depth = dependencies.keys.map { |id| measure.call(id) }.max
-  smells << "deep chain (#{max_depth} levels)" if max_depth >= 5
-  [smells, max_depth, dependencies.values.map(&:size).max]
+  smells << "deep chain (#{stats[:max_depth]} levels)" if stats[:max_depth] >= 5
+  [smells, stats[:max_depth], stats[:max_fan_in]]
 end
 
 puts "REFACTOR RECEIPTS (five ingests -> report, 30ms per task)"

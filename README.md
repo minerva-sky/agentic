@@ -248,15 +248,22 @@ default so fleets don't retry in lockstep (`backoff_jitter: :full` draws
 uniformly from `[0, delay]` for the hardest herd-flattening).
 
 `PlanOrchestrator#graph` returns a frozen snapshot of the plan's topology
-— including `graph[:order]` (topological sort) and `graph[:edges]`
-(labeled by `needs:` names) — for tools that render, review, or analyze
-plans. `Agentic::RateLimit` is a credential-scoped ceiling shareable
-across plans and clients (`Agentic::LlmClient.new(config, limiter: rate_limit)`):
-concurrent by default, or a rolling-window quota with
-`RateLimit.new(30, per: 60)`. Cross-field rules may be structured —
+— including `graph[:order]` (topological sort), `graph[:edges]` (labeled
+by `needs:` names), and `graph[:stats]` (per-task depth, max depth, max
+fan-in) — for tools that render, review, or analyze plans.
+`Agentic::RateLimit` is a credential-scoped ceiling shareable across
+plans and clients (`Agentic::LlmClient.new(config, limiter: rate_limit)`):
+concurrent by default, a rolling-window quota with
+`RateLimit.new(30, per: 60)`, or both laws at once via composition —
+`quota.and(pool)`. Cross-field rules may be structured —
 `rules: {air_weight_limit: {message: "...", fields: [:mode, :weight], check: ->(i) {...}}}` —
 and `ValidationError#rule_violations` reports each broken rule with its
 identifier, message, and the fields it reads.
+`CapabilitySpecification#to_json_schema` emits a contract side as
+draft-07 JSON Schema for OpenAPI and validator toolchains; journal
+replays expose per-task `durations` keyed by description (performance
+baselines for free); and retry policies accept an injected `rng:` for
+reproducible jitter timing.
 
 ### The concurrency contract
 

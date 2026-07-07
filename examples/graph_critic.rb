@@ -49,9 +49,8 @@ names = graph[:tasks].transform_values(&:description)
 dependents = Hash.new { |h, k| h[k] = [] }
 dependencies.each { |task_id, deps| deps.each { |dep| dependents[dep] << task_id } }
 
-depth_of = lambda do |task_id, memo = {}|
-  memo[task_id] ||= 1 + (dependencies[task_id].map { |dep| depth_of.call(dep, memo) }.max || 0)
-end
+# Depth now ships precomputed in the snapshot
+depth_of = ->(task_id) { graph[:stats][:depth][task_id] }
 
 findings = []
 

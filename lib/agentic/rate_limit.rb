@@ -54,6 +54,47 @@ module Agentic
     # @return [Integer] Acquisitions currently inside the ceiling
     attr_reader :in_flight
 
+    # Composes this limit with another: the block runs only inside BOTH.
+    # Production APIs usually enforce two laws at once - a billed quota
+    # (window) and a connection limit (ceiling):
+    #
+    #   quota = Agentic::RateLimit.new(30, per: 60)
+    #   pool  = Agentic::RateLimit.new(3)
+    #   limit = quota.and(pool)  # acquires quota first, then a connection
+    #
+    # @param other [RateLimit, Composite] The inner limit
+    # @return [Composite] A limiter enforcing both
+    def and(other)
+      Composite.new(self, other)
+    end
+
+    # Two or more limits acquired in order, released in reverse
+    class Composite
+      # @return [Array<RateLimit>] The composed limits, outermost first
+      attr_reader :limits
+
+      # @param limits [Array<RateLimit, Composite>] Outermost first
+      def initialize(*limits)
+        @limits = limits.flat_map { |l| l.is_a?(Composite) ? l.limits : [l] }
+      end
+
+      # Runs the block inside every composed limit
+      # @yield The rate-limited work
+      # @return [Object] The block's return value
+      def acquire(&block)
+        @limits.reverse.reduce(block) { |inner, limit|
+          -> { limit.acquire(&inner) }
+        }.call
+      end
+
+      # Composes further: quota.and(pool).and(burst)
+      # @param other [RateLimit, Composite] The next inner limit
+      # @return [Composite]
+      def and(other)
+        Composite.new(self, other)
+      end
+    end
+
     private
 
     def track
