@@ -51,9 +51,10 @@ orchestrator.add_task(rooms["Treasury"],
 graph = orchestrator.graph
 names = graph[:tasks].transform_values(&:description)
 
-puts "THE MAP (drawn from orchestrator.graph, before anyone delves)"
+puts "THE MAP (drawn from orchestrator.graph, in delving order)"
 puts
-graph[:dependencies].each do |room_id, door_ids|
+graph[:order].each do |room_id|
+  door_ids = graph[:dependencies][room_id]
   if door_ids.empty?
     puts "  [#{names[room_id]}]  <- you are here"
   else

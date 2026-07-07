@@ -244,11 +244,19 @@ The `task_slot_acquired` lifecycle hook fires when a task obtains a
 concurrency slot (with `waited:` time), separating queue wait from run
 time; retry policies consult an error's own `retryable?` verdict before
 falling back to the `retryable_errors` list, and backoff jitter is on by
-default so fleets don't retry in lockstep. `PlanOrchestrator#graph`
-returns a frozen snapshot of the plan's topology for tools that render or
-review it, and `Agentic::RateLimit` is a credential-scoped concurrency
-ceiling shareable across plans and clients
-(`Agentic::LlmClient.new(config, limiter: rate_limit)`).
+default so fleets don't retry in lockstep (`backoff_jitter: :full` draws
+uniformly from `[0, delay]` for the hardest herd-flattening).
+
+`PlanOrchestrator#graph` returns a frozen snapshot of the plan's topology
+— including `graph[:order]` (topological sort) and `graph[:edges]`
+(labeled by `needs:` names) — for tools that render, review, or analyze
+plans. `Agentic::RateLimit` is a credential-scoped ceiling shareable
+across plans and clients (`Agentic::LlmClient.new(config, limiter: rate_limit)`):
+concurrent by default, or a rolling-window quota with
+`RateLimit.new(30, per: 60)`. Cross-field rules may be structured —
+`rules: {air_weight_limit: {message: "...", fields: [:mode, :weight], check: ->(i) {...}}}` —
+and `ValidationError#rule_violations` reports each broken rule with its
+identifier, message, and the fields it reads.
 
 ### The concurrency contract
 

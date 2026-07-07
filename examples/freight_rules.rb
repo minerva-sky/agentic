@@ -24,14 +24,26 @@ spec = Agentic::CapabilitySpecification.new(
     destination: {type: "string", required: true, non_empty: true}
   },
   rules: {
-    "air freight is limited to 500kg" =>
-      ->(i) { i[:mode] != "air" || i[:weight_kg] <= 500 },
-    "hazardous cargo may not fly" =>
-      ->(i) { !(i[:mode] == "air" && i[:hazardous]) },
-    "insured value over 100k requires sea mode" =>
-      ->(i) { i[:insured_value] <= 100_000 || i[:mode] == "sea" },
-    "road freight only reaches domestic destinations" =>
-      ->(i) { i[:mode] != "road" || i[:destination].start_with?("domestic:") }
+    air_weight_limit: {
+      message: "air freight is limited to 500kg",
+      fields: [:mode, :weight_kg],
+      check: ->(i) { i[:mode] != "air" || i[:weight_kg] <= 500 }
+    },
+    no_hazardous_air: {
+      message: "hazardous cargo may not fly",
+      fields: [:mode, :hazardous],
+      check: ->(i) { !(i[:mode] == "air" && i[:hazardous]) }
+    },
+    high_value_by_sea: {
+      message: "insured value over 100k requires sea mode",
+      fields: [:mode, :insured_value],
+      check: ->(i) { i[:insured_value] <= 100_000 || i[:mode] == "sea" }
+    },
+    road_is_domestic: {
+      message: "road freight only reaches domestic destinations",
+      fields: [:mode, :destination],
+      check: ->(i) { i[:mode] != "road" || i[:destination].start_with?("domestic:") }
+    }
   }
 )
 
@@ -57,9 +69,12 @@ MANIFESTS.each_with_index do |manifest, index|
   quote = desk.execute(manifest)
   puts format("  #%d QUOTED  $%.2f  (%s, %dkg)", index + 1, quote[:quote], manifest[:mode], manifest[:weight_kg])
 rescue Agentic::Errors::ValidationError => e
-  if e.violations.key?(:base)
-    puts "  ##{index + 1} REFUSED - #{e.violations[:base].size} rule(s) broken:"
-    e.violations[:base].each { |rule| puts "       - #{rule}" }
+  if e.rule_violations.any?
+    puts "  ##{index + 1} REFUSED - #{e.rule_violations.size} rule(s) broken:"
+    e.rule_violations.each do |violation|
+      puts "       - [#{violation[:rule]}] #{violation[:message]} " \
+        "(fields: #{violation[:fields].join(", ")})"
+    end
   else
     puts "  ##{index + 1} MALFORMED - #{e.violations.keys.join(", ")} invalid " \
       "(never reached the tariff book)"

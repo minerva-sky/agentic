@@ -97,12 +97,22 @@ module Agentic
     # A read-only snapshot of the plan's topology, for tools that render,
     # review, or analyze the graph without executing it
     # @return [Hash] :tasks (id => Task), :dependencies (id => [ids]),
-    #   :needs (id => {name => id})
+    #   :needs (id => {name => id}), :order (task ids, topologically
+    #   sorted), :edges ([{from:, to:, label:}] with labels from needs:)
     def graph
+      labels = @task_needs.each_with_object({}) do |(task_id, named), acc|
+        named.each { |name, dep_id| acc[[dep_id, task_id]] = name }
+      end
+      edges = @dependencies.flat_map { |task_id, deps|
+        deps.map { |dep_id| {from: dep_id, to: task_id, label: labels[[dep_id, task_id]]}.freeze }
+      }.freeze
+
       {
         tasks: @tasks.dup.freeze,
         dependencies: @dependencies.transform_values { |deps| deps.dup.freeze }.freeze,
-        needs: @task_needs.transform_values { |named| named.dup.freeze }.freeze
+        needs: @task_needs.transform_values { |named| named.dup.freeze }.freeze,
+        order: topological_order.freeze,
+        edges: edges
       }.freeze
     end
 
@@ -257,8 +267,13 @@ module Agentic
         0
       end
 
-      # Apply jitter (on by default) so fleets don't retry in lockstep
-      if @retry_policy[:backoff_jitter]
+      # Apply jitter (on by default) so fleets don't retry in lockstep.
+      # true = equal jitter (+/-25%); :full = full jitter (uniform over
+      # [0, delay]), which flattens synchronized herds much harder
+      case @retry_policy[:backoff_jitter]
+      when :full
+        delay = rand(0.0..delay)
+      when true
         jitter_factor = 0.25 # Default 25% jitter
         jitter = rand(-delay * jitter_factor..delay * jitter_factor)
         delay = [delay + jitter, 0].max
@@ -306,6 +321,28 @@ module Agentic
     end
 
     private
+
+    # Kahn's algorithm over the declared dependencies. Tasks caught in a
+    # dependency cycle are appended (in insertion order) after the sorted
+    # portion rather than silently dropped.
+    # @return [Array<String>] Task ids, dependencies before dependents
+    def topological_order
+      remaining_deps = @dependencies.transform_values(&:dup)
+      order = []
+      ready = remaining_deps.select { |_, deps| deps.empty? }.keys
+
+      until ready.empty?
+        task_id = ready.shift
+        order << task_id
+        remaining_deps.each do |candidate, deps|
+          next unless deps.delete(task_id)
+
+          ready << candidate if deps.empty? && !order.include?(candidate)
+        end
+      end
+
+      order + (@dependencies.keys - order)
+    end
 
     # Schedules a task for execution using the semaphore to limit concurrency
     # @param task_id [String] ID of the task to schedule

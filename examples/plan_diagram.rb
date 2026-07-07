@@ -31,26 +31,17 @@ orchestrator.add_task(draft, needs: {skeleton: outline, citations: sources})
 orchestrator.add_task(publish, [draft])
 
 # --- the diagrammer: graph in, mermaid out -----------------------------------
+# graph[:edges] arrives pre-merged with labels and graph[:order] gives
+# stable, topological node numbering - both were this example's asks.
 def to_mermaid(graph)
   names = graph[:tasks].transform_values(&:description)
-  ids = names.keys.each_with_index.to_h { |task_id, i| [task_id, "T#{i}"] }
-
-  named_edges = graph[:needs].flat_map { |task_id, needs|
-    needs.map { |label, dep_id| [dep_id, task_id, label] }
-  }
-  labeled = named_edges.to_h { |from, to, _| [[from, to], true] }
+  ids = graph[:order].each_with_index.to_h { |task_id, i| [task_id, "T#{i}"] }
 
   lines = ["graph TD"]
-  names.each { |task_id, name| lines << "  #{ids[task_id]}[\"#{name}\"]" }
-  graph[:dependencies].each do |task_id, deps|
-    deps.each do |dep_id|
-      next if labeled[[dep_id, task_id]] # named edges are drawn with labels below
-
-      lines << "  #{ids[dep_id]} --> #{ids[task_id]}"
-    end
-  end
-  named_edges.each do |from, to, label|
-    lines << "  #{ids[from]} -- #{label} --> #{ids[to]}"
+  graph[:order].each { |task_id| lines << "  #{ids[task_id]}[\"#{names[task_id]}\"]" }
+  graph[:edges].each do |edge|
+    arrow = edge[:label] ? "-- #{edge[:label]} -->" : "-->"
+    lines << "  #{ids[edge[:from]]} #{arrow} #{ids[edge[:to]]}"
   end
   lines.join("\n")
 end

@@ -24,7 +24,11 @@ spec = Agentic::CapabilitySpecification.new(
     coupon: {type: "string"}
   },
   rules: {
-    "starter plan is limited to 5 seats" => ->(i) { i[:plan] != "starter" || i[:seats] <= 5 }
+    starter_seat_limit: {
+      message: "starter plan is limited to 5 seats",
+      fields: [:plan, :seats],
+      check: ->(i) { i[:plan] != "starter" || i[:seats] <= 5 }
+    }
   }
 )
 Agentic.register_capability(spec, Agentic::CapabilityProvider.new(
@@ -50,7 +54,10 @@ def error_document(error)
     status: 422,
     capability: error.capability,
     errors: field_errors,
-    policy_violations: error.violations.fetch(:base, [])
+    # Structured rule violations point at the widgets they involve
+    policy_violations: error.rule_violations.map { |v|
+      {rule: v[:rule], message: v[:message], highlight_fields: v[:fields]}
+    }
   }
 end
 
