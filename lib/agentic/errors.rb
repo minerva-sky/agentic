@@ -54,19 +54,29 @@ module Agentic
       # @return [Array<Hash>] [{rule:, message:, fields:}, ...]
       attr_reader :rule_violations
 
+      # Typo diagnoses: when a sent key is close to a missing declared
+      # key, the error says so - "you sent :weight_kilo - did you mean
+      # :weight_kg?". Missing-plus-similar-extra is a typo's signature,
+      # and the correction costs one Levenshtein pass at raise time.
+      # @return [Array<String>] Human hint sentences (possibly empty)
+      attr_reader :hints
+
       # @param capability [String] The capability name
       # @param kind [Symbol] :inputs or :outputs
       # @param violations [Hash{Symbol=>Array<String>}] Messages keyed by attribute
       # @param expectations [Hash{Symbol=>Hash}] Declarations for violated keys
       # @param rule_violations [Array<Hash>] Structured broken-rule records
-      def initialize(capability:, kind:, violations:, expectations: {}, rule_violations: [])
+      # @param hints [Array<String>] Typo diagnoses to append to the message
+      def initialize(capability:, kind:, violations:, expectations: {}, rule_violations: [], hints: [])
         @capability = capability
         @kind = kind
         @violations = violations
         @expectations = expectations
         @rule_violations = rule_violations
+        @hints = hints
 
         details = violations.map { |key, messages| "#{key} #{Array(messages).join(", ")}" }.join("; ")
+        details += ". #{hints.join(" ")}" unless hints.empty?
         super("Invalid #{kind} for capability '#{capability}': #{details}")
       end
     end

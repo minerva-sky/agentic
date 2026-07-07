@@ -124,6 +124,11 @@ module Agentic
     end
 
     # Appends an event to the journal - locked, flushed, and fsynced
+    #
+    # @note Concurrency contract: thread-safe (a Mutex serializes
+    #   writers in-process) AND cross-process safe (flock serializes
+    #   writers across processes). Pinned by the concurrency contract
+    #   spec and the threads/process drills.
     # @param event [Symbol, String] The event name
     # @param payload [Hash] Event data (must be JSON-serializable)
     # @return [void]

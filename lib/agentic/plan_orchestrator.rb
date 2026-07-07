@@ -104,7 +104,10 @@ module Agentic
     # @raise [ArgumentError] If unknown, already started, or depended upon
     def remove_task(task)
       task_id = task.respond_to?(:id) ? task.id : task
-      raise ArgumentError, "unknown task #{task_id}" unless @tasks.key?(task_id)
+      unless @tasks.key?(task_id)
+        known = @tasks.keys + @tasks.values.map(&:description)
+        raise ArgumentError, "unknown task #{task_id}#{Suggestions.hint(task_id, known)}"
+      end
       unless @execution_state[:pending].include?(task_id)
         raise ArgumentError, "task #{task_id} has already started; only pending tasks can be removed"
       end
@@ -134,7 +137,10 @@ module Agentic
     #   task that isn't in the plan
     def rewire_task(task, dependencies = [], needs: nil)
       task_id = task.respond_to?(:id) ? task.id : task
-      raise ArgumentError, "unknown task #{task_id}" unless @tasks.key?(task_id)
+      unless @tasks.key?(task_id)
+        known = @tasks.keys + @tasks.values.map(&:description)
+        raise ArgumentError, "unknown task #{task_id}#{Suggestions.hint(task_id, known)}"
+      end
       unless @execution_state[:pending].include?(task_id)
         raise ArgumentError, "task #{task_id} has already started; only pending tasks can be rewired"
       end
@@ -144,7 +150,11 @@ module Agentic
       deps |= named.values if named
 
       unknown = deps.reject { |dep| @tasks.key?(dep) }
-      raise ArgumentError, "cannot wire to unknown task(s) #{unknown.join(", ")}" if unknown.any?
+      if unknown.any?
+        known = @tasks.keys + @tasks.values.map(&:description)
+        diagnosed = unknown.map { |dep| "#{dep}#{Suggestions.hint(dep, known)}" }
+        raise ArgumentError, "cannot wire to unknown task(s) #{diagnosed.join(", ")}"
+      end
 
       @dependencies[task_id] = deps
       if named

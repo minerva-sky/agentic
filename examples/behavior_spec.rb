@@ -109,4 +109,8 @@ puts "  erases an earlier failure. every one of those is a choice that"
 puts "  could have gone the other way - which is exactly what a spec is:"
 puts "  the choices, written down, executable, so 'what the code happens"
 puts "  to do' and 'what the code means' stop being the same sentence."
+puts "  (this file's own round-14 ask was delivered in round 15: the"
+puts "  fiber-vs-thread guarantees are now pinned per method in"
+puts "  spec/agentic/concurrency_contract_spec.rb and documented as"
+puts "  @note Concurrency contract: on the methods themselves.)"
 exit(failures.zero? ? 0 : 1)

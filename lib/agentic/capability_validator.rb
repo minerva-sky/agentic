@@ -58,7 +58,8 @@ module Agentic
             capability: @specification.name,
             kind: kind,
             violations: violations,
-            expectations: declared.slice(*violations.keys)
+            expectations: declared.slice(*violations.keys),
+            hints: typo_hints(declared, symbolized, violations)
           )
         end
       end
@@ -110,6 +111,18 @@ module Agentic
         violations: {base: broken.map { |b| b[:message] }},
         rule_violations: broken
       )
+    end
+
+    # Missing-plus-similar-extra is a typo's signature: for each key the
+    # caller sent that the contract doesn't declare, look for a close
+    # match among the MISSING violated keys and diagnose the rename
+    def typo_hints(declared, given, violations)
+      missing = violations.select { |_, messages| Array(messages).any? { |m| m.include?("missing") } }.keys
+      extra = given.keys - declared.keys
+      extra.filter_map do |sent|
+        match = Suggestions.suggest(sent, missing)
+        "You sent :#{sent} - did you mean :#{match}?" if match
+      end
     end
 
     # Fail-fast check of every relation-typed rule against the declared
