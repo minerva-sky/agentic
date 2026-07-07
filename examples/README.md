@@ -12,9 +12,11 @@ not this file.
 | `burst_absorber.rb` | The Burst Absorber: three waves of requests slam a credential with a ceiling of 3 (Agentic::RateLimit - this round's rel... |
 | `capability_evals.rb` | Capability Evals: golden test cases run against registered capabilities, scored, and gated. When you swap a lambda for a... |
 | `changelog_scout.rb` | The Changelog Scout: reads real git history, classifies every commit through a contract-checked capability, and drafts t... |
+| `circuit_breaker.rb` | The Circuit Breaker: when an upstream is down, the cheapest request is the one you don't send. The breaker trips after 3... |
 | `collaboration_tracer.rb` | The Collaboration Tracer: lifecycle hooks record every message the orchestrator sends and every reply that comes back, t... |
 | `command_bus.rb` | The Command Bus: every command is a composed capability with its OWN declared contract (new in this round - compositions... |
 | `composed_limits.rb` | Composed Limits: a real provider enforces BOTH a billed quota and a connection ceiling. quota.and(pool) - new this round... |
+| `contract_fixtures.rb` | Contract Fixtures: example payloads in docs rot the day the contract changes. So don't write them - DERIVE them. This ge... |
 | `contract_fuzzer.rb` | The Contract Fuzzer: for every registered capability, generate inputs that SHOULD pass its declared contract and mutatio... |
 | `contract_semver.rb` | The Contract Semver Advisor: two versions of a capability's contract, every change classified as breaking or compatible ... |
 | `cost_estimator.rb` | The Cost Estimator: price the plan BEFORE running it - per-task token estimates times a pricing table - gate on budget, ... |
@@ -23,20 +25,25 @@ not this file.
 | `dead_letter_office.rb` | The Dead Letter Office: three days of journaled runs, every failure collected and triaged by what the errors said about ... |
 | `deploy_train.rb` | The Deploy Train: lint -> test -> build -> canary -> ship, where a red gate stops the train and everything behind it rep... |
 | `doc_coverage.rb` | The Documentation Surveyor: measures YARD comment coverage for every public method in a lib/ tree. One survey task per f... |
+| `duck_agents.rb` | Duck Agents: the agent: seam asks one question - "can you be called with a task?" - and five differently-shaped objects ... |
 | `dungeon_crawl.rb` | The Dungeon Crawl: a quest is a plan, rooms are tasks, and doors are dependencies. The map is drawn from the orchestrato... |
 | `durable_batch.rb` | The Durable Batch: six billable "LLM calls" run under an ExecutionJournal. Mid-batch, the process dies for real - exit!,... |
 | `error_taxonomy_drill.rb` | The Error Taxonomy Drill: three tasks fail three different ways - a rate limit (retryable, says the error itself), an au... |
 | `eval_scorers.rb` | Eval Scorers: the same eval set scored four ways - exact match, keyword containment, numeric tolerance, and a judge rubr... |
 | `exquisite_corpse.rb` | The Exquisite Corpse: three artists each draw one part of a creature without seeing the others' work; the assembler rece... |
+| `failure_weather.rb` | The Failure Weather Report: a journal of three days, read as a forecast. Retryable failures are WEATHER - showers that p... |
+| `fair_share.rb` | Fair Share: two tenants, one upstream. The global ceiling is fair to REQUESTS - first come, first served - but tenant A ... |
 | `flaky_api_drill.rb` | The Flaky API Drill: a task that times out twice before succeeding, run under a retry policy with exponential backoff an... |
 | `form_errors.rb` | The 422 Generator: turn a ValidationError into the API error document your frontend actually wants - message, allowed va... |
 | `freight_rules.rb` | The Freight Desk: a quoting capability whose tariff book is written as cross-field contract rules (new this round). Per-... |
 | `gem_scout.rb` | Gem Scout: describe what you need, get a ranked shortlist of gems. Search and scoring are separate capabilities; the sea... |
 | `graph_critic.rb` | The Graph Critic: reviews a plan's dependency structure BEFORE it runs, the way you'd review a class diagram. God tasks,... |
+| `graph_invariants.rb` | The Graph Invariants Prover: the reflection API makes promises - order respects edges, roots have no dependencies, depth... |
 | `graph_style.rb` | The Graph Style Guide: RuboCop for plans. Cops with thresholds run against any orchestrator's graph - depth, fan-in, orp... |
 | `graph_to_specs.rb` | Graph to Specs: the plan's structure dictates its test plan - roots need fixture cases, joins need one case per missing ... |
 | `haiku_agent.rb` | The three-line agent. Run me with no API key at all: |
 | `hill_chart.rb` | The Hill Chart: Basecamp's answer to "how's it going?" - work climbs the hill while it's still uncertain (queued, waitin... |
+| `impl_shootout.rb` | The Implementation Shootout: two candidates for the same capability, one eval set, and a verdict computed instead of vib... |
 | `incident_report.rb` | The Incident Report: a nightly batch dies at 3am. The on-call's first three questions - what ran? what broke? what do I ... |
 | `invariant_sentinel.rb` | The Invariant Sentinel: domain invariants checked after EVERY task, from a lifecycle hook. When a task leaves the world ... |
 | `jitter_shootout.rb` | The Jitter Shootout: none vs equal (+/-25%, the default) vs full (uniform over [0, delay], new this round) - same forty ... |
@@ -63,6 +70,7 @@ not this file.
 | `refactor_receipts.rb` | Refactor Receipts: the god-join plan from the graph critic, improved in two small steps - with a receipt after each one.... |
 | `refactoring_dojo.rb` | The Refactoring Dojo: a student submits a method, three critic agents review it from three distinct perspectives, and th... |
 | `renga_circle.rb` | A renga circle: three poet agents compose a linked-verse poem, each verse responding to the one before it. The dependenc... |
+| `resize_torture.rb` | The Resize Torture Test: a feature that changes a limiter's ceiling while fibers are waiting on it had better say exactl... |
 | `rule_prober.rb` | The Rule Prober: structured rules declare which fields they read - so now that claim can be AUDITED. For each rule, pert... |
 | `schema_advisor.rb` | The Schema Advisor: give it a schema and a query log, get back the advisories a careful DBA would write - each rule its ... |
 | `setup_doctor.rb` | The Setup Doctor: every onboarding wiki page is a bug. This runs the checks a README asks a new hire to do by hand - rub... |
@@ -72,7 +80,9 @@ not this file.
 | `state_machine.rb` | The Contract State Machine: each transition is a capability whose guard is not an if-statement but an enum predicate on ... |
 | `telephone_game.rb` | The telephone game: a rumor passes through five villagers, each of whom hears the previous version through the orchestra... |
 | `three_shapes.rb` | Three Shapes: the same six units of work arranged three ways - a chain, a star, and staged joins - then measured and cri... |
+| `throughput_knee.rb` | The Throughput Knee: sweep one limiter's ceiling from 1 to 8 against an upstream that quietly serializes above 4, and me... |
 | `ticket_screener.rb` | A HEY-style ticket screener: every inbound support ticket flows through screen -> categorize -> draft, all tickets in pa... |
+| `traffic_dial.rb` | The Traffic Dial: a canary rollout as one knob. New code starts at one lane of traffic; every healthy stage turns the di... |
 | `typed_pipeline.rb` | A typed ETL pipeline: extract -> transform -> load, each stage a capability with a declared contract, composed into one ... |
 | `variance_detective.rb` | The Variance Detective: ten journaled runs of the same plan, then a hunt for the task whose p90/p50 ratio betrays it. Av... |
 | `weekly_checkin.rb` | The Weekly Check-in: "what did you work on this week?" answered by the journal instead of by memory. Runs a few days of ... |

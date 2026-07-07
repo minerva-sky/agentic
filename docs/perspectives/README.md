@@ -210,6 +210,55 @@ experiments followed:
    survives taxonomy renames. (`eval_scorers.rb` joins the
    exit-1-by-design set.)
 
+## Round 9 — the operations round
+
+The round-8 asks shipped as a release (`RateLimit#resize(n)` — live
+ceiling changes, growing wakes waiters, shrinking drains — and the
+journal recording `retryable:` on `task_failed` at write time from the
+failure's own verdict), the two examples that asked were modernized
+onto them, and ten more experiments followed:
+
+| # | Persona | Built on the round-9 release | Run it | Field notes |
+|---|---------|------------------------------|--------|-------------|
+| 1 | Matz | Failure weather — retryable is weather, non-retryable is climate | `examples/failure_weather.rb` | [round-9/01-matz.md](round-9/01-matz.md) |
+| 2 | DHH | Traffic dial — a canary rollout as one resized limiter | `examples/traffic_dial.rb` | [round-9/02-dhh.md](round-9/02-dhh.md) |
+| 3 | Aaron Patterson | Throughput knee — the ceiling sweep with two honest clocks | `examples/throughput_knee.rb` | [round-9/03-tenderlove.md](round-9/03-tenderlove.md) |
+| 4 | Xavier Noria | Graph invariants — seven promises of the reflection API, proved | `examples/graph_invariants.rb` | [round-9/04-fxn.md](round-9/04-fxn.md) |
+| 5 | Samuel Williams | Fair share — tenant-fairness composed, shares rebalanced live | `examples/fair_share.rb` | [round-9/05-ioquatix.md](round-9/05-ioquatix.md) |
+| 6 | Jeremy Evans | Resize torture — shrink drains, grow wakes, ceilings bind | `examples/resize_torture.rb` | [round-9/06-jeremyevans.md](round-9/06-jeremyevans.md) |
+| 7 | Piotr Solnica | Contract fixtures — examples derived from declarations, proved | `examples/contract_fixtures.rb` | [round-9/07-solnic.md](round-9/07-solnic.md) |
+| 8 | Mike Perham | Circuit breaker — three strikes for 503s, one for a revoked key | `examples/circuit_breaker.rb` | [round-9/08-mperham.md](round-9/08-mperham.md) |
+| 9 | Sandi Metz | Duck agents — five shapes through one seam, one tiny decorator | `examples/duck_agents.rb` | [round-9/09-sandimetz.md](round-9/09-sandimetz.md) |
+| 10 | Andrew Kane | Impl shootout — accuracy AND latency on one table | `examples/impl_shootout.rb` | [round-9/10-ankane.md](round-9/10-ankane.md) |
+
+### What round 9 surfaced
+
+1. **resize turned limits into policy objects**: five tools steer one
+   live limiter — the rollout dial, the ceiling sweep, tenant share
+   rebalancing, the torture certificate, and the modernized AIMD
+   throttle. The topology of a limiter graph stays fixed; only the
+   numbers move at runtime, which is the property that makes it safe.
+2. **The write-time verdict became a decision input**: the weather
+   report (wait vs dig a well), the circuit breaker (three strikes vs
+   instant trip), and the modernized dead letter office all *act* on
+   `retryable:` instead of reconstructing it — the error's testimony,
+   recorded when fresh, drives policy later.
+3. **The tools kept correcting their authors** (fifth consecutive
+   round): Samuel's one-worker tenant couldn't starve, Aaron's
+   "throughput goes flat" was actually a fall, Xavier's depth
+   invariant was ill-posed on cycles, Jeremy's harness read its clock
+   before setting it, Mike's breaker read the wrong journal event, and
+   Kane's challenger lost a case to a missing stem. Every one was
+   caught by the example's own output before a user saw it.
+4. **Fairness needs unmet demand to be visible**: a FIFO door is fair
+   to requests, not tenants — starvation only appears when a tenant's
+   demand exceeds its receipts, which is why quiet outages stay quiet.
+5. **Next asks**: relation-typed structured rules (`sum_lte:`,
+   `requires:`, `mutually_exclusive:`) so generators can satisfy and
+   advisors can diff the declarable majority of cross-field rules
+   (Piotr); and a breaker-friendly convention for `retryable: nil` —
+   "no opinion" should mean retry-with-suspicion, not hopeless (Mike).
+
 ### What round 6 surfaced
 
 1. **Plans became artifacts**: narratable (tour), serializable with an
