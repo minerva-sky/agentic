@@ -54,6 +54,24 @@ module Agentic
     # @return [Integer] Acquisitions currently inside the ceiling
     attr_reader :in_flight
 
+    # Changes the ceiling while the limiter is live - the seam adaptive
+    # throttles steer. Raising a concurrency ceiling resumes waiters
+    # immediately; lowering it lets in-flight work finish and admits
+    # nothing new until the count is back under the mark. Windowed
+    # limits apply the new ceiling on the next admission check.
+    #
+    # @param ceiling [Integer] The new maximum (must be positive)
+    # @return [Integer] The new ceiling
+    def resize(ceiling)
+      unless ceiling.is_a?(Integer) && ceiling.positive?
+        raise ArgumentError, "ceiling must be a positive Integer, got #{ceiling.inspect}"
+      end
+
+      @ceiling = ceiling
+      @semaphore.limit = ceiling if @semaphore
+      ceiling
+    end
+
     # Composes this limit with another: the block runs only inside BOTH.
     # Production APIs usually enforce two laws at once - a billed quota
     # (window) and a connection limit (ceiling):

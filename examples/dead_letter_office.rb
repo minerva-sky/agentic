@@ -61,16 +61,10 @@ state.events.each do |event|
 end
 dead = latest.values.select { |e| e[:event] == "task_failed" }
 
-# The error taxonomy testifies: rebuild each error's retryability
-RETRYABLE = {
-  "Agentic::Errors::LlmRateLimitError" => true,
-  "Agentic::Errors::LlmServerError" => true,
-  "Agentic::Errors::LlmTimeoutError" => true,
-  "Agentic::Errors::LlmAuthenticationError" => false,
-  "Agentic::Errors::LlmInvalidRequestError" => false
-}.freeze
-
-requeue, parked = dead.partition { |e| RETRYABLE.fetch(e[:error_type], false) }
+# Each failure's retryability was journaled AT THE MOMENT it happened
+# (from the error's own retryable? verdict) - no read-time table to
+# drift out of date when the taxonomy renames
+requeue, parked = dead.partition { |e| e[:retryable] }
 attempts = state.events.select { |e| e[:event] == "task_failed" }.group_by { |e| e[:description] }
 
 puts "DEAD LETTER OFFICE (#{RUNS.size} journaled runs)"
@@ -95,3 +89,5 @@ puts "  the office triages by MOST RECENT attempt: sync:crm's old timeout"
 puts "  doesn't page anyone, and sync:tickets' early success doesn't"
 puts "  excuse its newer 502. a dead-letter queue that forgets recoveries"
 puts "  pages people for ghosts; one that forgets relapses buries real mail."
+puts "  and each verdict above came from the journal itself - retryability"
+puts "  was recorded when the error was fresh, not reconstructed later."

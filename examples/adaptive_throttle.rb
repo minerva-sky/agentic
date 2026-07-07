@@ -11,7 +11,6 @@
 
 require_relative "../lib/agentic"
 require "async"
-require "async/semaphore"
 
 SECRET_CAPACITY = 3
 BASE_LATENCY = 0.02
@@ -27,8 +26,10 @@ upstream = lambda do
   in_flight -= 1
 end
 
-# AIMD: additive increase, multiplicative decrease
+# AIMD: additive increase, multiplicative decrease - steering ONE live
+# limiter via resize, the same object the clients would share
 target = 1
+limiter = Agentic::RateLimit.new(target)
 history = []
 congestion_threshold = BASE_LATENCY * 1.6
 
@@ -38,12 +39,12 @@ puts format("  %-7s %-8s %-10s %-24s %s", "batch", "target", "p50", "", "action"
 
 Sync do
   BATCHES.times do |batch|
-    semaphore = Async::Semaphore.new(target)
+    limiter.resize(target)
     latencies = []
 
     BATCH_SIZE.times.map {
       Async do
-        semaphore.acquire do
+        limiter.acquire do
           started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
           upstream.call
           latencies << Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
@@ -76,4 +77,6 @@ puts format("  the controller oscillates around %.1f lanes - the upstream's", se
 puts "  secret capacity is #{SECRET_CAPACITY}. AIMD never saw that constant; it derived"
 puts "  it from latency alone, and it will re-derive it when the upstream"
 puts "  changes. static concurrency limits are a guess frozen at deploy"
-puts "  time; adaptive ones are a measurement that never stops."
+puts "  time; adaptive ones are a measurement that never stops. and the"
+puts "  controller steers ONE live RateLimit via resize - every client"
+puts "  sharing that limiter inherits each correction, mid-flight."
