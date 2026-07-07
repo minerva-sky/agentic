@@ -1,10 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "execution_plan"
-require_relative "agent_specification"
-require_relative "task_definition"
-require_relative "expected_answer_format"
-
 module Agentic
   # Handles the task planning process for Agentic using LLM
   #

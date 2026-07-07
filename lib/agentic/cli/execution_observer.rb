@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "thor"
+
 module Agentic
   class CLI < Thor
     # Observer that provides real-time feedback during plan execution
@@ -594,6 +596,9 @@ module Agentic
               :blue
             )}"
             $stdout.flush
+          elsif total > 0
+            # All tasks accounted for - terminate the carriage-return progress line
+            puts
           end
         end
       end

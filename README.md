@@ -187,6 +187,84 @@ else
 end
 ```
 
+### Passing work to the orchestrator directly
+
+You don't need an agent provider to run a plan. Tasks carry an arbitrary
+`payload`, accept their agent (or a bare callable) directly, and receive the
+outputs of the tasks they depend on:
+
+```ruby
+orchestrator = Agentic::PlanOrchestrator.new
+
+fetch = Agentic::Task.new(
+  description: "fetch the order",
+  agent_spec: {"name" => "Fetcher", "instructions" => "fetch"},
+  payload: order_id                       # any domain object, opaque to the framework
+)
+notify = Agentic::Task.new(
+  description: "notify the customer",
+  agent_spec: {"name" => "Notifier", "instructions" => "notify"}
+)
+
+# A callable receives the Task itself; its return value becomes the output
+orchestrator.add_task(fetch, agent: ->(task) { OrderApi.fetch(task.payload) })
+
+# Dependencies pipe their outputs into dependents
+orchestrator.add_task(notify, [fetch], agent: ->(task) {
+  Mailer.deliver(task.output_of(fetch))   # or task.dependency_outputs
+})
+
+result = orchestrator.execute_plan        # no provider needed
+```
+
+A plan-wide block acts as an agent factory when you do want one place that
+builds agents: `orchestrator.execute_plan { |task| build_agent_for(task) }`.
+
+Dependencies can be **named**, so they're declared and consumed under one
+word, and single-dependency chains have a shorthand:
+
+```ruby
+orchestrator.add_task(digest, needs: {shipped: commits, owed: debt}, agent: ->(task) {
+  "#{task.needs.shipped} commits shipped, #{task.needs.owed} TODOs owed"
+})
+
+orchestrator.add_task(next_verse, [previous_verse], agent: ->(task) {
+  answer(task.previous_output)   # the sole dependency's output
+})
+```
+
+Capability contracts can constrain values beyond type and presence —
+`enum: %w[standard express]`, `min:`/`max:` bounds, and `non_empty: true`
+for strings and arrays. The `task_slot_acquired` lifecycle hook fires when
+a task obtains a concurrency slot (with `waited:` time), separating queue
+wait from run time; and retry policies consult an error's own
+`retryable?` verdict before falling back to the `retryable_errors` list.
+
+### The concurrency contract
+
+Tasks run as fibers inside an [async](https://github.com/socketry/async)
+reactor. That means:
+
+- **IO-bound tasks scale nearly perfectly.** LLM calls, HTTP requests,
+  `sleep`, database queries — anything that waits on IO yields to other
+  tasks. Twenty 200ms API calls at `concurrency_limit: 20` take ~200ms of
+  wall clock, not 4 seconds (see `examples/latency_lab.rb` for the measured
+  curve).
+- **CPU-bound tasks do not parallelize.** Fibers share one thread; parsing,
+  hashing, and number crunching gain nothing from a higher concurrency
+  limit. If your tasks are compute, the limit is a queue, not a speedup.
+- `execute_plan` composes with a running reactor: called inside `Async`
+  (e.g. under Falcon), it joins the current event loop instead of nesting
+  a new one; standalone, it creates its own and blocks until done.
+
+### When to reach for which layer
+
+Start with **capabilities** — lambdas with declared contracts — and call
+them directly. Add the **orchestrator** when you have an actual queue:
+many independent items, or tasks with dependencies. Add the **planner**
+(`Agentic.run` / `TaskPlanner`) when the task list itself should come from
+an LLM. Each layer is optional and composes with the ones below it.
+
 ## Extension System
 
 Agentic includes a powerful Extension System to help integrate with external systems and customize the framework's behavior. The Extension System consists of three main components:
@@ -454,7 +532,7 @@ registry.compose(
 
 # Use the composed capability
 agent.add_capability("comprehensive_report")
-result = agent.execute_capability("comprehensive_report", { data: { ... } })
+result = agent.execute_capability("comprehensive_report", { data: { sales: [120, 90, 143] } })
 ```
 
 ## Learning System

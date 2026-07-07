@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "llm_client"
-require_relative "llm_config"
-
 module Agentic
   class Agent
     include FactoryMethods
@@ -30,26 +27,32 @@ module Agentic
     end
 
     # Executes a prompt with structured output schema
+    #
+    # The schema is a promise this method keeps: execution goes through the
+    # LLM client, which enforces structured output. An agent that cannot
+    # honor the schema says so instead of silently returning free text.
+    #
     # @param prompt [String] The prompt to execute
     # @param schema [Agentic::StructuredOutputs::Schema] The output schema
     # @return [Object] The structured response
+    # @raise [Errors::SchemaNotSupportedError] when only capability-based
+    #   execution is available, which cannot enforce a schema
+    # @raise [Errors::AgentNotConfiguredError] when no execution path exists
     def execute_with_schema(prompt, schema)
-      # If the agent has a text_generation capability, use it
-      if has_capability?("text_generation")
-        # For now, text_generation capabilities don't support schemas
-        # Fall back to regular execution
-        execute_capability("text_generation", {prompt: prompt})[:response]
-      elsif @llm_client
-        # Use the configured LLM client with structured output
+      if @llm_client
         response = @llm_client.complete(build_messages(prompt), output_schema: schema)
         if response.successful?
           response.content
         else
-          raise "LLM execution failed: #{response.error.message}"
+          raise Errors::LlmError.new("LLM execution failed: #{response.error.message}", context: {prompt: prompt})
         end
+      elsif has_capability?("text_generation")
+        raise Errors::SchemaNotSupportedError,
+          "A structured-output schema was requested, but this agent only has " \
+          "the text_generation capability, which cannot enforce schemas. " \
+          "Configure an llm_client, or call #execute for free-form output."
       else
-        # Fallback error - agent not properly configured
-        raise "Agent not configured with LLM capabilities. Use DefaultAgentProvider or configure llm_client directly."
+        raise Errors::AgentNotConfiguredError
       end
     end
 
@@ -61,11 +64,11 @@ module Agentic
       # Get the capability from the registry
       registry = AgentCapabilityRegistry.instance
       capability = registry.get(capability_name, version)
-      raise "Capability not found: #{capability_name}" unless capability
+      raise Errors::CapabilityNotFoundError.new(capability_name, context: "not registered") unless capability
 
       # Get the provider
       provider = registry.get_provider(capability_name, version)
-      raise "Provider not found for capability: #{capability_name}" unless provider
+      raise Errors::CapabilityNotFoundError.new(capability_name, context: "no provider registered") unless provider
 
       # Add to the agent's capabilities
       @capabilities[capability_name] = {
@@ -99,7 +102,9 @@ module Agentic
     # @param inputs [Hash] The inputs for the capability
     # @return [Hash] The outputs from the capability
     def execute_capability(capability_name, inputs = {})
-      raise "Capability not available: #{capability_name}" unless @capabilities.key?(capability_name)
+      unless @capabilities.key?(capability_name)
+        raise Errors::CapabilityNotFoundError.new(capability_name, context: "not added to this agent")
+      end
 
       # Get the provider
       provider = @capabilities[capability_name][:provider]
@@ -123,14 +128,13 @@ module Agentic
     # @param hash [Hash] The hash representation
     # @return [Agent] The agent
     def self.from_h(hash)
-      new do |a|
+      # Capabilities need to be added separately after creation
+      # since they require the registry to be available
+      build do |a|
         a.role = hash[:role] || hash["role"]
         a.purpose = hash[:purpose] || hash["purpose"]
         a.backstory = hash[:backstory] || hash["backstory"]
       end
-
-      # Note: Capabilities need to be added separately after creation
-      # since they require the registry to be available
     end
 
     private
@@ -148,11 +152,10 @@ module Agentic
         if response.successful?
           response.content
         else
-          raise "LLM execution failed: #{response.error.message}"
+          raise Errors::LlmError.new("LLM execution failed: #{response.error.message}", context: {prompt: prompt})
         end
       else
-        # Fallback error - agent not properly configured
-        raise "Agent not configured with LLM capabilities. Use DefaultAgentProvider or configure llm_client directly."
+        raise Errors::AgentNotConfiguredError
       end
     end
 

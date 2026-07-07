@@ -27,4 +27,65 @@ RSpec.describe Agentic::Agent do
       expect(agent.tools).to eq(["Custom Tool"])
     end
   end
+
+  describe ".from_h" do
+    it "builds an agent whose configuration block is actually applied" do
+      agent = Agentic::Agent.from_h(role: "Restored", purpose: "Round-trip")
+
+      expect(agent).to be_a(Agentic::Agent)
+      expect(agent.role).to eq("Restored")
+      expect(agent.purpose).to eq("Round-trip")
+    end
+  end
+
+  describe "#execute_with_schema" do
+    let(:schema) { instance_double(Agentic::StructuredOutputs::Schema) }
+
+    it "honors the schema through the LLM client" do
+      response = instance_double(Agentic::LlmResponse, successful?: true, content: {"answer" => 42})
+      llm_client = instance_double(Agentic::LlmClient)
+      allow(llm_client).to receive(:complete).with(anything, output_schema: schema).and_return(response)
+
+      agent = Agentic::Agent.build { |a| a.llm_client = llm_client }
+
+      expect(agent.execute_with_schema("What is the answer?", schema)).to eq({"answer" => 42})
+    end
+
+    it "refuses to silently drop the schema when only text_generation is available" do
+      agent = Agentic::Agent.build
+      agent.instance_variable_get(:@capabilities)["text_generation"] = {specification: nil, provider: nil}
+
+      expect {
+        agent.execute_with_schema("prompt", schema)
+      }.to raise_error(Agentic::Errors::SchemaNotSupportedError, /cannot enforce schemas/)
+    end
+
+    it "raises a named error when the agent has no execution path" do
+      agent = Agentic::Agent.build
+
+      expect {
+        agent.execute_with_schema("prompt", schema)
+      }.to raise_error(Agentic::Errors::AgentNotConfiguredError)
+    end
+  end
+
+  describe "capability errors" do
+    it "raises CapabilityNotFoundError for unregistered capabilities" do
+      agent = Agentic::Agent.build
+
+      expect {
+        agent.add_capability("does_not_exist")
+      }.to raise_error(Agentic::Errors::CapabilityNotFoundError) { |error|
+        expect(error.capability_name).to eq("does_not_exist")
+      }
+    end
+
+    it "raises CapabilityNotFoundError when executing a capability the agent lacks" do
+      agent = Agentic::Agent.build
+
+      expect {
+        agent.execute_capability("not_added")
+      }.to raise_error(Agentic::Errors::CapabilityNotFoundError, /not added to this agent/)
+    end
+  end
 end

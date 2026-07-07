@@ -3,7 +3,6 @@
 require "thor"
 require "json"
 require "yaml"
-require_relative "cli/capabilities"
 
 module Agentic
   # Command Line Interface for Agentic
@@ -208,7 +207,7 @@ module Agentic
         # Create spinner for agent creation
         agent = UI.with_spinner("Creating agent: #{name}") do
           # Create new agent
-          agent = Agentic::Agent.new do |a|
+          agent = Agentic::Agent.build do |a|
             a.role = options[:role]
             a.purpose = options[:purpose]
             a.backstory = options[:backstory] || ""
@@ -812,7 +811,7 @@ module Agentic
 
     # Checks for API token and raises error if not configured
     def check_api_token!
-      unless Agentic.configuration.access_token
+      unless Agentic.configuration.access_token || Agentic.configuration.api_base_url
         error_box = UI.box(
           "Configuration Error",
           "No OpenAI API token configured.\n\n" \

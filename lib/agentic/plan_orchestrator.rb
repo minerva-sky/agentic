@@ -5,9 +5,6 @@ require "set"
 require "async"
 require "async/barrier"
 require "async/semaphore"
-require_relative "task_failure"
-require_relative "task_execution_result"
-require_relative "plan_execution_result"
 
 module Agentic
   # Orchestrates the execution of tasks in a plan, handling dependencies and concurrency
@@ -38,6 +35,8 @@ module Agentic
       }
       @concurrency_limit = concurrency_limit
       @async_tasks = {}
+      @task_agents = {}
+      @task_needs = {}
 
       # Configure retry policy with defaults
       @retry_policy = {
@@ -46,11 +45,14 @@ module Agentic
         backoff_strategy: :constant
       }.merge(retry_policy)
 
-      # Configure lifecycle hooks with callable defaults (no-ops)
+      # Configure lifecycle hooks with callable defaults (no-ops).
+      # Hooks run inline on the task's fiber - anything slower than a hash
+      # insert should hand off (e.g. enqueue onto an Async::Queue).
       @lifecycle_hooks = {
         before_agent_build: ->(task_id:, task:) {},          # Called before an agent is built
         after_agent_build: ->(task_id:, task:, agent:, build_duration:) {}, # Called after an agent is built
-        before_task_execution: ->(task_id:, task:) {},        # Called before a task is executed
+        before_task_execution: ->(task_id:, task:) {},        # Called when the task is scheduled (may still queue)
+        task_slot_acquired: ->(task_id:, task:, waited:) {},  # Called when a concurrency slot is acquired
         after_task_success: ->(task_id:, task:, result:, duration:) {}, # Called after a task succeeds
         after_task_failure: ->(task_id:, task:, failure:, duration:) {}, # Called after a task fails
         plan_completed: ->(plan_id:, status:, execution_time:, tasks:, results:) {} # Called when plan completes
@@ -58,21 +60,54 @@ module Agentic
     end
 
     # Adds a task to the plan with optional dependencies
+    #
+    # Dependencies may be task ids or Task objects. An agent (anything
+    # responding to #execute) or a bare callable (receives the task,
+    # returns the output) can be attached directly, making a plan-wide
+    # agent provider optional. Named dependencies declared via needs: are
+    # dependencies whose outputs arrive addressable by name:
+    #
+    #   orchestrator.add_task(digest, needs: {shipped: commits, owed: debt})
+    #   # in the agent: task.needs.shipped
+    #
     # @param task [Task] The task to add
-    # @param dependencies [Array<String>] Array of task ids that this task depends on
+    # @param dependencies [Array<String, Task>] Tasks (or ids) this task depends on
+    # @param agent [#execute, #call, nil] The agent or callable to execute this task
+    # @param needs [Hash{Symbol=>Task,String}, nil] Named dependencies
     # @return [void]
-    def add_task(task, dependencies = [])
+    def add_task(task, dependencies = [], agent: nil, needs: nil)
       task_id = task.id
       @tasks[task_id] = task
-      @dependencies[task_id] = Array(dependencies)
+      deps = Array(dependencies).map { |dep| dep.respond_to?(:id) ? dep.id : dep }
+
+      if needs
+        @task_needs[task_id] = needs.transform_values { |dep| dep.respond_to?(:id) ? dep.id : dep }
+        deps |= @task_needs[task_id].values
+      end
+
+      @dependencies[task_id] = deps
+      @task_agents[task_id] = agent if agent
       @execution_state[:pending].add(task_id)
     end
 
     # Executes the plan, respecting task dependencies and concurrency limits
-    # @param agent_provider [Object] An object that provides agents for task execution
+    #
+    # Composes with structured concurrency: when called inside a running
+    # Async reactor (e.g. under Falcon or within another task) it joins the
+    # current reactor instead of nesting a new event loop; standalone calls
+    # still create their own reactor and block until the plan completes.
+    #
+    # @param agent_provider [Object, nil] An object that provides agents for
+    #   task execution (responds to #get_agent_for_task), or a callable
+    #   factory (receives the task, returns an agent). Optional when every
+    #   task was added with its own agent:, or when a block is given.
+    # @yield [task] Optional agent factory - called per task, returns an agent
     # @return [PlanExecutionResult] The structured execution results
-    def execute_plan(agent_provider)
-      @reactor = Async do |reactor|
+    def execute_plan(agent_provider = nil, &agent_factory)
+      agent_provider ||= agent_factory
+      ensure_agents_resolvable!(agent_provider)
+
+      @reactor = Sync do |reactor|
         @barrier = Async::Barrier.new
         @semaphore = Async::Semaphore.new(@concurrency_limit, parent: @barrier)
 
@@ -166,6 +201,12 @@ module Agentic
       task.retry_count ||= 0
       return false if task.retry_count >= @retry_policy[:max_retries]
 
+      # An error's own retryability verdict outranks the type list -
+      # Errors::LlmRateLimitError knows it's retryable, an
+      # authentication error knows it isn't
+      verdict = failure.respond_to?(:retryable?) ? failure.retryable? : nil
+      return verdict unless verdict.nil?
+
       # Check if error type is in retryable_errors list
       @retry_policy[:retryable_errors].include?(failure.type)
     end
@@ -207,12 +248,11 @@ module Agentic
         delay += jitter
       end
 
-      # Sleep if there's a delay to apply
-      if delay > 0
-        Async do
-          Async::Task.current.sleep(delay) if delay > 0
-        end
-      end
+      # Sleep in the current task so the retry actually waits; the async
+      # fiber scheduler keeps this non-blocking for sibling tasks. The old
+      # `Async { sleep }` spawned a detached task and returned immediately,
+      # so retries never observed their backoff delay.
+      sleep(delay) if delay > 0
     end
 
     # Checks if all dependencies for a task are met
@@ -238,6 +278,10 @@ module Agentic
     def overall_status
       if @execution_state[:failed].any?
         :partial_failure
+      elsif @execution_state[:canceled].any?
+        # A plan with canceled tasks did not complete, even if every task
+        # that ran succeeded
+        :canceled
       elsif @execution_state[:pending].empty? && @execution_state[:in_progress].empty?
         :completed
       else
@@ -260,88 +304,126 @@ module Agentic
       task = @tasks[task_id]
       transition_task_state(task_id, from: :pending, to: :in_progress)
 
+      # Pipe completed dependency outputs into the task before it runs
+      @dependencies[task_id].each do |dependency_id|
+        dependency_result = @results[dependency_id]
+        if dependency_result&.successful?
+          task.record_dependency_output(dependency_id, dependency_result.output)
+        end
+      end
+
+      # Named dependencies arrive addressable by the caller's chosen name
+      @task_needs[task_id]&.each do |name, dependency_id|
+        dependency_result = @results[dependency_id]
+        task.needs[name] = dependency_result.output if dependency_result&.successful?
+      end
+
       # Call before_task_execution hook
       @lifecycle_hooks[:before_task_execution].call(
         task_id: task_id,
         task: task
       )
 
-      # Schedule task execution with the semaphore
-      async_task = semaphore.async do
-        task_start_time = Time.now
-        begin
-          # Call before_agent_build hook
-          @lifecycle_hooks[:before_agent_build].call(
-            task_id: task_id,
-            task: task
-          )
-
-          agent_build_start = Time.now
-          agent = agent_provider.get_agent_for_task(task)
-          agent_build_duration = Time.now - agent_build_start
-
-          # Call after_agent_build hook
-          @lifecycle_hooks[:after_agent_build].call(
+      # Spawn through the barrier and acquire the semaphore INSIDE the
+      # spawned fiber. Spawning with semaphore.async here would block the
+      # caller when the semaphore is full - and completing tasks schedule
+      # their dependents from within their own slot, so two slot-holders
+      # spawning dependents at a tight concurrency limit would deadlock
+      # waiting for each other's slots.
+      scheduled_at = Time.now
+      async_task = barrier.async do
+        semaphore.acquire do
+          @lifecycle_hooks[:task_slot_acquired].call(
             task_id: task_id,
             task: task,
-            agent: agent,
-            build_duration: agent_build_duration
+            waited: Time.now - scheduled_at
           )
-
-          result = task.perform(agent)
-          task_duration = Time.now - task_start_time
-
-          # Record result and update state
-          if result.successful?
-            record_task_success(task_id, result.output)
-
-            # Call after_task_success hook
-            @lifecycle_hooks[:after_task_success].call(
-              task_id: task_id,
-              task: task,
-              result: result,
-              duration: task_duration
-            )
-
-            # Find and schedule dependent tasks
-            schedule_dependent_tasks(task_id, agent_provider, semaphore, barrier)
-          else
-            record_task_failure(task_id, result.failure)
-
-            # Call after_task_failure hook
-            @lifecycle_hooks[:after_task_failure].call(
-              task_id: task_id,
-              task: task,
-              failure: result.failure,
-              duration: task_duration
-            )
-
-            # Handle failure based on policy
-            handle_task_failure(task, result.failure, agent_provider, semaphore, barrier)
-          end
-        rescue => e
-          # Handle unexpected errors
-          failure = TaskFailure.from_exception(e, {
-            task_id: task_id,
-            context_type: "unexpected_error"
-          })
-
-          record_task_failure(task_id, failure)
-
-          # Call after_task_failure hook for unexpected errors
-          @lifecycle_hooks[:after_task_failure].call(
-            task_id: task_id,
-            task: task,
-            failure: failure,
-            duration: Time.now - task_start_time
-          )
-
-          Agentic.logger.error("Unexpected error in task #{task_id}: #{e.message}")
+          execute_task_in_slot(task_id, task, agent_provider, semaphore, barrier)
         end
       end
 
       # Store the async task for potential cancellation
       @async_tasks[task_id] = async_task
+    end
+
+    # Runs one task inside an acquired concurrency slot: builds the agent,
+    # performs the task, records the outcome, and fans out to dependents
+    # @param task_id [String] ID of the task
+    # @param task [Task] The task to run
+    # @param agent_provider [Object, nil] Provides agents for task execution
+    # @param semaphore [Async::Semaphore] Controls concurrency
+    # @param barrier [Async::Barrier] Tracks task completion
+    # @return [void]
+    def execute_task_in_slot(task_id, task, agent_provider, semaphore, barrier)
+      task_start_time = Time.now
+
+      # Call before_agent_build hook
+      @lifecycle_hooks[:before_agent_build].call(
+        task_id: task_id,
+        task: task
+      )
+
+      agent_build_start = Time.now
+      agent = resolve_agent(task, agent_provider)
+      agent_build_duration = Time.now - agent_build_start
+
+      # Call after_agent_build hook
+      @lifecycle_hooks[:after_agent_build].call(
+        task_id: task_id,
+        task: task,
+        agent: agent,
+        build_duration: agent_build_duration
+      )
+
+      result = task.perform(agent)
+      task_duration = Time.now - task_start_time
+
+      # Record result and update state
+      if result.successful?
+        record_task_success(task_id, result.output)
+
+        # Call after_task_success hook
+        @lifecycle_hooks[:after_task_success].call(
+          task_id: task_id,
+          task: task,
+          result: result,
+          duration: task_duration
+        )
+
+        # Find and schedule dependent tasks
+        schedule_dependent_tasks(task_id, agent_provider, semaphore, barrier)
+      else
+        record_task_failure(task_id, result.failure)
+
+        # Call after_task_failure hook
+        @lifecycle_hooks[:after_task_failure].call(
+          task_id: task_id,
+          task: task,
+          failure: result.failure,
+          duration: task_duration
+        )
+
+        # Handle failure based on policy
+        handle_task_failure(task, result.failure, agent_provider, semaphore, barrier)
+      end
+    rescue => e
+      # Handle unexpected errors
+      failure = TaskFailure.from_exception(e, {
+        task_id: task_id,
+        context_type: "unexpected_error"
+      })
+
+      record_task_failure(task_id, failure)
+
+      # Call after_task_failure hook for unexpected errors
+      @lifecycle_hooks[:after_task_failure].call(
+        task_id: task_id,
+        task: task,
+        failure: failure,
+        duration: Time.now - task_start_time
+      )
+
+      Agentic.logger.error("Unexpected error in task #{task_id}: #{e.message}")
     end
 
     # Schedules tasks that depend on a completed task
@@ -438,6 +520,40 @@ module Agentic
     def record_task_success(task_id, output)
       transition_task_state(task_id, from: :in_progress, to: :completed)
       @results[task_id] = TaskExecutionResult.success(output)
+    end
+
+    # Resolves the agent for a task: per-task agent first, then the
+    # plan-wide provider or factory
+    # @param task [Task] The task needing an agent
+    # @param agent_provider [Object, nil] Plan-wide provider or factory
+    # @return [Object] An agent responding to #execute
+    def resolve_agent(task, agent_provider)
+      per_task = @task_agents[task.id]
+      if per_task
+        # A per-task callable IS the work; wrap it so it receives the task
+        return per_task.respond_to?(:execute) ? per_task : CallableAgent.new(per_task, task)
+      end
+
+      if agent_provider.respond_to?(:get_agent_for_task)
+        agent_provider.get_agent_for_task(task)
+      else
+        # A plan-wide callable is a factory: task in, agent out
+        agent_provider.call(task)
+      end
+    end
+
+    # Fails fast when execute_plan is called with no way to obtain agents
+    # @param agent_provider [Object, nil] Plan-wide provider or factory
+    # @return [void]
+    def ensure_agents_resolvable!(agent_provider)
+      return if agent_provider
+
+      missing = @tasks.keys.reject { |task_id| @task_agents.key?(task_id) }
+      return if missing.empty?
+
+      raise ArgumentError,
+        "#{missing.size} task(s) have no agent. Pass an agent provider (or block) " \
+        "to execute_plan, or add each task with add_task(task, agent: ...)"
     end
 
     # Records a task failure with proper state transition and result storage

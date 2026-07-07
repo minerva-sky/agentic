@@ -17,6 +17,14 @@ module Agentic
       @agent = agent
     end
 
+    # Builds an executable Task from this definition
+    # @param input [Hash] Input data for the task
+    # @param payload [Object, nil] Arbitrary domain data for the executing agent
+    # @return [Task] A new task ready for the orchestrator
+    def to_task(input: {}, payload: nil)
+      Task.new(description: description, agent_spec: agent, input: input, payload: payload)
+    end
+
     # Returns a serializable representation of the task definition
     # @return [Hash] The task definition as a hash
     def to_h

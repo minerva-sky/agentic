@@ -2,10 +2,6 @@
 
 require "openai"
 require "net/http"
-require_relative "llm_response"
-require_relative "errors/llm_error"
-require_relative "retry_handler"
-require_relative "retry_config"
 
 module Agentic
   # Generic wrapper for LLM API clients
@@ -20,11 +16,16 @@ module Agentic
     # @param config [LlmConfig] The configuration for the LLM
     # @param retry_config [RetryConfig, Hash] Configuration for the retry handler
     def initialize(config, retry_config = {})
-      client_options = {access_token: Agentic.configuration.access_token}
+      configuration = Agentic.configuration
+      configuration.validate!
+
+      # Local endpoints (Ollama, etc.) ignore the token but the client
+      # requires one, so send an explicit placeholder rather than nil
+      client_options = {access_token: configuration.access_token || "local"}
 
       # Add custom base URL if configured (for Ollama, etc.)
-      if Agentic.configuration.api_base_url
-        client_options[:uri_base] = Agentic.configuration.api_base_url
+      if configuration.api_base_url
+        client_options[:uri_base] = configuration.api_base_url
       end
 
       @client = OpenAI::Client.new(client_options)

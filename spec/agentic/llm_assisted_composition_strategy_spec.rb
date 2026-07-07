@@ -99,10 +99,15 @@ RSpec.describe Agentic::LlmAssistedCompositionStrategy do
         allow(llm_response).to receive(:to_s).and_return(json_response)
       end
 
-      it "filters out invalid capabilities" do
+      it "filters out invalid capabilities and falls back to the default strategy" do
+        default_strategy = instance_double(Agentic::DefaultCompositionStrategy)
+        allow(Agentic::DefaultCompositionStrategy).to receive(:new).and_return(default_strategy)
+        allow(default_strategy).to receive(:select_capabilities).and_return([])
+
         capabilities = strategy.select_capabilities(requirements, registry)
 
         expect(capabilities).to be_empty
+        expect(default_strategy).to have_received(:select_capabilities).with(requirements, registry)
       end
     end
 
@@ -139,16 +144,24 @@ RSpec.describe Agentic::LlmAssistedCompositionStrategy do
       task = instance_double(Agentic::Task)
       agent = instance_double(Agentic::Agent)
 
-      # Let initialization happen normally, but mock the assembly engine's assemble_agent method
-      allow_any_instance_of(Agentic::AgentAssemblyEngine).to receive(:assemble_agent).and_return(agent)
+      # Swap in a doubled assembly engine so we can observe the strategy it receives
+      engine = instance_double(Agentic::AgentAssemblyEngine, assemble_agent: agent)
+      original_engine = Agentic.instance_variable_get(:@agent_assembly_engine)
+      allow(Agentic).to receive(:initialize_agent_assembly)
+      Agentic.instance_variable_set(:@agent_assembly_engine, engine)
 
-      result = Agentic.assemble_agent(task, use_llm: true)
+      begin
+        result = Agentic.assemble_agent(task, use_llm: true)
 
-      expect(result).to eq(agent)
-      expect_any_instance_of(Agentic::AgentAssemblyEngine).to have_received(:assemble_agent).with(
-        task,
-        hash_including(strategy: instance_of(described_class))
-      )
+        expect(result).to eq(agent)
+        expect(engine).to have_received(:assemble_agent).with(
+          task,
+          strategy: instance_of(described_class),
+          store: true
+        )
+      ensure
+        Agentic.instance_variable_set(:@agent_assembly_engine, original_engine)
+      end
     end
   end
 end

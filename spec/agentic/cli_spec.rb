@@ -49,10 +49,16 @@ RSpec.describe Agentic::CLI do
         # Stub UI.box to return a simpler string for testing
         allow(Agentic::UI).to receive(:box).and_return("Agent Created")
 
+        # Avoid touching the real on-disk agent store
+        agent_store = instance_double(Agentic::PersistentAgentStore, store: "agent-id")
+        allow(Agentic).to receive(:initialize_agent_assembly)
+        allow(Agentic).to receive(:agent_store).and_return(agent_store)
+
         # Execute the agent create command
-        described_class.start(["agent", "create", "TestAgent", "--role=Tester", "--instructions=Test instructions"])
+        described_class.start(["agent", "create", "TestAgent", "--role=Tester", "--purpose=Run the test suite"])
 
         # Verify output
+        expect(agent_store).to have_received(:store)
         expect(output.string).to include("Agent Created")
       end
     end

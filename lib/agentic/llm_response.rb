@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "errors/llm_error"
-require_relative "generation_stats"
-
 module Agentic
   # Value object representing a response from an LLM
   class LlmResponse

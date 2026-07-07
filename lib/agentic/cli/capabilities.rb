@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "thor"
+
 module Agentic
   class CLI < Thor
     # Command-line interface for managing capabilities

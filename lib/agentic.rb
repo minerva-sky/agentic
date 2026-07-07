@@ -1,29 +1,24 @@
 # frozen_string_literal: true
 
 require "zeitwerk"
+
+# Zeitwerk is the single code loader for this gem: every constant under
+# Agentic:: is autoloaded on first reference, including the CLI, so
+# library consumers never pay for Thor or the tty-* UI stack at require
+# time. Files must not require_relative their siblings - reference the
+# constant and let the loader resolve it.
 loader = Zeitwerk::Loader.for_gem
 
 # Configure Zeitwerk to handle the CLI class name properly
 loader.inflector.inflect(
-  "cli" => "CLI"
+  "cli" => "CLI",
+  "ui" => "UI"
 )
 
-# Configure paths that need to be eager loaded or excluded from Zeitwerk
+# The CLI is only autoloaded on demand (exe/agentic), never eager loaded
 loader.do_not_eager_load("#{__dir__}/agentic/cli")
 
 loader.setup
-
-# Explicitly require Thor-related components to avoid Zeitwerk issues with Thor
-# Thor requires subcommands to be loaded before they're referenced
-require_relative "agentic/ui"
-require_relative "agentic/default_agent_provider"
-require_relative "agentic/cli"
-require_relative "agentic/cli/execution_observer"
-require_relative "agentic/extension"
-require_relative "agentic/capabilities"
-require_relative "agentic/agent_assembly_engine"
-require_relative "agentic/llm_assisted_composition_strategy"
-require_relative "agentic/task_output_schemas"
 
 module Agentic
   class Error < StandardError; end
@@ -32,15 +27,32 @@ module Agentic
     attr_accessor :logger
   end
 
-  self.logger ||= Logger.new($stdout, level: :debug)
+  # Library etiquette: quiet by default. The CLI raises verbosity for
+  # interactive use; library consumers opt in via Agentic.logger.level=
+  self.logger ||= Logger.new($stdout, level: :warn)
 
   class Configuration
     attr_accessor :access_token, :agent_store_path, :api_base_url
 
     def initialize
-      @access_token = ENV["OPENAI_ACCESS_TOKEN"] || ENV["AGENTIC_API_TOKEN"] || "ollama"
+      @access_token = ENV["OPENAI_ACCESS_TOKEN"] || ENV["AGENTIC_API_TOKEN"]
       @agent_store_path = ENV["AGENTIC_AGENT_STORE_PATH"] || File.join(Dir.home, ".agentic", "agents")
       @api_base_url = ENV["AGENTIC_API_BASE_URL"] || ENV["OPENAI_BASE_URL"]
+    end
+
+    # Verifies that the configuration can reach an LLM: either an access
+    # token (hosted APIs) or a custom base URL (local endpoints such as
+    # Ollama, which accept any token).
+    #
+    # @return [Configuration] self, for chaining
+    # @raise [Errors::ConfigurationError] when no credentials are configured
+    def validate!
+      return self if access_token || api_base_url
+
+      raise Errors::ConfigurationError,
+        "No LLM credentials configured. Set OPENAI_ACCESS_TOKEN (or " \
+        "AGENTIC_API_TOKEN), configure an api_base_url for a local " \
+        "endpoint, or use Agentic.configure { |c| c.access_token = ... }"
     end
   end
 
@@ -61,16 +73,53 @@ module Agentic
     LlmClient.new(config)
   end
 
+  # Plan and execute a goal in one call - the 80% path
+  #
+  # @example
+  #   result = Agentic.run("Summarize this week's support tickets")
+  #   puts result.results.values.map(&:output) if result.successful?
+  #
+  # @param goal [String] What you want done, in plain language
+  # @param model [String, nil] Optional LLM model override
+  # @param concurrency [Integer] Maximum number of tasks to run at once
+  # @return [PlanExecutionResult] The structured execution results
+  def self.run(goal, model: nil, concurrency: 5)
+    config = LlmConfig.new
+    config.model = model if model
+
+    plan = TaskPlanner.new(goal, config).plan
+
+    orchestrator = PlanOrchestrator.new(concurrency_limit: concurrency)
+    plan.tasks.each { |task_def| orchestrator.add_task(task_def.to_task) }
+
+    orchestrator.execute_plan(DefaultAgentProvider.new(config))
+  end
+
+  # Guards lazy initialization of the agent assembly system
+  ASSEMBLY_LOCK = Mutex.new
+  private_constant :ASSEMBLY_LOCK
+
   # Initialize the core agent self-assembly components
+  #
+  # Thread-safe: concurrent callers initialize the registry, store, and
+  # assembly engine exactly once.
   def self.initialize_agent_assembly
-    # Create registry, store, and assembly engine if not already initialized
-    unless @agent_capability_registry
-      @agent_capability_registry = AgentCapabilityRegistry.instance
-      @agent_store = PersistentAgentStore.new(configuration.agent_store_path, @agent_capability_registry)
-      @agent_assembly_engine = AgentAssemblyEngine.new(@agent_capability_registry, @agent_store)
+    return if @agent_capability_registry
+
+    ASSEMBLY_LOCK.synchronize do
+      # Re-check inside the lock - another thread may have won the race
+      return if @agent_capability_registry
+
+      registry = AgentCapabilityRegistry.instance
+      @agent_store = PersistentAgentStore.new(configuration.agent_store_path, registry)
+      @agent_assembly_engine = AgentAssemblyEngine.new(registry, @agent_store)
 
       # Register standard capabilities
       Capabilities.register_standard_capabilities
+
+      # Assigned last: this ivar doubles as the initialized flag, so it must
+      # only become visible once the store and engine are fully built
+      @agent_capability_registry = registry
 
       logger.info("Initialized agent assembly system")
     end
@@ -82,7 +131,7 @@ module Agentic
   # @return [CapabilitySpecification] The registered capability
   def self.register_capability(capability, provider)
     initialize_agent_assembly
-    @agent_capability_registry.register(capability, provider)
+    agent_capability_registry.register(capability, provider)
   end
 
   # Assemble an agent for a task
@@ -99,7 +148,7 @@ module Agentic
       strategy = LlmAssistedCompositionStrategy.new
     end
 
-    @agent_assembly_engine.assemble_agent(task, strategy: strategy, store: store)
+    agent_assembly_engine.assemble_agent(task, strategy: strategy, store: store)
   end
 
   # Create an LLM-assisted composition strategy

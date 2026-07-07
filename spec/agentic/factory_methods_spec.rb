@@ -25,4 +25,29 @@ RSpec.describe Agentic::FactoryMethods do
       expect(agent.backstory).to eq("Custom Backstory")
     end
   end
+
+  describe "inheritance" do
+    it "gives subclasses their parent's configurable attributes and assembly" do
+      subclass = Class.new(Agentic::MockAgent)
+
+      agent = subclass.build do |builder|
+        builder.role = "Subclassed Role"
+      end
+
+      expect(agent.role).to eq("Subclassed Role")
+      expect(agent.goal).to eq("Default Goal")
+      expect(agent.backstory).to eq("Default Backstory")
+    end
+
+    it "keeps subclass additions out of the parent" do
+      subclass = Class.new(Agentic::MockAgent) do
+        configurable :specialty
+      end
+
+      agent = subclass.build { |builder| builder.specialty = "Testing" }
+
+      expect(agent.specialty).to eq("Testing")
+      expect(Agentic::MockAgent.build).not_to respond_to(:specialty)
+    end
+  end
 end

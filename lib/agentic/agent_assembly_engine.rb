@@ -246,24 +246,29 @@ module Agentic
       ]
 
       known_capabilities.each do |capability|
-        if description.downcase.include?(capability.downcase)
-          requirements[capability] ||= {
+        next unless description_mentions_capability?(description, capability)
+
+        if requirements[capability]
+          # Mentions across multiple sources (description, agent spec name,
+          # instructions, ...) compound the capability's importance
+          requirements[capability][:importance] = [requirements[capability][:importance] + 0.15, 1.0].min
+        else
+          requirements[capability] = {
             importance: 0.5,  # Default importance
             version_constraint: nil  # Any version
           }
-
-          # Increase importance if mentioned multiple times
-          count = description.downcase.scan(capability.downcase).count
-          requirements[capability][:importance] += 0.1 * count if count > 1
         end
+
+        # Increase importance if mentioned multiple times in this source
+        count = description.downcase.scan(capability.downcase).count
+        requirements[capability][:importance] += 0.1 * count if count > 1
       end
 
-      # Special case for test tasks
+      # Special case for code-generation tasks: a strong signal that should
+      # raise the importance even when keyword matching already found it
       if description.downcase.include?("code") && description.downcase.include?("generate")
-        requirements["code_generation"] ||= {
-          importance: 0.8,  # High importance for code generation tasks
-          version_constraint: nil  # Any version
-        }
+        requirement = (requirements["code_generation"] ||= {importance: 0.0, version_constraint: nil})
+        requirement[:importance] = [requirement[:importance], 0.8].max
       end
 
       # Add common capabilities for all tasks
@@ -271,6 +276,22 @@ module Agentic
         importance: 0.3,  # Lower importance as it's a default capability
         version_constraint: nil
       }
+    end
+
+    # Check whether a description mentions a capability, either literally
+    # ("data_analysis"), space-separated ("data analysis"), or via word stems
+    # so that "Analyze the data" still matches "data_analysis"
+    # @param description [String] The text to search
+    # @param capability [String] The capability name (underscore-separated)
+    # @return [Boolean] True if the description mentions the capability
+    def description_mentions_capability?(description, capability)
+      text = description.downcase
+      return true if text.include?(capability.downcase) || text.include?(capability.tr("_", " "))
+
+      capability.split("_").all? do |word|
+        stem = word[0, 5]
+        stem.length >= 3 && text.include?(stem)
+      end
     end
 
     # Infer capabilities from an agent specification
@@ -326,20 +347,18 @@ module Agentic
         if capabilities.is_a?(Array)
           capabilities.each do |capability|
             if capability.is_a?(String)
-              requirements[capability] ||= {
-                importance: 0.9,  # Very high importance for explicitly requested capabilities
-                version_constraint: nil  # Any version
-              }
+              # Explicitly requested capabilities outrank keyword inference
+              requirement = (requirements[capability] ||= {importance: 0.0, version_constraint: nil})
+              requirement[:importance] = [requirement[:importance], 0.9].max
             elsif capability.is_a?(Hash)
               name = capability[:name] || capability["name"]
               version = capability[:version] || capability["version"]
               importance = capability[:importance] || capability["importance"] || 0.9
 
               if name
-                requirements[name] ||= {
-                  importance: importance,
-                  version_constraint: version
-                }
+                requirement = (requirements[name] ||= {importance: 0.0, version_constraint: version})
+                requirement[:importance] = [requirement[:importance], importance].max
+                requirement[:version_constraint] ||= version
               end
             end
           end

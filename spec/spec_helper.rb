@@ -4,6 +4,12 @@ require "agentic"
 
 require "vcr"
 
+# Give the test environment a credential so fail-fast configuration
+# validation passes without a real key; VCR intercepts all HTTP anyway
+Agentic.configure do |config|
+  config.access_token ||= "test-token"
+end
+
 VCR.configure do |config|
   config.cassette_library_dir = "spec/vcr_cassettes"
   config.hook_into :webmock

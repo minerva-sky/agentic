@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "capabilities/examples"
-
 module Agentic
   # Namespace for capability-related functionality
   module Capabilities

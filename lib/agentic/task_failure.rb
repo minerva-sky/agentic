@@ -9,16 +9,28 @@ module Agentic
   class TaskFailure
     attr_reader :message, :type, :timestamp, :context
 
+    # @return [Boolean, nil] Whether the originating error declared itself
+    #   retryable (nil when the error expressed no opinion)
+    attr_reader :retryable
+
     # Initializes a new task failure
     # @param message [String] The failure message
     # @param type [String] The type of failure
     # @param context [Hash] Additional context about the failure
+    # @param retryable [Boolean, nil] The originating error's own retryability verdict
     # @return [TaskFailure] A new task failure instance
-    def initialize(message:, type:, context: {})
+    def initialize(message:, type:, context: {}, retryable: nil)
       @message = message
       @type = type
       @timestamp = Time.now
       @context = context
+      @retryable = retryable
+    end
+
+    # Whether the originating error declared itself retryable
+    # @return [Boolean, nil] nil when the error expressed no opinion
+    def retryable?
+      @retryable
     end
 
     # Returns a serializable representation of the failure
@@ -28,11 +40,13 @@ module Agentic
         message: @message,
         type: @type,
         timestamp: @timestamp.iso8601,
-        context: @context
+        context: @context,
+        retryable: @retryable
       }
     end
 
-    # Creates a task failure from an exception
+    # Creates a task failure from an exception, preserving the exception's
+    # own retryability verdict when it offers one (e.g. Errors::LlmRateLimitError)
     # @param exception [Exception] The exception
     # @param context [Hash] Additional context about the failure
     # @return [TaskFailure] A new task failure instance
@@ -40,6 +54,7 @@ module Agentic
       new(
         message: exception.message,
         type: exception.class.name,
+        retryable: exception.respond_to?(:retryable?) ? exception.retryable? : nil,
         context: context.merge(
           backtrace: exception.backtrace&.first(10)
         )
