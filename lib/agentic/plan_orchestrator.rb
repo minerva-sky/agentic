@@ -126,7 +126,9 @@ module Agentic
         stats: {
           depth: depth.freeze,
           max_depth: depth.values.max || 0,
-          max_fan_in: @dependencies.values.map(&:size).max || 0
+          max_fan_in: @dependencies.values.map(&:size).max || 0,
+          roots: @dependencies.select { |_, deps| deps.empty? }.keys.freeze,
+          leaves: (@dependencies.keys - @dependencies.values.flatten).freeze
         }.freeze
       }.freeze
     end

@@ -111,7 +111,7 @@ module Agentic
         [name.to_s, schema]
       end
 
-      {
+      schema = {
         "$schema" => "http://json-schema.org/draft-07/schema#",
         "title" => "#{name} #{side}",
         "type" => "object",
@@ -119,6 +119,21 @@ module Agentic
         "properties" => properties,
         "additionalProperties" => true
       }
+
+      # Cross-field rules are lambdas and cannot project into JSON Schema
+      # keywords, but structured rules carry declarable metadata - emit it
+      # as an extension so schema consumers can at least SEE the policies
+      if side == :inputs && !rules.empty?
+        structured = rules.filter_map do |key, definition|
+          next if definition.respond_to?(:call)
+
+          {"rule" => key.to_s, "message" => definition[:message] || key.to_s,
+           "fields" => (definition[:fields] || []).map(&:to_s)}
+        end
+        schema["x-agentic-rules"] = structured unless structured.empty?
+      end
+
+      schema
     end
 
     # Contract type names to JSON Schema type names
