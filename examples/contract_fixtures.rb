@@ -20,11 +20,18 @@ SPECS = [
     inputs: {
       mode: {type: "string", required: true, enum: %w[air sea road]},
       weight: {type: "number", required: true, min: 1, max: 5_000},
-      customs_code: {type: "string", required: true},
-      notes: {type: "string"},
-      express: {type: "boolean"}
+      volume: {type: "number", min: 0, max: 5_000},
+      customs_code: {type: "string"},
+      express: {type: "boolean"},
+      api_key: {type: "string"},
+      oauth_token: {type: "string"}
     },
-    outputs: {price_cents: {type: "number", required: true}}
+    outputs: {price_cents: {type: "number", required: true}},
+    rules: {
+      fits: {relation: :sum_lte, fields: [:weight, :volume], limit: 4_000},
+      customs: {relation: :requires, fields: [:express, :customs_code]},
+      one_auth: {relation: :mutually_exclusive, fields: [:api_key, :oauth_token]}
+    }
   ),
   Agentic::CapabilitySpecification.new(
     name: "classify_ticket", description: "Route a support ticket", version: "1.1.0",
@@ -50,11 +57,38 @@ def value_for(key, decl)
   end
 end
 
+# Relation-typed rules are data, so the generator can SATISFY them
+# instead of hoping: scale sums under their limit, add what a present
+# trigger requires, keep only the first of an exclusive group
+def satisfy_relations(fixture, spec)
+  spec.rules.each_value do |definition|
+    next if definition.respond_to?(:call) || !definition[:relation]
+
+    fields = definition[:fields]
+    case definition[:relation]
+    when :sum_lte
+      given = fields.select { |f| fixture[f].is_a?(Numeric) }
+      total = given.sum { |f| fixture[f] }
+      if total > definition[:limit]
+        given.each { |f| fixture[f] = definition[:limit] / given.size }
+      end
+    when :requires
+      trigger, *needed = fields
+      if !fixture[trigger].nil?
+        needed.each { |f| fixture[f] ||= value_for(f, spec.inputs[f]) }
+      end
+    when :mutually_exclusive
+      fields.select { |f| fixture.key?(f) }.drop(1).each { |f| fixture.delete(f) }
+    end
+  end
+  fixture
+end
+
 def fixtures_for(spec)
   required = spec.inputs.select { |_, decl| decl[:required] }
   {
-    "minimal" => required.to_h { |key, decl| [key, value_for(key, decl)] },
-    "maximal" => spec.inputs.to_h { |key, decl| [key, value_for(key, decl)] }
+    "minimal" => satisfy_relations(required.to_h { |key, decl| [key, value_for(key, decl)] }, spec),
+    "maximal" => satisfy_relations(spec.inputs.to_h { |key, decl| [key, value_for(key, decl)] }, spec)
   }
 end
 
@@ -99,10 +133,13 @@ if failures.zero?
   puts "  rerun and they change with it. handwritten examples are promises;"
   puts "  derived ones are consequences."
   puts
-  puts "  known blind spot, stated honestly: cross-field rules: are"
-  puts "  predicates, and a generator cannot see inside a lambda - a"
-  puts "  fixture legal per-field may still violate a rule. structured"
-  puts "  rules narrow this; they do not close it."
+  puts "  and the round-9 blind spot has closed for the declarable"
+  puts "  majority: relation-typed rules (sum_lte, requires,"
+  puts "  mutually_exclusive) are data, so the generator SATISFIED them -"
+  puts "  scaled the weights under the limit, added what express required,"
+  puts "  kept one credential of the exclusive pair - and the validator,"
+  puts "  which now enforces relations too, countersigned the result."
+  puts "  lambdas remain for the exotic tail, and remain opaque."
 else
   puts "  #{failures} DISAGREEMENT(S) between generator and validator."
 end

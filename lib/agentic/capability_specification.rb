@@ -122,19 +122,52 @@ module Agentic
 
       # Cross-field rules are lambdas and cannot project into JSON Schema
       # keywords, but structured rules carry declarable metadata - emit it
-      # as an extension so schema consumers can at least SEE the policies
+      # as an extension so schema consumers can at least SEE the policies.
+      # Relation-typed rules go further: requires and mutually_exclusive
+      # ARE expressible in draft-07, so they project into real keywords
+      # (dependencies / not-required) that stock validators enforce.
       if side == :inputs && !rules.empty?
         structured = rules.filter_map do |key, definition|
           next if definition.respond_to?(:call)
 
-          {"rule" => key.to_s, "message" => definition[:message] || key.to_s,
-           "fields" => (definition[:fields] || []).map(&:to_s)}
+          entry = {"rule" => key.to_s, "message" => definition[:message] || key.to_s,
+                   "fields" => (definition[:fields] || []).map(&:to_s)}
+          if definition[:relation]
+            entry["relation"] = definition[:relation].to_s
+            entry["limit"] = definition[:limit] if definition.key?(:limit)
+            entry["message"] = definition[:message] || RelationRules.message(definition)
+            project_relation!(schema, definition)
+          end
+          entry
         end
         schema["x-agentic-rules"] = structured unless structured.empty?
       end
 
       schema
     end
+
+    # Projects a relation-typed rule into real draft-07 keywords where
+    # one exists: requires -> dependencies, mutually_exclusive -> a
+    # not-required clause per pair. sum_lte has no JSON Schema keyword
+    # and lives only in x-agentic-rules.
+    # @param schema [Hash] The schema being built (mutated)
+    # @param definition [Hash] The relation rule definition
+    # @return [void]
+    def project_relation!(schema, definition)
+      fields = definition.fetch(:fields).map(&:to_s)
+      case definition[:relation]
+      when :requires
+        trigger, *needed = fields
+        schema["dependencies"] ||= {}
+        schema["dependencies"][trigger] = ((schema["dependencies"][trigger] || []) + needed).uniq
+      when :mutually_exclusive
+        schema["allOf"] ||= []
+        fields.combination(2) do |pair|
+          schema["allOf"] << {"not" => {"required" => pair}}
+        end
+      end
+    end
+    private :project_relation!
 
     # Contract type names to JSON Schema type names
     JSON_SCHEMA_TYPES = {

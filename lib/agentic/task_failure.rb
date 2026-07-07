@@ -33,6 +33,21 @@ module Agentic
       @retryable
     end
 
+    # The nil convention: only an EXPLICIT false verdict is hopeless.
+    # An error that expressed no opinion (nil) gets suspicion, not a
+    # death sentence - breakers should count strikes against it, not
+    # trip instantly. These two predicates split the three-valued
+    # verdict at the joint policy code actually cares about.
+    # @return [Boolean] True when the error testified retrying can never help
+    def hopeless?
+      @retryable == false
+    end
+
+    # @return [Boolean] True when retrying might help (verdict true or no opinion)
+    def possibly_transient?
+      !hopeless?
+    end
+
     # Returns a serializable representation of the failure
     # @return [Hash] The failure as a hash
     def to_h

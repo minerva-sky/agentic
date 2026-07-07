@@ -50,8 +50,12 @@ class Breaker
     @strikes = 0
   end
 
-  def record_failure(retryable)
-    @strikes += retryable ? 1 : TRIP_AFTER # non-retryable trips instantly
+  # The framework's nil convention (TaskFailure#hopeless?): only an
+  # EXPLICIT false verdict trips instantly. An error that expressed no
+  # opinion gets a strike - suspicion, not a death sentence.
+  def record_failure(verdict)
+    hopeless = verdict == false
+    @strikes += hopeless ? TRIP_AFTER : 1
     return unless @strikes >= TRIP_AFTER || @state == :half_open
 
     @state = :open
