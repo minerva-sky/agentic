@@ -13,6 +13,22 @@ module Agentic
     # time so misconfiguration fails at boot, not at request time.
     class ConfigurationError < StandardError; end
 
+    # Raised by strict-mode journal replay when a line is torn,
+    # mis-encoded, or (for task events) missing its identifying keys.
+    # Tolerant replay - the recovery default - reports damage on the
+    # replayed state instead of raising.
+    class JournalDamagedError < StandardError
+      # @return [Integer] 1-based line number of the damaged line
+      attr_reader :line_number
+
+      # @param message [String] What was wrong
+      # @param line_number [Integer] Where it was wrong
+      def initialize(message, line_number:)
+        @line_number = line_number
+        super("#{message} (line #{line_number})")
+      end
+    end
+
     # Raised when a capability's inputs or outputs violate its declared
     # specification. Collects every violation instead of failing on the
     # first, so callers can fix a bad payload in one round trip.

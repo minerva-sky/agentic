@@ -45,12 +45,11 @@ flushed = bench { |i|
 journal = Agentic::ExecutionJournal.new(path: File.join(dir, "real.jsonl"))
 real = bench { |i| journal.record(:task_succeeded, PAYLOAD.merge(task_id: "t-#{i}")) }
 
-# The alternative shape: group commit - buffer N, fsync once
-group_file = File.open(File.join(dir, "group.jsonl"), "a")
-group = bench { |i|
-  group_file.puts(JSON.generate(PAYLOAD))
-  group_file.fsync if (i % 20) == 19
-}
+# The alternative promise: group commit, now a real constructor knob
+# (fsync_every: - the round-13 release cashing this file's own ask)
+group_journal = Agentic::ExecutionJournal.new(path: File.join(dir, "group.jsonl"), fsync_every: 20)
+group = bench { |i| group_journal.record(:task_succeeded, PAYLOAD.merge(task_id: "t-#{i}")) }
+group_journal.sync # the crash-window closes here, explicitly
 
 puts "WRITE PATH PROFILE (#{EVENTS} events per layer, microseconds each)"
 puts
@@ -59,7 +58,7 @@ rows = {
   "+ buffered write" => buffered,
   "+ flush to kernel" => flushed,
   "journal.record (flock+fsync)" => real,
-  "group commit (fsync per 20)" => group
+  "journal fsync_every: 20" => group
 }
 rows.each do |name, us|
   puts format("  %-30s %9.1fus   %s", name, us, "#" * [(Math.log10([us, 1].max) * 12).round, 1].max)
@@ -71,10 +70,11 @@ puts format("  the ledger: serialization is %.1f%% of the real write. swapping",
 puts "  JSON libraries would optimize a rounding error - the other"
 puts format("  %.1f%% is the price of the fsync, which is to say the price of", 100 - json_share)
 puts "  the journal's ONLY promise (a crash cannot unwrite what record"
-puts "  returned from). the honest knob is group commit: batch 20"
-puts format("  events per fsync and the write drops to %.0fus - but now a crash", group)
-puts "  can eat up to 19 acknowledged events, so it's not an"
-puts "  optimization, it's a DIFFERENT PROMISE, and only the caller"
-puts "  knows which promise their recovery story needs. profile first,"
-puts "  name the tradeoff second, and never let anyone optimize the"
-puts "  layer the profiler acquitted."
+puts "  returned from). the honest knob is group commit - and since"
+puts "  round 13 it's a real constructor argument: fsync_every: 20"
+puts format("  drops the write to %.0fus, and the constructor's docs name what", group)
+puts "  was traded (a crash may eat up to 19 acknowledged events)."
+puts "  that's the correct shape for a durability tradeoff: explicit,"
+puts "  named, greppable in the diff that chose it - not folklore in a"
+puts "  wiki. profile first, name the tradeoff second, and never let"
+puts "  anyone optimize the layer the profiler acquitted."
