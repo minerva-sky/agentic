@@ -7,17 +7,21 @@ not this file.
 | Example | What it shows |
 |---------|---------------|
 | `adaptive_throttle.rb` | The Adaptive Throttle: nobody TELLS you an upstream's capacity - you discover it. An AIMD controller (TCP's algorithm) p... |
+| `allocation_audit.rb` | The Allocation Audit: every object is a promissory note the GC collects on later. This audit counts exactly what each fr... |
 | `api_reference.rb` | The API Reference Generator: walk the registry, emit reference docs for every capability - types, enums, bounds, policie... |
 | `backoff_conformance.rb` | Backoff Conformance: every strategy x jitter combination, a thousand draws each through an injected seeded RNG, checked ... |
 | `batch_import.rb` | The Batch Import: 500 rows of the kind of data people actually upload - typos, header drift, impossible combinations - r... |
 | `burst_absorber.rb` | The Burst Absorber: three waves of requests slam a credential with a ceiling of 3 (Agentic::RateLimit - this round's rel... |
 | `cancel_drill.rb` | The Cancel Drill: structured concurrency's core promise is that cancellation is PROMPT - stop means stop, not "finish ev... |
 | `capability_evals.rb` | Capability Evals: golden test cases run against registered capabilities, scored, and gated. When you swap a lambda for a... |
+| `capacity_planner.rb` | The Capacity Planner: "how many workers do we need?" is not a feeling, it's Little's Law - L = lambda x W. The journal a... |
 | `changelog_scout.rb` | The Changelog Scout: reads real git history, classifies every commit through a contract-checked capability, and drafts t... |
 | `circuit_breaker.rb` | The Circuit Breaker: when an upstream is down, the cheapest request is the one you don't send. The breaker trips after 3... |
 | `collaboration_tracer.rb` | The Collaboration Tracer: lifecycle hooks record every message the orchestrator sends and every reply that comes back, t... |
 | `command_bus.rb` | The Command Bus: every command is a composed capability with its OWN declared contract (new in this round - compositions... |
 | `composed_limits.rb` | Composed Limits: a real provider enforces BOTH a billed quota and a connection ceiling. quota.and(pool) - new this round... |
+| `confident_pipeline.rb` | The Confident Pipeline: timid code checks nil at every step because it trusts nothing, including itself. Confident code ... |
+| `contract_cop.rb` | The Contract Cop: RuboCop for capability specs. Contracts are the most-read documents in this framework - six tools cons... |
 | `contract_fixtures.rb` | Contract Fixtures: example payloads in docs rot the day the contract changes. So don't write them - DERIVE them. This ge... |
 | `contract_fuzzer.rb` | The Contract Fuzzer: for every registered capability, generate inputs that SHOULD pass its declared contract and mutatio... |
 | `contract_overhead.rb` | The Contract Overhead Bench: "should we validate every call?" is a performance question, so answer it with a measurement... |
@@ -62,14 +66,17 @@ not this file.
 | `perf_history.rb` | Perf History: last release's run left a journal; this release's run is compared against it. No synthetic baseline, no sa... |
 | `performance_detective.rb` | The Performance Detective: one task per Ruby file in lib/, fanned out through the orchestrator, each dissecting a file f... |
 | `plan_diagram.rb` | The Plan Diagrammer: any orchestrator's graph, emitted as Mermaid - paste it into a README, GitHub renders it, and the d... |
+| `plan_flog.rb` | Plan Flog: flog gives every Ruby method a pain score; this gives every plan one. Fan-in hurts (joins hide coupling), dep... |
 | `plan_forest.rb` | The Plan Forest: your graph drawn as a forest - roots at the soil, leaves in the canopy, every task planted at its depth... |
 | `plan_fortune.rb` | The Plan Fortune Teller: reads your graph's palm - depth, fan-in, roots, breadth - and tells its fortune. Every fortune ... |
 | `plan_gantt.rb` | The Plan Gantt: lifecycle hooks timestamp every task, then the run is rendered as an ASCII timeline - where your wall cl... |
+| `plan_kata.rb` | The Plan Kata: red, green, refactor - for a plan. The "tests" are assertions about the graph (one root, one leaf, labele... |
 | `plan_merge.rb` | The Plan Merge: base, ours, theirs - a three-way merge of plan wire formats. Independent changes combine; the same edge ... |
 | `plan_roundtrip.rb` | The Round Trip: serialize a plan's graph to JSON, rebuild a fresh orchestrator from the JSON, and prove the rebuilt topo... |
 | `plan_structural_diff.rb` | The Structural Diff: two versions of a plan's wire format, diffed as TOPOLOGY - tasks added and removed, edges rewired, ... |
 | `plan_tour.rb` | The Plan Tour: hand any orchestrator to the guide and it narrates the plan as prose - first this, then that, meanwhile t... |
 | `polite_form.rb` | The Polite Form: a contract usually speaks AFTER you fail - a 422, a stack of violations. This assistant makes it speak ... |
+| `ports_and_adapters.rb` | Ports and Adapters: the domain is the part of your app that would survive a framework migration - IF you kept it clean. ... |
 | `projection_agreement.rb` | The Projection Agreement Prover: relation rules now render twice - the validator enforces them in Ruby, and to_json_sche... |
 | `quota_keeper.rb` | The Quota Keeper: the same 20 requests through two different laws. A concurrency ceiling ("3 in flight") models connecti... |
 | `readme_verifier.rb` | The README Verifier: every ruby code fence in the README is a promise. This extracts them all, syntax-checks each with P... |
@@ -88,7 +95,10 @@ not this file.
 | `stampede_sim.rb` | The Stampede Simulator: twenty workers hit a hiccuping upstream, all fail at once, all retry. With jitter OFF they come ... |
 | `standup_digest.rb` | The Standup Digest: three collectors gather from the repo in parallel - recent commits, TODO debt, test suite shape - an... |
 | `state_machine.rb` | The Contract State Machine: each transition is a capability whose guard is not an if-statement but an enum predicate on ... |
+| `telemetry_bus.rb` | The Telemetry Bus: lifecycle hooks are callbacks - one producer, one consumer, coupled at configuration time. A telemetr... |
 | `telephone_game.rb` | The telephone game: a rumor passes through five villagers, each of whom hears the previous version through the orchestra... |
+| `tenant_shards.rb` | Tenant Shards: at scale, "the plan" becomes "the plan, per shard" - same pipeline, isolated blast radius. Each shard get... |
+| `threads_drill.rb` | The Threads Drill: fibers are polite; threads are not. Everything in this gem that claims to be shared-safe gets hammere... |
 | `three_shapes.rb` | Three Shapes: the same six units of work arranged three ways - a chain, a star, and staged joins - then measured and cri... |
 | `throughput_knee.rb` | The Throughput Knee: sweep one limiter's ceiling from 1 to 8 against an upstream that quietly serializes above 4, and me... |
 | `ticket_screener.rb` | A HEY-style ticket screener: every inbound support ticket flows through screen -> categorize -> draft, all tickets in pa... |

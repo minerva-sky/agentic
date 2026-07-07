@@ -316,6 +316,60 @@ followed:
    projection boundary. (`relation_prober.rb` joins the
    exit-1-by-design set.)
 
+## Round 11 — a new cast takes the bench
+
+The round-10 asks shipped as a release: `cancel_plan` is now prompt
+(bookkeeping first, then fiber stops - never the reactor handle, never
+the calling fiber), relation declarations fail fast at validator
+construction (undeclared fields and sum_lte-over-strings refuse to
+boot), `RateLimit#try_acquire` gives non-blocking admission, and
+relations over untyped fields stay out of draft-07 keywords. The two
+exit-1-by-design probers flipped to green acceptance tests, the retry
+budget's wallet became a real windowed RateLimit — and then **ten new
+prolific Rubyists** took over the experiments:
+
+| # | Persona | Built with the gem | Run it | Field notes |
+|---|---------|--------------------|--------|-------------|
+| 1 | Koichi Sasada (ko1) | Allocation audit — exact object counts per operation, via GC.stat | `examples/allocation_audit.rb` | [round-11/01-ko1.md](round-11/01-ko1.md) |
+| 2 | Charles Nutter (headius) | Threads drill — real parallelism vs everything shared; a load-order bug caught | `examples/threads_drill.rb` | [round-11/02-headius.md](round-11/02-headius.md) |
+| 3 | Nate Berkopec | Capacity planner — Little's Law over journal percentiles | `examples/capacity_planner.rb` | [round-11/03-nateberkopec.md](round-11/03-nateberkopec.md) |
+| 4 | Ryan Davis (zenspider) | Plan flog — a pain score per plan; idiom free, coupling priced | `examples/plan_flog.rb` | [round-11/04-zenspider.md](round-11/04-zenspider.md) |
+| 5 | Avdi Grimm | Confident pipeline — ten timid conditionals vs one barricade | `examples/confident_pipeline.rb` | [round-11/05-avdi.md](round-11/05-avdi.md) |
+| 6 | Katrina Owen | Plan kata — red/green/refactor with graph assertions written first | `examples/plan_kata.rb` | [round-11/06-kytrinyx.md](round-11/06-kytrinyx.md) |
+| 7 | Bozhidar Batsov | Contract cop — seven named cops, mechanical autocorrect only | `examples/contract_cop.rb` | [round-11/07-bbatsov.md](round-11/07-bbatsov.md) |
+| 8 | José Valim | Telemetry bus — :telemetry on the hooks; runtime attach/detach, crash isolation | `examples/telemetry_bus.rb` | [round-11/08-josevalim.md](round-11/08-josevalim.md) |
+| 9 | Luca Guidi | Ports and adapters — the domain survives the migration, with a purity scan | `examples/ports_and_adapters.rb` | [round-11/09-jodosha.md](round-11/09-jodosha.md) |
+| 10 | Eileen Uchitelle | Tenant shards — N journals, N limits, one ignorant control plane | `examples/tenant_shards.rb` | [round-11/10-eileencodes.md](round-11/10-eileencodes.md) |
+
+### What round 11 surfaced
+
+1. **Fresh eyes found a fresh class of bug immediately**: headius's
+   bare-journal drill caught `Time#iso8601` used without requiring
+   "time" — a load-order bug nine rounds of fiber-world examples never
+   tripped, fixed in this round's release. New perspectives audit
+   different assumptions.
+2. **The runtime got audited from below**: exact allocation counts
+   (37 objects per happy validation, 11x on rejection, zero GC runs
+   per plan), real-thread verdicts (journal and registry hold on real
+   locks; the windowed limiter coasts on the GVL), and Little's Law
+   turning the journal into a capacity plan whose binding constraint
+   was outside the meeting.
+3. **The teaching seat is real**: the kata (assertions before tasks),
+   the flog score (calibrated so idiom is free), the confident/timid
+   contrast (nil-tolerance launders errors), and the cop (autocorrect
+   only what has one right answer) are all *pedagogy tools* built on
+   the same reflection surfaces the ops tools use.
+4. **The architecture seat approves the seams**: the duck-typed
+   `agent:` seam let a pure domain walk in without signing tenancy
+   (ports-and-adapters with a purity scan), and ten lines bridged the
+   hooks to a :telemetry-style bus with crash isolation - frameworks
+   orchestrate, domains decide, handlers come and go.
+5. **Next asks**: a Mutex around the windowed limiter's stamp
+   bookkeeping so the answer is the same on every Ruby (headius);
+   `remove_task`/rewire so refactoring a plan doesn't mean demolition
+   (Katrina, with the kata as acceptance test); and a multiprocess
+   journal drill to certify the flock claim (headius, follow-up).
+
 ### What round 6 surfaced
 
 1. **Plans became artifacts**: narratable (tour), serializable with an
