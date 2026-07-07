@@ -54,6 +54,33 @@ module Agentic
     # @return [Integer] Acquisitions currently inside the ceiling
     attr_reader :in_flight
 
+    # Non-blocking admission: runs the block (if given) when a slot or
+    # window stamp is available RIGHT NOW, and answers false otherwise
+    # instead of waiting. acquire is for work that must happen; this is
+    # for work that should only happen if capacity is to spare - retry
+    # budgets, best-effort refreshes, opportunistic prefetch. A budget
+    # wants to say no, not to make you wait for a yes.
+    # @yield The admitted work, if any
+    # @return [Boolean] True when admitted (block, if given, was run)
+    def try_acquire(&block)
+      if @per
+        now = clock
+        @stamps.reject! { |stamp| stamp <= now - @per }
+        return false if @stamps.size >= @ceiling
+
+        @stamps << now
+        track { block&.call }
+        return true
+      end
+
+      return false if @semaphore.blocking?
+
+      @semaphore.acquire do
+        track { block&.call }
+      end
+      true
+    end
+
     # Changes the ceiling while the limiter is live - the seam adaptive
     # throttles steer. Raising a concurrency ceiling resumes waiters
     # immediately; lowering it lets in-flight work finish and admits

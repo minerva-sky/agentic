@@ -62,9 +62,10 @@ RSpec.describe "round 10 framework features" do
         rules: {odd: {relation: :sum_gte, fields: [:a], limit: 1}}
       )
 
+      # Since round 11 this fails even earlier - at validator construction
       expect {
-        Agentic::CapabilityValidator.new(bad).validate_inputs!(a: 1)
-      }.to raise_error(ArgumentError, /unknown rule relation :sum_gte/)
+        Agentic::CapabilityValidator.new(bad)
+      }.to raise_error(ArgumentError, /unknown relation :sum_gte/)
     end
 
     it "projects expressible relations into draft-07 keywords and x-agentic-rules" do

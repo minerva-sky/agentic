@@ -219,19 +219,33 @@ module Agentic
       false
     end
 
-    # Cancels execution of the entire plan
+    # Cancels execution of the entire plan - promptly. Queued work is
+    # marked canceled before the scheduler can start it, and every
+    # scheduled fiber (waiting for a slot or mid-flight) is stopped.
+    # Stopping the fibers rather than the reactor keeps the promise
+    # when execute_plan has joined a host reactor: in-flight agents
+    # stop where they are instead of running to completion and billing
+    # for results nobody will read.
     # @return [void]
     def cancel_plan
-      # Stop the reactor to cancel all async tasks
-      @reactor&.stop
-
-      # Move all pending and in_progress tasks to canceled state
-      @execution_state[:pending].each do |task_id|
+      # ALL bookkeeping first: stopping a fiber releases its concurrency
+      # slot and synchronously admits the next waiter - which must
+      # already read as canceled by then, or it will start (and bill)
+      # in the instant before its own stop arrives
+      @execution_state[:pending].dup.each do |task_id|
         transition_task_state(task_id, from: :pending, to: :canceled)
       end
-
-      @execution_state[:in_progress].each do |task_id|
+      stopping = @execution_state[:in_progress].dup
+      stopping.each do |task_id|
         transition_task_state(task_id, from: :in_progress, to: :canceled)
+      end
+
+      # Then stop every scheduled fiber. Never stop the calling fiber
+      # itself - a lifecycle hook may cancel the plan from inside a task
+      current = Async::Task.current?
+      stopping.each do |task_id|
+        fiber = @async_tasks[task_id]
+        fiber&.stop unless fiber.nil? || fiber == current
       end
     end
 
@@ -406,6 +420,10 @@ module Agentic
       scheduled_at = Time.now
       async_task = barrier.async do
         semaphore.acquire do
+          # A task canceled while waiting for its slot must not run -
+          # its fiber may win the slot race against its own stop
+          next unless @execution_state[:in_progress].include?(task_id)
+
           @lifecycle_hooks[:task_slot_acquired].call(
             task_id: task_id,
             task: task,
