@@ -2,6 +2,7 @@
 
 require "json"
 require "fileutils"
+require "time" # Time#iso8601 - do not depend on another file loading it first
 
 module Agentic
   # Durable, append-only journal of plan execution.
