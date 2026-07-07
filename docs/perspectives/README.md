@@ -106,6 +106,48 @@ more experiments followed:
 | 9 | Sandi Metz | Three shapes — chain vs star vs staged, chosen by evidence | `examples/three_shapes.rb` | [round-5/09-sandimetz.md](round-5/09-sandimetz.md) |
 | 10 | Andrew Kane | Examples index — self-maintaining signage for a 40-example gallery | `examples/examples_index.rb` | [round-5/10-ankane.md](round-5/10-ankane.md) |
 
+## Round 6 — plans as artifacts
+
+The round-5 asks shipped as a release (`graph[:order]` via Kahn's
+algorithm, labeled `graph[:edges]`, structured rules with
+`fields:`/`rule_violations`, `backoff_jitter: :full`, and windowed
+rate limits `RateLimit.new(30, per: 60)`), four examples were
+modernized onto them, and ten more experiments followed:
+
+| # | Persona | Built on the round-6 release | Run it | Field notes |
+|---|---------|------------------------------|--------|-------------|
+| 1 | Matz | Plan tour — the plan narrated as prose, before it runs | `examples/plan_tour.rb` | [round-6/01-matz.md](round-6/01-matz.md) |
+| 2 | DHH | Deploy train — the unhappy path as the product | `examples/deploy_train.rb` | [round-6/02-dhh.md](round-6/02-dhh.md) |
+| 3 | Aaron Patterson | Perf diff — did the PR make it worse, path-qualified | `examples/perf_diff.rb` | [round-6/03-tenderlove.md](round-6/03-tenderlove.md) |
+| 4 | Xavier Noria | Plan round-trip — graph → JSON → graph with isomorphism proof | `examples/plan_roundtrip.rb` | [round-6/04-fxn.md](round-6/04-fxn.md) |
+| 5 | Samuel Williams | Quota keeper — ceiling physics vs window physics, 61ms vs 601ms | `examples/quota_keeper.rb` | [round-6/05-ioquatix.md](round-6/05-ioquatix.md) |
+| 6 | Jeremy Evans | Rule prober — field declarations audited; a lying rule caught | `examples/rule_prober.rb` | [round-6/06-jeremyevans.md](round-6/06-jeremyevans.md) |
+| 7 | Piotr Solnica | API reference — docs from the contracts that validate the calls | `examples/api_reference.rb` | [round-6/07-solnic.md](round-6/07-solnic.md) |
+| 8 | Mike Perham | Jitter shootout — none/equal/full on one scoreboard: 40/19/13 | `examples/jitter_shootout.rb` | [round-6/08-mperham.md](round-6/08-mperham.md) |
+| 9 | Sandi Metz | Refactor receipts — the god join dissolved in priced steps | `examples/refactor_receipts.rb` | [round-6/09-sandimetz.md](round-6/09-sandimetz.md) |
+| 10 | Andrew Kane | Cost estimator — the plan priced before it runs, reconciled after | `examples/cost_estimator.rb` | [round-6/10-ankane.md](round-6/10-ankane.md) |
+
+### What round 6 surfaced
+
+1. **Plans became artifacts**: narratable (tour), serializable with an
+   isomorphism proof (round-trip), priceable before execution (cost
+   gate), and diffable across runs (perf diff). The graph accessor's
+   second round turned topology into a first-class document.
+2. **Declarations became testable claims**: rule `fields:` shipped as
+   UI plumbing and immediately became an auditable specification — the
+   prober caught a seeded lying rule that would have misdirected form
+   highlighting.
+3. **One contract, five behaviors**: validate, reject, explain,
+   document, audit — the same declaration now feeds all five.
+4. **Honest prose corrections**: two personas (DHH, Sandi) had their
+   example copy corrected by their own measurements — the tools are
+   now good enough to disagree with their authors.
+5. **Next asks**: composing a windowed and a concurrency limiter as
+   one object, journal-fed baselines for the perf diff, OpenAPI
+   emission from contracts, custom RNG injection for retry policies,
+   and a `graph`-level depth/fan-in stats helper (Sandi's third
+   strike).
+
 ### What round 5 surfaced
 
 1. **The graph accessor compounded immediately**: one round old, it fed

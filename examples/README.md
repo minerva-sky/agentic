@@ -6,13 +6,16 @@ not this file.
 
 | Example | What it shows |
 |---------|---------------|
+| `api_reference.rb` | The API Reference Generator: walk the registry, emit reference docs for every capability - types, enums, bounds, policie... |
 | `burst_absorber.rb` | The Burst Absorber: three waves of requests slam a credential with a ceiling of 3 (Agentic::RateLimit - this round's rel... |
 | `changelog_scout.rb` | The Changelog Scout: reads real git history, classifies every commit through a contract-checked capability, and drafts t... |
 | `collaboration_tracer.rb` | The Collaboration Tracer: lifecycle hooks record every message the orchestrator sends and every reply that comes back, t... |
 | `command_bus.rb` | The Command Bus: every command is a composed capability with its OWN declared contract (new in this round - compositions... |
 | `contract_fuzzer.rb` | The Contract Fuzzer: for every registered capability, generate inputs that SHOULD pass its declared contract and mutatio... |
+| `cost_estimator.rb` | The Cost Estimator: price the plan BEFORE running it - per-task token estimates times a pricing table - gate on budget, ... |
 | `coupling_cartographer.rb` | The Coupling Cartographer: which files lean on which? Every file is surveyed for the constants it DEFINES and the consta... |
 | `critical_path.rb` | The Critical Path: after a run, combine the graph topology with measured durations to find the chain of tasks that deter... |
+| `deploy_train.rb` | The Deploy Train: lint -> test -> build -> canary -> ship, where a red gate stops the train and everything behind it rep... |
 | `doc_coverage.rb` | The Documentation Surveyor: measures YARD comment coverage for every public method in a lib/ tree. One survey task per f... |
 | `dungeon_crawl.rb` | The Dungeon Crawl: a quest is a plan, rooms are tasks, and doors are dependencies. The map is drawn from the orchestrato... |
 | `durable_batch.rb` | The Durable Batch: six billable "LLM calls" run under an ExecutionJournal. Mid-batch, the process dies for real - exit!,... |
@@ -25,17 +28,24 @@ not this file.
 | `graph_critic.rb` | The Graph Critic: reviews a plan's dependency structure BEFORE it runs, the way you'd review a class diagram. God tasks,... |
 | `haiku_agent.rb` | The three-line agent. Run me with no API key at all: |
 | `invariant_sentinel.rb` | The Invariant Sentinel: domain invariants checked after EVERY task, from a lifecycle hook. When a task leaves the world ... |
+| `jitter_shootout.rb` | The Jitter Shootout: none vs equal (+/-25%, the default) vs full (uniform over [0, delay], new this round) - same forty ... |
 | `kanban_board.rb` | The Kanban Board: a plan rendered as the three columns everyone actually understands - To Do, Doing, Done - reprinted at... |
 | `knee_finder.rb` | The Knee Finder: runs the same plan at increasing concurrency limits, measures wall time and total queue-wait via the ta... |
 | `latency_lab.rb` | The Latency Lab: 20 simulated LLM calls (200ms of IO each) executed through the orchestrator at different concurrency li... |
 | `live_dashboard.rb` | The Live Dashboard: lifecycle hooks publish events onto an Async::Queue; a consumer task IN THE SAME REACTOR renders the... |
 | `namespace_cartographer.rb` | The Namespace Cartographer: maps a gem's constant tree and audits every file against the constant Zeitwerk expects it to... |
+| `perf_diff.rb` | The Perf Diff: run the plan before and after a change, diff per-task durations, and flag regressions - with the one qual... |
 | `performance_detective.rb` | The Performance Detective: one task per Ruby file in lib/, fanned out through the orchestrator, each dissecting a file f... |
 | `plan_diagram.rb` | The Plan Diagrammer: any orchestrator's graph, emitted as Mermaid - paste it into a README, GitHub renders it, and the d... |
 | `plan_gantt.rb` | The Plan Gantt: lifecycle hooks timestamp every task, then the run is rendered as an ASCII timeline - where your wall cl... |
+| `plan_roundtrip.rb` | The Round Trip: serialize a plan's graph to JSON, rebuild a fresh orchestrator from the JSON, and prove the rebuilt topo... |
+| `plan_tour.rb` | The Plan Tour: hand any orchestrator to the guide and it narrates the plan as prose - first this, then that, meanwhile t... |
+| `quota_keeper.rb` | The Quota Keeper: the same 20 requests through two different laws. A concurrency ceiling ("3 in flight") models connecti... |
 | `readme_verifier.rb` | The README Verifier: every ruby code fence in the README is a promise. This extracts them all, syntax-checks each with P... |
+| `refactor_receipts.rb` | Refactor Receipts: the god-join plan from the graph critic, improved in two small steps - with a receipt after each one.... |
 | `refactoring_dojo.rb` | The Refactoring Dojo: a student submits a method, three critic agents review it from three distinct perspectives, and th... |
 | `renga_circle.rb` | A renga circle: three poet agents compose a linked-verse poem, each verse responding to the one before it. The dependenc... |
+| `rule_prober.rb` | The Rule Prober: structured rules declare which fields they read - so now that claim can be AUDITED. For each rule, pert... |
 | `schema_advisor.rb` | The Schema Advisor: give it a schema and a query log, get back the advisories a careful DBA would write - each rule its ... |
 | `setup_doctor.rb` | The Setup Doctor: every onboarding wiki page is a bug. This runs the checks a README asks a new hire to do by hand - rub... |
 | `shared_rate_limit.rb` | The Shared Rate Limit: two plans run concurrently in one reactor, but the API key they share allows only 3 requests in f... |
