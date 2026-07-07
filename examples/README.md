@@ -9,6 +9,7 @@ not this file.
 | `adaptive_throttle.rb` | The Adaptive Throttle: nobody TELLS you an upstream's capacity - you discover it. An AIMD controller (TCP's algorithm) p... |
 | `allocation_audit.rb` | The Allocation Audit: every object is a promissory note the GC collects on later. This audit counts exactly what each fr... |
 | `api_reference.rb` | The API Reference Generator: walk the registry, emit reference docs for every capability - types, enums, bounds, policie... |
+| `api_surface.rb` | The API Surface Census: your public API is not what you documented - it's every public method a user CAN call, because t... |
 | `backoff_conformance.rb` | Backoff Conformance: every strategy x jitter combination, a thousand draws each through an injected seeded RNG, checked ... |
 | `batch_import.rb` | The Batch Import: 500 rows of the kind of data people actually upload - typos, header drift, impossible combinations - r... |
 | `burst_absorber.rb` | The Burst Absorber: three waves of requests slam a credential with a ceiling of 3 (Agentic::RateLimit - this round's rel... |
@@ -37,6 +38,7 @@ not this file.
 | `durable_batch.rb` | The Durable Batch: six billable "LLM calls" run under an ExecutionJournal. Mid-batch, the process dies for real - exit!,... |
 | `error_taxonomy_drill.rb` | The Error Taxonomy Drill: three tasks fail three different ways - a rate limit (retryable, says the error itself), an au... |
 | `eval_scorers.rb` | Eval Scorers: the same eval set scored four ways - exact match, keyword containment, numeric tolerance, and a judge rubr... |
+| `event_prof.rb` | EventProf for Plans: TestProf taught test suites to answer "where does the time GO?" by group, not by file. Same questio... |
 | `exquisite_corpse.rb` | The Exquisite Corpse: three artists each draw one part of a creature without seeing the others' work; the assembler rece... |
 | `failure_weather.rb` | The Failure Weather Report: a journal of three days, read as a forecast. Retryable failures are WEATHER - showers that p... |
 | `fair_share.rb` | Fair Share: two tenants, one upstream. The global ceiling is fair to REQUESTS - first come, first served - but tenant A ... |
@@ -44,12 +46,15 @@ not this file.
 | `form_errors.rb` | The 422 Generator: turn a ValidationError into the API error document your frontend actually wants - message, allowed va... |
 | `freight_rules.rb` | The Freight Desk: a quoting capability whose tariff book is written as cross-field contract rules (new this round). Per-... |
 | `gem_scout.rb` | Gem Scout: describe what you need, get a ranked shortlist of gems. Search and scoring are separate capabilities; the sea... |
+| `gentle_deprecations.rb` | Gentle Deprecations: the hard part of maintaining a framework isn't adding the better name - it's the two years of not b... |
 | `graph_critic.rb` | The Graph Critic: reviews a plan's dependency structure BEFORE it runs, the way you'd review a class diagram. God tasks,... |
 | `graph_invariants.rb` | The Graph Invariants Prover: the reflection API makes promises - order respects edges, roots have no dependencies, depth... |
 | `graph_style.rb` | The Graph Style Guide: RuboCop for plans. Cops with thresholds run against any orchestrator's graph - depth, fan-in, orp... |
 | `graph_to_specs.rb` | Graph to Specs: the plan's structure dictates its test plan - roots need fixture cases, joins need one case per missing ... |
 | `haiku_agent.rb` | The three-line agent. Run me with no API key at all: |
 | `hill_chart.rb` | The Hill Chart: Basecamp's answer to "how's it going?" - work climbs the hill while it's still uncertain (queued, waitin... |
+| `honest_doubles.rb` | Honest Doubles: every fake LLM in every agent test suite is lying a little - the question is whether anyone checks. The ... |
+| `hostile_inputs.rb` | Hostile Inputs: a parser's real spec is what it does with input nobody intended. The journal's replay parses a file that... |
 | `impl_shootout.rb` | The Implementation Shootout: two candidates for the same capability, one eval set, and a verdict computed instead of vib... |
 | `incident_report.rb` | The Incident Report: a nightly batch dies at 3am. The on-call's first three questions - what ran? what broke? what do I ... |
 | `invariant_sentinel.rb` | The Invariant Sentinel: domain invariants checked after EVERY task, from a lifecycle hook. When a task leaves the world ... |
@@ -61,11 +66,13 @@ not this file.
 | `latency_lab.rb` | The Latency Lab: 20 simulated LLM calls (200ms of IO each) executed through the orchestrator at different concurrency li... |
 | `live_dashboard.rb` | The Live Dashboard: lifecycle hooks publish events onto an Async::Queue; a consumer task IN THE SAME REACTOR renders the... |
 | `namespace_cartographer.rb` | The Namespace Cartographer: maps a gem's constant tree and audits every file against the constant Zeitwerk expects it to... |
+| `onboarding_trail.rb` | The Onboarding Trail: a codebase is a place people live, and new teammates don't need a map of every pipe - they need a ... |
 | `one_file_api.rb` | The One-File API: an endpoint is a contract wearing HTTP. Declare the capability once and the rest is derived - the 422s... |
 | `perf_diff.rb` | The Perf Diff: run the plan before and after a change, diff per-task durations, and flag regressions - with the one qual... |
 | `perf_history.rb` | Perf History: last release's run left a journal; this release's run is compared against it. No synthetic baseline, no sa... |
 | `performance_detective.rb` | The Performance Detective: one task per Ruby file in lib/, fanned out through the orchestrator, each dissecting a file f... |
 | `plan_diagram.rb` | The Plan Diagrammer: any orchestrator's graph, emitted as Mermaid - paste it into a README, GitHub renders it, and the d... |
+| `plan_dsl.rb` | The Plan DSL: Sinatra's whole argument was that an API is a user interface, and a user interface should read like what i... |
 | `plan_flog.rb` | Plan Flog: flog gives every Ruby method a pain score; this gives every plan one. Fan-in hurts (joins hide coupling), dep... |
 | `plan_forest.rb` | The Plan Forest: your graph drawn as a forest - roots at the soil, leaves in the canopy, every task planted at its depth... |
 | `plan_fortune.rb` | The Plan Fortune Teller: reads your graph's palm - depth, fan-in, roots, breadth - and tells its fortune. Every fortune ... |
@@ -77,6 +84,7 @@ not this file.
 | `plan_tour.rb` | The Plan Tour: hand any orchestrator to the guide and it narrates the plan as prose - first this, then that, meanwhile t... |
 | `polite_form.rb` | The Polite Form: a contract usually speaks AFTER you fail - a 422, a stack of violations. This assistant makes it speak ... |
 | `ports_and_adapters.rb` | Ports and Adapters: the domain is the part of your app that would survive a framework migration - IF you kept it clean. ... |
+| `process_drill.rb` | The Process Drill: threads share a Mutex; PROCESSES share nothing but the file. The journal claims flock+fsync, which is... |
 | `projection_agreement.rb` | The Projection Agreement Prover: relation rules now render twice - the validator enforces them in Ruby, and to_json_sche... |
 | `quota_keeper.rb` | The Quota Keeper: the same 20 requests through two different laws. A concurrency ceiling ("3 in flight") models connecti... |
 | `readme_verifier.rb` | The README Verifier: every ruby code fence in the README is a promise. This extracts them all, syntax-checks each with P... |
@@ -85,11 +93,13 @@ not this file.
 | `relation_diff.rb` | The Relation Diff: round 8's semver advisor classified declaration changes but had to shrug at rules - lambdas can't be ... |
 | `relation_prober.rb` | The Relation Prober: relation-typed rules are new, and new predicates deserve hostility. Each relation is probed with ed... |
 | `renga_circle.rb` | A renga circle: three poet agents compose a linked-verse poem, each verse responding to the one before it. The dependenc... |
+| `require_cost.rb` | The Require Cost Report: `require` is a purchase - memory, objects, and boot time, paid again by every process you fork ... |
 | `resize_torture.rb` | The Resize Torture Test: a feature that changes a limiter's ceiling while fibers are waiting on it had better say exactl... |
 | `retry_budget.rb` | The Retry Budget: a retry storm is a self-inflicted DDoS - every job politely retrying 3x turns one outage into four. Re... |
 | `rule_prober.rb` | The Rule Prober: structured rules declare which fields they read - so now that claim can be AUDITED. For each rule, pert... |
 | `rule_shapes.rb` | Rule Shapes: the same policy - "express shipments need a customs code" - written three ways: a lambda, a structured chec... |
 | `schema_advisor.rb` | The Schema Advisor: give it a schema and a query log, get back the advisories a careful DBA would write - each rule its ... |
+| `self_correcting_output.rb` | Self-Correcting Output: the pattern that makes LLM components shippable. The model's output is validated against the cap... |
 | `setup_doctor.rb` | The Setup Doctor: every onboarding wiki page is a bug. This runs the checks a README asks a new hire to do by hand - rub... |
 | `shared_rate_limit.rb` | The Shared Rate Limit: two plans run concurrently in one reactor, but the API key they share allows only 3 requests in f... |
 | `stampede_sim.rb` | The Stampede Simulator: twenty workers hit a hiccuping upstream, all fail at once, all retry. With jitter OFF they come ... |
@@ -106,3 +116,4 @@ not this file.
 | `typed_pipeline.rb` | A typed ETL pipeline: extract -> transform -> load, each stage a capability with a declared contract, composed into one ... |
 | `variance_detective.rb` | The Variance Detective: ten journaled runs of the same plan, then a hunt for the task whose p90/p50 ratio betrays it. Av... |
 | `weekly_checkin.rb` | The Weekly Check-in: "what did you work on this week?" answered by the journal instead of by memory. Runs a few days of ... |
+| `write_path_profile.rb` | The Write Path Profile: everyone's first instinct about a slow journal is "switch JSON libraries". Before holding that o... |

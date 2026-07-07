@@ -370,6 +370,56 @@ prolific Rubyists** took over the experiments:
    (Katrina, with the kata as acceptance test); and a multiprocess
    journal drill to certify the flock claim (headius, follow-up).
 
+## Round 12 — a third cast, and the bill arrives itemized
+
+The round-11 asks shipped as a release: the windowed limiter's stamp
+bookkeeping holds a real Mutex (the threads drill now certifies
+instead of observes), `remove_task`/`rewire_task` make plan
+refactoring surgical (the kata refactors in place), and the process
+drill certifies the flock claim across four forked writers. Then a
+third cast of ten prolific Rubyists took the bench:
+
+| # | Persona | Built with the gem | Run it | Field notes |
+|---|---------|--------------------|--------|-------------|
+| 1 | Yehuda Katz (wycats) | API surface census — 112 methods, 58 earning rent, 54 on loan | `examples/api_surface.rb` | [round-12/01-wycats.md](round-12/01-wycats.md) |
+| 2 | Sarah Mei | Onboarding trail — a house tour computed from who-mentions-whom | `examples/onboarding_trail.rb` | [round-12/02-sarahmei.md](round-12/02-sarahmei.md) |
+| 3 | Richard Schneeman | Require cost report — the bill lands at first touch, not at require | `examples/require_cost.rb` | [round-12/03-schneems.md](round-12/03-schneems.md) |
+| 4 | Vladimir Dementyev | EventProf for plans — task-seconds by tag; llm owns 78% | `examples/event_prof.rb` | [round-12/04-palkan.md](round-12/04-palkan.md) |
+| 5 | Mike Dalessio | Hostile inputs — a torn tail denies ALL recovery; exit 1 until | `examples/hostile_inputs.rb` | [round-12/05-flavorjones.md](round-12/05-flavorjones.md) |
+| 6 | Justin Searls | Honest doubles — fakes show their papers at load time | `examples/honest_doubles.rb` | [round-12/06-searls.md](round-12/06-searls.md) |
+| 7 | Konstantin Haase | Plan DSL — thirty lines of Sinatra over the public API | `examples/plan_dsl.rb` | [round-12/07-rkh.md](round-12/07-rkh.md) |
+| 8 | Obie Fernandez | Self-correcting output — violations become the correction prompt | `examples/self_correcting_output.rb` | [round-12/08-obie.md](round-12/08-obie.md) |
+| 9 | Rafael França | Gentle deprecations — warn once per site, tally, strict on schedule | `examples/gentle_deprecations.rb` | [round-12/09-rafaelfranca.md](round-12/09-rafaelfranca.md) |
+| 10 | Jean Boussier (byroot) | Write path profile — JSON acquitted at 0.4%; the fsync IS the product | `examples/write_path_profile.rb` | [round-12/10-byroot.md](round-12/10-byroot.md) |
+
+### What round 12 surfaced
+
+1. **The stewardship seat spoke**: the census split 112 public
+   methods into earned API and accidental API; the deprecation shim
+   choreographed a rename across three releases; the DSL proved sugar
+   can stay entirely outside the engine. Three different answers to
+   "how does this gem grow old gracefully."
+2. **One real defect, found where parsers meet reality**: a torn
+   journal tail — the exact artifact of the crash the journal exists
+   for — crashes replay in the wrong error class and denies all
+   recovery (`hostile_inputs.rb` exits 1 as the acceptance test).
+3. **Costs arrived itemized**: require costs land at first constant
+   touch, not at require (Zeitwerk's deferral, priced); the journal
+   write is 99.6% fsync and 0.4% JSON, with group commit named as a
+   different promise rather than a faster one; plan time profiles by
+   tag with the barriers indicted, not the budget.
+4. **The AI-application seat matured**: the self-correcting output
+   loop showed the contract doubling as a correction-prompt
+   generator, and honest doubles put load-time verification at the
+   LLM boundary — patterns, not vibes.
+5. **Next asks**: tolerant journal replay — salvage whole lines,
+   report (don't raise on) a torn or mis-encoded tail
+   (`hostile_inputs.rb` is the acceptance test); an optional
+   `fsync_every: n` group-commit mode with its durability trade
+   named in the constructor (byroot); and consider a strict-shapes
+   replay mode for audit tools vs the tolerant recovery default
+   (flavorjones).
+
 ### What round 6 surfaced
 
 1. **Plans became artifacts**: narratable (tour), serializable with an
