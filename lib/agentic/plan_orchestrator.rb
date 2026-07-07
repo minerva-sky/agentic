@@ -94,6 +94,66 @@ module Agentic
       @execution_state[:pending].add(task_id)
     end
 
+    # Removes a pending task from the plan. Refactoring needs demolition
+    # to be surgical: only tasks that haven't run can leave, and a task
+    # that others depend on refuses to go (name the dependents, make the
+    # caller rewire them first - silent cascade deletes are how plans
+    # lose limbs).
+    # @param task [Task, String] The task (or its id) to remove
+    # @return [Task] The removed task
+    # @raise [ArgumentError] If unknown, already started, or depended upon
+    def remove_task(task)
+      task_id = task.respond_to?(:id) ? task.id : task
+      raise ArgumentError, "unknown task #{task_id}" unless @tasks.key?(task_id)
+      unless @execution_state[:pending].include?(task_id)
+        raise ArgumentError, "task #{task_id} has already started; only pending tasks can be removed"
+      end
+
+      dependents = @dependencies.select { |_, deps| deps.include?(task_id) }.keys
+      if dependents.any?
+        names = dependents.map { |id| @tasks[id].description }
+        raise ArgumentError, "cannot remove #{@tasks[task_id].description}: " \
+          "#{names.join(", ")} depend(s) on it - rewire them first"
+      end
+
+      @execution_state[:pending].delete(task_id)
+      @dependencies.delete(task_id)
+      @task_needs.delete(task_id)
+      @task_agents.delete(task_id)
+      @tasks.delete(task_id)
+    end
+
+    # Replaces a pending task's dependencies in place - the refactoring
+    # seam. Same shapes as add_task: positional dependencies, or needs:
+    # for named (labeled) ones.
+    # @param task [Task, String] The task (or its id) to rewire
+    # @param dependencies [Array<Task, String>] The new dependencies
+    # @param needs [Hash{Symbol=>Task,String}, nil] Named dependencies
+    # @return [void]
+    # @raise [ArgumentError] If unknown, already started, or wired to a
+    #   task that isn't in the plan
+    def rewire_task(task, dependencies = [], needs: nil)
+      task_id = task.respond_to?(:id) ? task.id : task
+      raise ArgumentError, "unknown task #{task_id}" unless @tasks.key?(task_id)
+      unless @execution_state[:pending].include?(task_id)
+        raise ArgumentError, "task #{task_id} has already started; only pending tasks can be rewired"
+      end
+
+      deps = Array(dependencies).map { |dep| dep.respond_to?(:id) ? dep.id : dep }
+      named = needs&.transform_values { |dep| dep.respond_to?(:id) ? dep.id : dep }
+      deps |= named.values if named
+
+      unknown = deps.reject { |dep| @tasks.key?(dep) }
+      raise ArgumentError, "cannot wire to unknown task(s) #{unknown.join(", ")}" if unknown.any?
+
+      @dependencies[task_id] = deps
+      if named
+        @task_needs[task_id] = named
+      else
+        @task_needs.delete(task_id)
+      end
+    end
+
     # A read-only snapshot of the plan's topology, for tools that render,
     # review, or analyze the graph without executing it
     # @return [Hash] :tasks (id => Task), :dependencies (id => [ids]),

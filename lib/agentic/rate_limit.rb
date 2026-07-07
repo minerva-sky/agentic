@@ -36,6 +36,10 @@ module Agentic
       @per = per
       @semaphore = Async::Semaphore.new(ceiling) unless per
       @stamps = []
+      # Windowed bookkeeping is check-then-act over shared state; a
+      # real Mutex makes the answer the same on every Ruby VM instead
+      # of relying on the GVL's scheduling habits
+      @window_mutex = Mutex.new
       @in_flight = 0
       @high_water = 0
     end
@@ -64,11 +68,13 @@ module Agentic
     # @return [Boolean] True when admitted (block, if given, was run)
     def try_acquire(&block)
       if @per
-        now = clock
-        @stamps.reject! { |stamp| stamp <= now - @per }
-        return false if @stamps.size >= @ceiling
+        admitted = @window_mutex.synchronize do
+          now = clock
+          @stamps.reject! { |stamp| stamp <= now - @per }
+          @stamps << now if @stamps.size < @ceiling
+        end
+        return false unless admitted
 
-        @stamps << now
         track { block&.call }
         return true
       end
@@ -151,17 +157,26 @@ module Agentic
     end
 
     # Rolling-window admission: wait until fewer than ceiling
-    # acquisitions have started within the last `per` seconds
+    # acquisitions have started within the last `per` seconds. The
+    # check-and-stamp is atomic under the mutex; only the sleep
+    # happens outside it.
     def windowed_acquire
       loop do
-        now = clock
-        @stamps.reject! { |stamp| stamp <= now - @per }
-        break if @stamps.size < @ceiling
+        wait = @window_mutex.synchronize do
+          now = clock
+          @stamps.reject! { |stamp| stamp <= now - @per }
+          if @stamps.size < @ceiling
+            @stamps << now
+            nil
+          else
+            @stamps.first + @per - now
+          end
+        end
+        break if wait.nil?
 
-        sleep(@stamps.first + @per - now)
+        sleep(wait)
       end
 
-      @stamps << clock
       track { yield }
     end
 

@@ -71,30 +71,24 @@ o.add_task(prices)
 o.add_task(merge, [parse, prices])
 report("bolt on a price feed (two sins)", check(o))
 
-# GREEN again: rebuild the seam properly. A plan can't remove tasks
-# (round-12 ask!), so the kata rebuilds - which is itself the lesson:
-# keep plans cheap to rebuild
-o = Agentic::PlanOrchestrator.new
-ingest = task_named("ingest")
-parse = task_named("parse")
-prices = task_named("prices")
-merge = task_named("merge")
+# GREEN again: REFACTOR IN PLACE - the round-12 release gave plans
+# rewire_task, so fixing the shape no longer means demolishing it.
+# Route the price feed through the one door, and give the merge its
+# labels; the assertions stand guard the whole time.
+o.rewire_task(prices, [ingest])
+o.rewire_task(merge, needs: {parsed: parse, prices: prices})
 report_task = task_named("report")
-o.add_task(ingest)
-o.add_task(parse, [ingest])
-o.add_task(prices, [ingest]) # both feeds enter through ONE door
-o.add_task(merge, needs: {parsed: parse, prices: prices})
 o.add_task(report_task, [merge])
 final = check(o)
-report("rebuild: one entry, labeled merge", final)
+report("refactor in place: rewire, relabel", final)
 
 reds = final.count { |_, ok| !ok }
 puts "  the kata's shape is the point: the assertions existed before"
 puts "  the plan did, every addition was the smallest thing that moved"
 puts "  a line, and the two deliberate sins were CAUGHT and NAMED by"
 puts "  tests written when nobody was defensive about the design yet."
-puts "  notice the refactor step required rebuilding the orchestrator -"
-puts "  plans are add-only today. filed as the round-12 ask: remove_task"
-puts "  (or a rewire seam), so refactoring a plan doesn't mean"
-puts "  reconstructing it. #{(reds == 0) ? "kata complete, all green." : "KATA INCOMPLETE."}"
+puts "  and the refactor was a real refactor this time: rewire_task"
+puts "  (round 12, this kata's own ask) changed the plan's shape without"
+puts "  demolishing its identity - red, green, REFACTOR, with all three"
+puts "  words meaning what they say. #{(reds == 0) ? "kata complete, all green." : "KATA INCOMPLETE."}"
 exit((reds == 0) ? 0 : 1)

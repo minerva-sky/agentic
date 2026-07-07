@@ -69,31 +69,25 @@ puts format("    %d registrations lost - %s", missing, missing.zero? ? "registry
 puts
 
 # --- drill 3: the windowed limiter's check-then-act ------------------------------
-# try_acquire reads @stamps.size then appends - two steps, no mutex.
-# Under the GVL the window between them is narrow; on JRuby it is a
-# freeway. The drill hammers it and reports what it saw - honestly.
+# In round 11 this bookkeeping had no mutex and the drill called it
+# "luck wearing a lab coat". The round-12 release put a real Mutex
+# around the stamp dance, so the drill now ASSERTS what it could
+# previously only observe.
 limit = Agentic::RateLimit.new(50, per: 60)
 admitted = THREADS.times.map {
   Thread.new { 200.times.count { limit.try_acquire } }
 }.map(&:value).sum
 
+failures += 1 if admitted != 50
 puts "  drill 3 - windowed try_acquire, #{THREADS} threads x 200 attempts (ceiling 50):"
-if admitted <= 50
-  puts "    admitted #{admitted}/50 - no over-admission OBSERVED. on this VM the"
-  puts "    GVL serializes the check-then-act; that is a bodyguard, not a"
-  puts "    guarantee. the same code on JRuby runs both steps truly in"
-  puts "    parallel, and unsynchronized size-check-then-append is exactly"
-  puts "    the shape that over-admits there."
-else
-  puts "    admitted #{admitted}/50 - OVER-ADMISSION, caught live. no JRuby needed;"
-  puts "    the preemption gods were simply feeling honest today."
-end
+puts format("    admitted %d/50 - %s", admitted,
+  (admitted == 50) ? "the stamp bookkeeping holds a real Mutex now" : "OVER-ADMISSION - the lock is gone")
 puts
-puts "  the journal and registry hold under real threads because they"
-puts "  paid for real locks (a Mutex, flock, fsync). the limiter's"
-puts "  windowed bookkeeping hasn't paid yet - it works because MRI's"
-puts "  scheduler rarely preempts a two-step dance, which is luck"
-puts "  wearing a lab coat. filed as the round-12 ask: a Mutex around"
-puts "  the stamp bookkeeping, so the answer is the same on every Ruby."
+puts "  all three structures now hold under real threads for the right"
+puts "  reason: real locks (two Mutexes, flock, fsync), not scheduling"
+puts "  luck. this drill went from characterization to CERTIFICATION"
+puts "  when the round-12 release paid the limiter's lock debt - the"
+puts "  answer is now the same on every Ruby, which is the only kind"
+puts "  of thread-safety worth writing in a README."
 
 exit(failures.zero? ? 0 : 1)
