@@ -420,6 +420,57 @@ third cast of ten prolific Rubyists took the bench:
    replay mode for audit tools vs the tolerant recovery default
    (flavorjones).
 
+## Round 13 — a fourth cast, and the docs go on trial
+
+The round-12 asks shipped as a release: journal replay is
+tolerant-by-default (whole lines salvaged, damage reported with line
+and reason on `state.damage`), a strict mode raises
+`JournalDamagedError` for audit tools, and `fsync_every:` makes group
+commit an explicit constructor choice with its durability trade
+named. The hostile-inputs probe flipped green; the write-path profile
+benches the real knob. Then a fourth cast of ten took the bench:
+
+| # | Persona | Built with the gem | Run it | Field notes |
+|---|---------|--------------------|--------|-------------|
+| 1 | Piotr Murach | TTY status board — badge, gauge, tree, frame, composed | `examples/tty_status.rb` | [round-13/01-piotrmurach.md](round-13/01-piotrmurach.md) |
+| 2 | John Nunemaker | Feature flags — the experimental step is a plan shape, not an if | `examples/feature_flags.rb` | [round-13/02-jnunemaker.md](round-13/02-jnunemaker.md) |
+| 3 | Akira Matsuda | Journal tail pager — page 1 costs 16KB of a 2.5MB file | `examples/journal_tail.rb` | [round-13/03-amatsuda.md](round-13/03-amatsuda.md) |
+| 4 | David Bryant Copeland | CLI contract — four channels, EX_USAGE distinct from failure | `examples/cli_contract.rb` | [round-13/04-davetron5000.md](round-13/04-davetron5000.md) |
+| 5 | Hiroshi Shibata | Stdlib census — logger and cgi caught before the 3.5 wave | `examples/stdlib_census.rb` | [round-13/05-hsbt.md](round-13/05-hsbt.md) |
+| 6 | Noel Rappin | Money discipline — integer cents as a tripwire type | `examples/money_discipline.rb` | [round-13/06-noelrap.md](round-13/06-noelrap.md) |
+| 7 | Tom Stuart | Plans as automata — completion proved total by exhaustion | `examples/plans_as_automata.rb` | [round-13/07-tomstuart.md](round-13/07-tomstuart.md) |
+| 8 | Chris Oliver | Job adapter — retry_on/discard_on in forty lines | `examples/job_adapter.rb` | [round-13/08-excid3.md](round-13/08-excid3.md) |
+| 9 | Kasper Timm Hansen | API riffs — three shapes for fsync_every, judged at the call site | `examples/api_riffs.rb` | [round-13/09-kaspth.md](round-13/09-kaspth.md) |
+| 10 | Steve Klabnik | Doctest runner — 11 of 30 documented examples are alive | `examples/doctest_runner.rb` | [round-13/10-steveklabnik.md](round-13/10-steveklabnik.md) |
+
+### What round 13 surfaced
+
+1. **Two more live hazards fixed in-round**: the stdlib census caught
+   `logger` (bundled-gem promotion in Ruby 3.5) and `cgi` (trimmed in
+   3.5) required-but-undeclared — both now in the gemspec with
+   reasons. Same law as round 11's "time" bug: a transitive require
+   is a loan, and rubies refinance.
+2. **The docs went on trial and lost**: the doctest runner executed
+   all 30 documented examples (YARD @example blocks + README fences)
+   in sandboxes — 11 run, 19 are dead from missing setup or API
+   drift. Dead docs cluster around dead-ish code corners.
+3. **The release's own features were immediately load-bearing**:
+   `rewire_task` spliced flag-gated steps (Nunemaker), `fsync_every`
+   made the pager's 20k-event fixture affordable and got its API
+   shape riffed and vindicated (kaspth), and `hopeless?` backstopped
+   `discard_on` in the job adapter.
+4. **The theory seat earned its keep**: enumerating the diamond's
+   six-state space proves completion totally rather than sampling
+   it, and exhibits the cycle as an empty machine — giving precise
+   content to two earlier rounds' cycle intuitions. Know which
+   regime you're in: enumeration for small machines, invariant
+   provers past forty tasks.
+5. **Next asks**: runnable-or-annotated docs — every README fence
+   and @example either executes in CI via the doctest runner or
+   carries a deliberate "illustrative" marker (Klabnik); and revive
+   or retire the learning-system corner whose examples all died with
+   LoadErrors (the census-adjacent smell).
+
 ### What round 6 surfaced
 
 1. **Plans became artifacts**: narratable (tour), serializable with an
