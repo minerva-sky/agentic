@@ -148,12 +148,18 @@ module Agentic
 
     private
 
+    # Counter updates share the window mutex so in_flight/high_water
+    # stay truthful under real threads too; the yielded work itself
+    # runs OUTSIDE the lock (holding it there would serialize all
+    # windowed work, which is the opposite of a rate limit)
     def track
-      @in_flight += 1
-      @high_water = [@high_water, @in_flight].max
+      @window_mutex.synchronize do
+        @in_flight += 1
+        @high_water = [@high_water, @in_flight].max
+      end
       yield
     ensure
-      @in_flight -= 1
+      @window_mutex.synchronize { @in_flight -= 1 }
     end
 
     # Rolling-window admission: wait until fewer than ceiling
