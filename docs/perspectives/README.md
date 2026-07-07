@@ -524,6 +524,72 @@ seam the journal uses. Then a fifth cast took the bench:
    fiber-vs-thread safety guarantees per public method as behavior
    specs, not just drills (eregon).
 
+## Round 15 — the closing release
+
+The final round delivers the round-14 asks and closes the loop with
+no new asks outstanding:
+
+- **Did-you-mean became infrastructure** (`Agentic::Suggestions`): a
+  conservative Levenshtein engine threaded into the framework's own
+  errors. `ValidationError` now diagnoses renamed keys from
+  missing-plus-similar-extra ("You sent :weight_kilo - did you mean
+  :weight_kg?", in the message and as structured `hints`), and the
+  rewire/remove errors suggest close task names. The engine stays
+  silent past a length-scaled threshold - a wrong suggestion is worse
+  than none. `did_you_mean.rb` flipped from retrofit to native
+  demonstration.
+- **The concurrency contract is pinned, not just drilled**:
+  `spec/agentic/concurrency_contract_spec.rb` promises per-method
+  guarantees (journal writes thread-safe and cross-process safe,
+  windowed limiter thread-safe, concurrency-mode limiter
+  fiber-scoped, registry thread-safe), and the methods themselves
+  carry `@note Concurrency contract:` documentation.
+
+Suite at 610 examples, 0 failures; 131 runnable example programs;
+every doc example runs or says why it doesn't.
+
+## The series, closed out
+
+Fifteen rounds. Fifty personas across five casts. Thirteen releases,
+each built from the previous round's in-character field notes. What
+the experiment demonstrated:
+
+1. **The loop worked.** Personas building *with* the gem generated
+   asks; shipping the asks made the next builds possible; the new
+   builds found the next seams. Features that emerged this way -
+   the graph API, the journal's percentiles and tolerant replay,
+   relation rules, resize/try_acquire, remove/rewire, suggestions -
+   all arrived pre-validated by a consumer that already existed.
+2. **Examples are a defect detector.** The builds surfaced real bugs
+   the suite never touched: a truncated test run, a scheduler
+   deadlock, canceled plans that billed anyway, relation rules
+   crashing in the wrong error class, a torn journal tail denying
+   all recovery, six files using stdlib without requiring it, a
+   history store double-counting itself, and a public API calling a
+   method that never existed. Every one was found by *using* the
+   thing, and fixed with the finding example as the acceptance test.
+3. **Declarations compound.** The single biggest return came from
+   making things data: contract declarations bought validation,
+   docs, schemas, fixtures, semver, RBS, 422s, polite forms, and a
+   resolver; relation rules bought enforcement, generation,
+   projection, and diffing; the graph bought drawing, testing,
+   merging, linting, and flogging. Code keeps secrets; data makes
+   friends - the series' most-repeated lesson because it kept being
+   re-earned.
+4. **Tools correct their authors.** Eight consecutive rounds ended
+   with an example's own output overruling the prose its author had
+   drafted. Measurement-over-narrative wasn't a value we asserted;
+   it was a pattern the artifacts enforced.
+5. **The referee pattern scales.** Exit-code-gated honesty tools
+   (probers, provers, drills, the doctest runner) turned findings
+   into acceptance tests: each round's sharpest complaint became the
+   next round's green check, and stays in the repo re-running.
+
+The catalog stands at 131 offline example programs, ten field-note
+directories, and a framework whose contracts, journals, limiters,
+and plans all testify about themselves. The bench is cleared; the
+asks list is empty; everything the room asked for was shipped.
+
 ### What round 6 surfaced
 
 1. **Plans became artifacts**: narratable (tour), serializable with an

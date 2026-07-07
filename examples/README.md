@@ -39,7 +39,7 @@ not this file.
 | `critical_path.rb` | The Critical Path: after a run, combine the graph topology with measured durations to find the chain of tasks that deter... |
 | `dead_letter_office.rb` | The Dead Letter Office: three days of journaled runs, every failure collected and triaged by what the errors said about ... |
 | `deploy_train.rb` | The Deploy Train: lint -> test -> build -> canary -> ship, where a red gate stops the train and everything behind it rep... |
-| `did_you_mean.rb` | Did You Mean, for plans: the kindest thing an error can do is finish your sentence. A typo'd capability name, contract f... |
+| `did_you_mean.rb` | Did You Mean, for plans: the kindest thing an error can do is finish your sentence. In round 14 this example retrofitted... |
 | `doc_coverage.rb` | The Documentation Surveyor: measures YARD comment coverage for every public method in a lib/ tree. One survey task per f... |
 | `doctest_runner.rb` | The Doctest Runner: Rust taught the industry one enormous docs lesson - EXAMPLES IN DOCS SHOULD EXECUTE. This harvests e... |
 | `duck_agents.rb` | Duck Agents: the agent: seam asks one question - "can you be called with a task?" - and five differently-shaped objects ... |
