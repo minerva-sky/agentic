@@ -127,6 +127,45 @@ modernized onto them, and ten more experiments followed:
 | 9 | Sandi Metz | Refactor receipts — the god join dissolved in priced steps | `examples/refactor_receipts.rb` | [round-6/09-sandimetz.md](round-6/09-sandimetz.md) |
 | 10 | Andrew Kane | Cost estimator — the plan priced before it runs, reconciled after | `examples/cost_estimator.rb` | [round-6/10-ankane.md](round-6/10-ankane.md) |
 
+## Round 7 — the referee round
+
+The round-6 asks shipped as a release (`RateLimit#and` composition,
+`graph[:stats]`, journal `durations` keyed by description,
+`CapabilitySpecification#to_json_schema`, injectable retry `rng:`),
+two graph tools were modernized onto `stats`, and ten more experiments
+followed:
+
+| # | Persona | Built on the round-7 release | Run it | Field notes |
+|---|---------|------------------------------|--------|-------------|
+| 1 | Matz | Plan fortune teller — structural diagnoses in a mystic's robe | `examples/plan_fortune.rb` | [round-7/01-matz.md](round-7/01-matz.md) |
+| 2 | DHH | Weekly check-in — the journal answers so nobody's Friday has to | `examples/weekly_checkin.rb` | [round-7/02-dhh.md](round-7/02-dhh.md) |
+| 3 | Aaron Patterson | Perf history — regressions judged against the last release's journal | `examples/perf_history.rb` | [round-7/03-tenderlove.md](round-7/03-tenderlove.md) |
+| 4 | Xavier Noria | Structural diff — plan review at design altitude, not JSON altitude | `examples/plan_structural_diff.rb` | [round-7/04-fxn.md](round-7/04-fxn.md) |
+| 5 | Samuel Williams | Composed limits — both laws at once; the chart names the binding one | `examples/composed_limits.rb` | [round-7/05-ioquatix.md](round-7/05-ioquatix.md) |
+| 6 | Jeremy Evans | Backoff conformance — nine timing envelopes certified via injected rng | `examples/backoff_conformance.rb` | [round-7/06-jeremyevans.md](round-7/06-jeremyevans.md) |
+| 7 | Piotr Solnica | Schema export + agreement proof — every projection ships its referee | `examples/json_schema_export.rb` | [round-7/07-solnic.md](round-7/07-solnic.md) |
+| 8 | Mike Perham | Incident report — the 3am questions answered from the journal | `examples/incident_report.rb` | [round-7/08-mperham.md](round-7/08-mperham.md) |
+| 9 | Sandi Metz | Graph style guide — RuboCop for plans, ten lines per cop | `examples/graph_style.rb` | [round-7/09-sandimetz.md](round-7/09-sandimetz.md) |
+| 10 | Andrew Kane | Capability evals — contracts check types, evals check truth | `examples/capability_evals.rb` | [round-7/10-ankane.md](round-7/10-ankane.md) |
+
+### What round 7 surfaced
+
+1. **The referee pattern generalized**: six exit-code-gated honesty
+   tools now exist (fuzzer, prober, verifier, conformance, agreement
+   proof, evals) — the framework can no longer lie about its
+   contracts, rules, docs, timing, exports, or answers.
+2. **The journal became four products**: crash recovery, resume keys,
+   perf baselines, and prose (check-ins, incident reports) — one
+   fsynced JSONL file, read with different questions.
+3. **Tools kept correcting their authors**: Samuel's binding-constraint
+   prose and Piotr's generator coverage were both fixed by their own
+   measurements — the third straight round of measurement-over-narrative.
+4. **Next asks**: `stats[:roots]`/`stats[:leaves]`, percentile
+   baselines over journal history (p50-of-last-N), rename detection
+   hints in the structural diff, JSON Schema `if/then` emission for
+   expressible rules, and an eval-scorer seam for LLM-backed
+   capabilities.
+
 ### What round 6 surfaced
 
 1. **Plans became artifacts**: narratable (tour), serializable with an
