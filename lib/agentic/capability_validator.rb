@@ -63,13 +63,23 @@ module Agentic
 
     # Cross-field rules run after per-key validation, over the whole
     # inputs hash; every broken rule is reported at once. Rules come in
-    # two forms:
+    # three forms:
     #
     #   "prose description" => ->(inputs) { ... }                # simple
     #   :rule_id => {message: "...", fields: [:a, :b], check: ->} # structured
+    #   :rule_id => {relation: :sum_lte, fields: [:a, :b], limit: 9} # relation-typed
     #
     # Structured rules declare which fields they read, so violations can
-    # point UIs at the offending inputs.
+    # point UIs at the offending inputs. Relation-typed rules go further:
+    # the predicate itself is data, so generators can satisfy it and
+    # diff tools can compare it. Supported relations:
+    #
+    #   sum_lte:            the fields' values sum to at most limit:
+    #   requires:           if the first field is present, the rest must be
+    #   mutually_exclusive: at most one of the fields may be present
+    #
+    # "Present" means the key is given with a non-nil value (the same
+    # presence JSON Schema's dependencies keyword speaks about).
     def validate_rules!(inputs)
       rules = @specification.respond_to?(:rules) ? @specification.rules : nil
       return if rules.nil? || rules.empty?
@@ -78,6 +88,9 @@ module Agentic
         check, message, fields =
           if definition.respond_to?(:call)
             [definition, key.to_s, []]
+          elsif definition[:relation]
+            [RelationRules.check(definition), definition[:message] || RelationRules.message(definition),
+              definition[:fields] || []]
           else
             [definition.fetch(:check), definition[:message] || key.to_s, definition[:fields] || []]
           end

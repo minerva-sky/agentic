@@ -166,6 +166,156 @@ followed:
    expressible rules, and an eval-scorer seam for LLM-backed
    capabilities.
 
+## Round 8 — structure becomes vocabulary
+
+The round-7 asks shipped as a release (`stats[:roots]`/`stats[:leaves]`,
+journal `duration_samples` with `duration_percentile(desc, pct, last:)`,
+and `x-agentic-rules` emission in `to_json_schema`), and ten more
+experiments followed:
+
+| # | Persona | Built on the round-8 release | Run it | Field notes |
+|---|---------|------------------------------|--------|-------------|
+| 1 | Matz | Plan forest — the graph drawn as trees, depth as altitude | `examples/plan_forest.rb` | [round-8/01-matz.md](round-8/01-matz.md) |
+| 2 | DHH | Hill chart — where the work *is*, from lifecycle hooks | `examples/hill_chart.rb` | [round-8/02-dhh.md](round-8/02-dhh.md) |
+| 3 | Aaron Patterson | Variance detective — flaky vs slow, settled by percentiles | `examples/variance_detective.rb` | [round-8/03-tenderlove.md](round-8/03-tenderlove.md) |
+| 4 | Xavier Noria | Plan merge — three-way merge with conflicts at seam altitude | `examples/plan_merge.rb` | [round-8/04-fxn.md](round-8/04-fxn.md) |
+| 5 | Samuel Williams | Adaptive throttle — AIMD finds the capacity nobody documented | `examples/adaptive_throttle.rb` | [round-8/05-ioquatix.md](round-8/05-ioquatix.md) |
+| 6 | Jeremy Evans | Journal audit — five invariants; a tampered journal named precisely | `examples/journal_audit.rb` | [round-8/06-jeremyevans.md](round-8/06-jeremyevans.md) |
+| 7 | Piotr Solnica | Contract semver — breaking-or-compatible computed, bump advised | `examples/contract_semver.rb` | [round-8/07-solnic.md](round-8/07-solnic.md) |
+| 8 | Mike Perham | Dead letter office — requeue, parked, recovered, by last word | `examples/dead_letter_office.rb` | [round-8/08-mperham.md](round-8/08-mperham.md) |
+| 9 | Sandi Metz | Graph to specs — structural roles dictate the test plan | `examples/graph_to_specs.rb` | [round-8/09-sandimetz.md](round-8/09-sandimetz.md) |
+| 10 | Andrew Kane | Eval scorers — four ways to say "good enough", one seam | `examples/eval_scorers.rb` | [round-8/10-ankane.md](round-8/10-ankane.md) |
+
+### What round 8 surfaced
+
+1. **Structure became vocabulary**: `roots`/`leaves`/`depth` landed and
+   were immediately spent three ways — a drawing (forest), a test plan
+   (graph-to-specs), and merge conflicts named at seam altitude. Metadata
+   that keeps buying unplanned tools is metadata shaped right.
+2. **Durations became distributions**: `duration_samples` turned point
+   readings into percentiles, and two tools acted on them — the variance
+   detective separates flaky from slow (p90/p50 ratio), and the adaptive
+   throttle steers concurrency by p50 drift instead of vibes.
+3. **Signal-to-noise as a design goal**: the dead letter office triages
+   by *most recent* attempt (no paging for ghosts), and the eval scorers
+   flag exactly one real failure where exact-match flags two. Both argue
+   the same point: a report is only as good as what its failures mean.
+4. **The declarations' blind spot held**: Piotr's semver advisor and
+   Jeremy's audit both stop at callable rules — predicates stay opaque
+   to every static tool. Structured rules narrow the gap; they don't
+   close it.
+5. **Next asks**: `RateLimit#resize(n)` so the adaptive throttle can
+   steer the real limiter instead of simulating one, and journaling
+   `retryable:` at write time from `failure.retryable?` so triage
+   survives taxonomy renames. (`eval_scorers.rb` joins the
+   exit-1-by-design set.)
+
+## Round 9 — the operations round
+
+The round-8 asks shipped as a release (`RateLimit#resize(n)` — live
+ceiling changes, growing wakes waiters, shrinking drains — and the
+journal recording `retryable:` on `task_failed` at write time from the
+failure's own verdict), the two examples that asked were modernized
+onto them, and ten more experiments followed:
+
+| # | Persona | Built on the round-9 release | Run it | Field notes |
+|---|---------|------------------------------|--------|-------------|
+| 1 | Matz | Failure weather — retryable is weather, non-retryable is climate | `examples/failure_weather.rb` | [round-9/01-matz.md](round-9/01-matz.md) |
+| 2 | DHH | Traffic dial — a canary rollout as one resized limiter | `examples/traffic_dial.rb` | [round-9/02-dhh.md](round-9/02-dhh.md) |
+| 3 | Aaron Patterson | Throughput knee — the ceiling sweep with two honest clocks | `examples/throughput_knee.rb` | [round-9/03-tenderlove.md](round-9/03-tenderlove.md) |
+| 4 | Xavier Noria | Graph invariants — seven promises of the reflection API, proved | `examples/graph_invariants.rb` | [round-9/04-fxn.md](round-9/04-fxn.md) |
+| 5 | Samuel Williams | Fair share — tenant-fairness composed, shares rebalanced live | `examples/fair_share.rb` | [round-9/05-ioquatix.md](round-9/05-ioquatix.md) |
+| 6 | Jeremy Evans | Resize torture — shrink drains, grow wakes, ceilings bind | `examples/resize_torture.rb` | [round-9/06-jeremyevans.md](round-9/06-jeremyevans.md) |
+| 7 | Piotr Solnica | Contract fixtures — examples derived from declarations, proved | `examples/contract_fixtures.rb` | [round-9/07-solnic.md](round-9/07-solnic.md) |
+| 8 | Mike Perham | Circuit breaker — three strikes for 503s, one for a revoked key | `examples/circuit_breaker.rb` | [round-9/08-mperham.md](round-9/08-mperham.md) |
+| 9 | Sandi Metz | Duck agents — five shapes through one seam, one tiny decorator | `examples/duck_agents.rb` | [round-9/09-sandimetz.md](round-9/09-sandimetz.md) |
+| 10 | Andrew Kane | Impl shootout — accuracy AND latency on one table | `examples/impl_shootout.rb` | [round-9/10-ankane.md](round-9/10-ankane.md) |
+
+### What round 9 surfaced
+
+1. **resize turned limits into policy objects**: five tools steer one
+   live limiter — the rollout dial, the ceiling sweep, tenant share
+   rebalancing, the torture certificate, and the modernized AIMD
+   throttle. The topology of a limiter graph stays fixed; only the
+   numbers move at runtime, which is the property that makes it safe.
+2. **The write-time verdict became a decision input**: the weather
+   report (wait vs dig a well), the circuit breaker (three strikes vs
+   instant trip), and the modernized dead letter office all *act* on
+   `retryable:` instead of reconstructing it — the error's testimony,
+   recorded when fresh, drives policy later.
+3. **The tools kept correcting their authors** (fifth consecutive
+   round): Samuel's one-worker tenant couldn't starve, Aaron's
+   "throughput goes flat" was actually a fall, Xavier's depth
+   invariant was ill-posed on cycles, Jeremy's harness read its clock
+   before setting it, Mike's breaker read the wrong journal event, and
+   Kane's challenger lost a case to a missing stem. Every one was
+   caught by the example's own output before a user saw it.
+4. **Fairness needs unmet demand to be visible**: a FIFO door is fair
+   to requests, not tenants — starvation only appears when a tenant's
+   demand exceeds its receipts, which is why quiet outages stay quiet.
+5. **Next asks**: relation-typed structured rules (`sum_lte:`,
+   `requires:`, `mutually_exclusive:`) so generators can satisfy and
+   advisors can diff the declarable majority of cross-field rules
+   (Piotr); and a breaker-friendly convention for `retryable: nil` —
+   "no opinion" should mean retry-with-suspicion, not hopeless (Mike).
+
+## Round 10 — predicates become data
+
+The round-9 asks shipped as a release (`Agentic::RelationRules` —
+`sum_lte`/`requires`/`mutually_exclusive` declared as data, enforced
+by the validator with derived messages, projected into real draft-07
+keywords, and carried in `x-agentic-rules`; plus the retryable-nil
+convention on `TaskFailure`: `hopeless?` / `possibly_transient?`),
+the two asking examples were modernized, and ten more experiments
+followed:
+
+| # | Persona | Built on the round-10 release | Run it | Field notes |
+|---|---------|-------------------------------|--------|-------------|
+| 1 | Matz | Polite form — every declaration read aloud as a question | `examples/polite_form.rb` | [round-10/01-matz.md](round-10/01-matz.md) |
+| 2 | DHH | One-file API — schema, 422s, and 201s derived from one declaration | `examples/one_file_api.rb` | [round-10/02-dhh.md](round-10/02-dhh.md) |
+| 3 | Aaron Patterson | Contract overhead — validation priced against the call it guards | `examples/contract_overhead.rb` | [round-10/03-tenderlove.md](round-10/03-tenderlove.md) |
+| 4 | Xavier Noria | Projection agreement — both renderings of the law, proved; the nil frontier mapped | `examples/projection_agreement.rb` | [round-10/04-fxn.md](round-10/04-fxn.md) |
+| 5 | Samuel Williams | Cancel drill — task cancel is prompt; plan cancel bills you anyway | `examples/cancel_drill.rb` | [round-10/05-ioquatix.md](round-10/05-ioquatix.md) |
+| 6 | Jeremy Evans | Relation prober — 13 probes pass; one step off the road draws blood | `examples/relation_prober.rb` | [round-10/06-jeremyevans.md](round-10/06-jeremyevans.md) |
+| 7 | Piotr Solnica | Relation diff — the rules join semver; opacity becomes opt-in | `examples/relation_diff.rb` | [round-10/07-solnic.md](round-10/07-solnic.md) |
+| 8 | Mike Perham | Retry budget — one fleet-wide wallet; 45 doomed calls become 17 | `examples/retry_budget.rb` | [round-10/08-mperham.md](round-10/08-mperham.md) |
+| 9 | Sandi Metz | Rule shapes — one policy, three representations, four consumers | `examples/rule_shapes.rb` | [round-10/09-sandimetz.md](round-10/09-sandimetz.md) |
+| 10 | Andrew Kane | Batch import — a reject file with line, field, and rule, at 162us/row | `examples/batch_import.rb` | [round-10/10-ankane.md](round-10/10-ankane.md) |
+
+### What round 10 surfaced
+
+1. **Predicates as data compounded immediately**: within one round,
+   relation rules were asked as questions (polite form), served as
+   draft-07 keywords (one-file API), satisfied by the generator,
+   diffed for semver, audited for consumer count, and used to explain
+   118 CSV rejections. Six consumers for a feature shipped that
+   morning — the strongest version yet of "metadata keeps buying
+   unplanned tools."
+2. **Two real defects found by drills**: `cancel_plan` under a joined
+   reactor is bookkeeping-only — every agent runs and bills while the
+   status says canceled (Samuel); and a relation rule over an
+   undeclared field escapes as raw TypeError instead of
+   ValidationError, turning 422 paths into 500 paths (Jeremy, whose
+   prober exits 1 by design as the acceptance test).
+3. **Agreement-for-different-reasons is a named hazard**: typed
+   fields guard the nil frontier so both renderings reject
+   `{express: nil}` — for unrelated reasons; relax the type and the
+   renderings diverge. Verdict-only tests would call that a pass
+   (Xavier).
+4. **The meter settled the validation debate**: the largest contract
+   costs 0.14ms against the 800ms call it guards, and rejection
+   costs 12x the happy path — both numbers now on the table (Aaron,
+   Kane concurring at 162us/row with rejects included).
+5. **Next asks**: make `cancel_plan` stop the scheduler and in-flight
+   fibers (the cancel drill is the acceptance test); relation rules
+   must type-check their fields at declaration time or wrap
+   evaluation failures in ValidationError (the relation prober is
+   the acceptance test); `RateLimit#try_acquire` for non-blocking
+   admission so retry budgets can be RateLimits; and align or
+   document presence semantics (Ruby nil vs JSON null) across the
+   projection boundary. (`relation_prober.rb` joins the
+   exit-1-by-design set.)
+
 ### What round 6 surfaced
 
 1. **Plans became artifacts**: narratable (tour), serializable with an

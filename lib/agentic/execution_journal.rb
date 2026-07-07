@@ -23,7 +23,7 @@ module Agentic
   class ExecutionJournal
     # Replayed journal state: everything a resuming process needs to know
     ReplayedState = Struct.new(
-      :plan_id, :status, :completed_task_ids, :failed_task_ids, :outputs, :failures, :events, :descriptions, :durations,
+      :plan_id, :status, :completed_task_ids, :failed_task_ids, :outputs, :failures, :events, :descriptions, :durations, :duration_samples,
       keyword_init: true
     ) do
       # Task durations keyed by description - the natural baseline source
@@ -31,6 +31,24 @@ module Agentic
       # @return [Hash{String=>Float}] Description => seconds (latest wins)
       def durations_by_description
         durations
+      end
+
+      # A percentile over a task's recorded durations, for baselines that
+      # resist single-run noise (a journal may hold many runs)
+      # @param description [String] The task's description
+      # @param percentile [Numeric] 0-100
+      # @param last [Integer, nil] Consider only the most recent N samples
+      # @return [Float, nil] The percentile duration, or nil if unrecorded
+      def duration_percentile(description, percentile, last: nil)
+        samples = duration_samples[description]
+        return nil if samples.nil? || samples.empty?
+
+        samples = samples.last(last) if last
+        sorted = samples.sort
+        rank = (percentile / 100.0) * (sorted.size - 1)
+        lower = sorted[rank.floor]
+        upper = sorted[rank.ceil]
+        lower + (upper - lower) * (rank - rank.floor)
       end
 
       # @param key [String] A task id or a task description (descriptions
@@ -70,7 +88,9 @@ module Agentic
           record(:task_succeeded, task_id: task_id, description: task.description, duration: duration, output: result.output)
         end,
         after_task_failure: chain(hooks[:after_task_failure]) do |task_id:, task:, failure:, duration:|
-          record(:task_failed, task_id: task_id, description: task.description, duration: duration, error: failure.message, error_type: failure.type)
+          record(:task_failed, task_id: task_id, description: task.description, duration: duration,
+            error: failure.message, error_type: failure.type,
+            retryable: failure.respond_to?(:retryable?) ? failure.retryable? : nil)
         end,
         plan_completed: chain(hooks[:plan_completed]) do |plan_id:, status:, execution_time:, tasks:, results:|
           record(:plan_completed, plan_id: plan_id, status: status, execution_time: execution_time)
@@ -108,7 +128,8 @@ module Agentic
         failures: {},
         events: [],
         descriptions: {},
-        durations: {}
+        durations: {},
+        duration_samples: Hash.new { |h, k| h[k] = [] }
       )
 
       return state unless File.exist?(path)
@@ -132,12 +153,13 @@ module Agentic
           state.outputs[task_id] = entry[:output]
           if entry[:description] && entry[:duration]
             state.durations[entry[:description]] = entry[:duration]
+            state.duration_samples[entry[:description]] << entry[:duration]
           end
         when "task_failed"
           task_id = entry[:task_id]
           unless state.completed_task_ids.include?(task_id)
             state.failed_task_ids << task_id unless state.failed_task_ids.include?(task_id)
-            state.failures[task_id] = {message: entry[:error], type: entry[:error_type]}
+            state.failures[task_id] = {message: entry[:error], type: entry[:error_type], retryable: entry[:retryable]}
           end
         when "plan_completed"
           state.plan_id = entry[:plan_id]
