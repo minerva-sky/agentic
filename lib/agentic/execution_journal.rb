@@ -23,9 +23,16 @@ module Agentic
   class ExecutionJournal
     # Replayed journal state: everything a resuming process needs to know
     ReplayedState = Struct.new(
-      :plan_id, :status, :completed_task_ids, :failed_task_ids, :outputs, :failures, :events, :descriptions,
+      :plan_id, :status, :completed_task_ids, :failed_task_ids, :outputs, :failures, :events, :descriptions, :durations,
       keyword_init: true
     ) do
+      # Task durations keyed by description - the natural baseline source
+      # for performance regression tooling
+      # @return [Hash{String=>Float}] Description => seconds (latest wins)
+      def durations_by_description
+        durations
+      end
+
       # @param key [String] A task id or a task description (descriptions
       #   act as idempotency keys across runs, since ids are per-run)
       # @return [Boolean] True if the journal records a success for the task
@@ -100,7 +107,8 @@ module Agentic
         outputs: {},
         failures: {},
         events: [],
-        descriptions: {}
+        descriptions: {},
+        durations: {}
       )
 
       return state unless File.exist?(path)
@@ -122,6 +130,9 @@ module Agentic
           state.failed_task_ids.delete(task_id)
           state.failures.delete(task_id)
           state.outputs[task_id] = entry[:output]
+          if entry[:description] && entry[:duration]
+            state.durations[entry[:description]] = entry[:duration]
+          end
         when "task_failed"
           task_id = entry[:task_id]
           unless state.completed_task_ids.include?(task_id)

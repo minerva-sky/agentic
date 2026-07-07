@@ -18,14 +18,23 @@ module Agentic
     # @param inputs [Hash] The required inputs for the capability
     # @param outputs [Hash] The expected outputs from the capability
     # @param dependencies [Array<Hash>] The dependencies of the capability
-    def initialize(name:, description:, version:, inputs: {}, outputs: {}, dependencies: [])
+    def initialize(name:, description:, version:, inputs: {}, outputs: {}, dependencies: [], rules: {})
       @name = name
       @description = description
       @version = version
       @inputs = inputs
       @outputs = outputs
       @dependencies = dependencies
+      @rules = rules
     end
+
+    # Cross-field input rules: description => predicate over the full
+    # (symbolized) inputs hash. Checked after per-key validation passes:
+    #
+    #   rules: {"express orders max 10 items" => ->(i) { i[:speed] != "express" || i[:quantity] <= 10 }}
+    #
+    # @return [Hash{String=>#call}]
+    attr_reader :rules
 
     # Check if this capability is compatible with another capability
     # @param other [CapabilitySpecification] The other capability
@@ -79,6 +88,49 @@ module Agentic
         dependencies: hash[:dependencies] || hash["dependencies"] || []
       )
     end
+
+    # Emits the declared contract as a JSON Schema object, so capability
+    # contracts plug into OpenAPI tooling, JSON validators, and every
+    # schema-aware toolchain without a bespoke exporter
+    # @param side [Symbol] :inputs or :outputs
+    # @return [Hash] A JSON Schema (draft-07 compatible) as a plain hash
+    def to_json_schema(side = :inputs)
+      declared = (side == :outputs) ? outputs : inputs
+
+      properties = declared.to_h do |name, decl|
+        schema = {}
+        schema["type"] = JSON_SCHEMA_TYPES.fetch(decl[:type], nil) if decl[:type]
+        schema.delete("type") if schema["type"].nil?
+        schema["description"] = decl[:description] if decl[:description]
+        schema["enum"] = decl[:enum] if decl[:enum]
+        schema["minimum"] = decl[:min] if decl[:min]
+        schema["maximum"] = decl[:max] if decl[:max]
+        if decl[:non_empty]
+          schema[(decl[:type] == "array") ? "minItems" : "minLength"] = 1
+        end
+        [name.to_s, schema]
+      end
+
+      {
+        "$schema" => "http://json-schema.org/draft-07/schema#",
+        "title" => "#{name} #{side}",
+        "type" => "object",
+        "required" => declared.select { |_, decl| decl[:required] }.keys.map(&:to_s),
+        "properties" => properties,
+        "additionalProperties" => true
+      }
+    end
+
+    # Contract type names to JSON Schema type names
+    JSON_SCHEMA_TYPES = {
+      "string" => "string",
+      "number" => "number",
+      "integer" => "integer",
+      "boolean" => "boolean",
+      "array" => "array",
+      "object" => "object",
+      "hash" => "object"
+    }.freeze
 
     # Get the capability requirements as a human-readable string
     # @return [String] The capability requirements

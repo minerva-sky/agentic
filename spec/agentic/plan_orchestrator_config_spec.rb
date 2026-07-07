@@ -46,7 +46,8 @@ RSpec.describe Agentic::PlanOrchestrator, "configuration" do
       expect(orchestrator.retry_policy[:backoff_base]).to eq(2)
 
       # Verify defaults are still present for options not specified
-      expect(orchestrator.retry_policy[:backoff_jitter]).to be_nil
+      # (jitter defaults ON so fleets don't retry in lockstep)
+      expect(orchestrator.retry_policy[:backoff_jitter]).to be true
     end
 
     it "merges custom policy with defaults" do

@@ -234,11 +234,36 @@ orchestrator.add_task(next_verse, [previous_verse], agent: ->(task) {
 ```
 
 Capability contracts can constrain values beyond type and presence —
-`enum: %w[standard express]`, `min:`/`max:` bounds, and `non_empty: true`
-for strings and arrays. The `task_slot_acquired` lifecycle hook fires when
-a task obtains a concurrency slot (with `waited:` time), separating queue
-wait from run time; and retry policies consult an error's own
-`retryable?` verdict before falling back to the `retryable_errors` list.
+`enum: %w[standard express]`, `min:`/`max:` bounds, `non_empty: true` for
+strings and arrays, and cross-field `rules:` checked over the whole input
+(`rules: {"express max 10 items" => ->(i) { i[:speed] != "express" || i[:quantity] <= 10 }}`).
+`ValidationError#expectations` carries the declared contract for each
+violated key, so error messages can name what would have been legal.
+
+The `task_slot_acquired` lifecycle hook fires when a task obtains a
+concurrency slot (with `waited:` time), separating queue wait from run
+time; retry policies consult an error's own `retryable?` verdict before
+falling back to the `retryable_errors` list, and backoff jitter is on by
+default so fleets don't retry in lockstep (`backoff_jitter: :full` draws
+uniformly from `[0, delay]` for the hardest herd-flattening).
+
+`PlanOrchestrator#graph` returns a frozen snapshot of the plan's topology
+— including `graph[:order]` (topological sort), `graph[:edges]` (labeled
+by `needs:` names), and `graph[:stats]` (per-task depth, max depth, max
+fan-in) — for tools that render, review, or analyze plans.
+`Agentic::RateLimit` is a credential-scoped ceiling shareable across
+plans and clients (`Agentic::LlmClient.new(config, limiter: rate_limit)`):
+concurrent by default, a rolling-window quota with
+`RateLimit.new(30, per: 60)`, or both laws at once via composition —
+`quota.and(pool)`. Cross-field rules may be structured —
+`rules: {air_weight_limit: {message: "...", fields: [:mode, :weight], check: ->(i) {...}}}` —
+and `ValidationError#rule_violations` reports each broken rule with its
+identifier, message, and the fields it reads.
+`CapabilitySpecification#to_json_schema` emits a contract side as
+draft-07 JSON Schema for OpenAPI and validator toolchains; journal
+replays expose per-task `durations` keyed by description (performance
+baselines for free); and retry policies accept an injected `rng:` for
+reproducible jitter timing.
 
 ### The concurrency contract
 

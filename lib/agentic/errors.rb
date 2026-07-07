@@ -26,13 +26,29 @@ module Agentic
       # @return [Hash{Symbol=>Array<String>}] Violation messages keyed by attribute
       attr_reader :violations
 
+      # The declared contract for each violated key - type, enum, min/max,
+      # required - so callers can render what WOULD have been legal without
+      # side-channel knowledge of the contract
+      # @return [Hash{Symbol=>Hash}] Declarations keyed by violated attribute
+      attr_reader :expectations
+
+      # Structured cross-field rule violations: each carries the rule's
+      # identifier, its human message, and the fields it reads - so UIs
+      # can highlight the offending inputs, not just print prose
+      # @return [Array<Hash>] [{rule:, message:, fields:}, ...]
+      attr_reader :rule_violations
+
       # @param capability [String] The capability name
       # @param kind [Symbol] :inputs or :outputs
       # @param violations [Hash{Symbol=>Array<String>}] Messages keyed by attribute
-      def initialize(capability:, kind:, violations:)
+      # @param expectations [Hash{Symbol=>Hash}] Declarations for violated keys
+      # @param rule_violations [Array<Hash>] Structured broken-rule records
+      def initialize(capability:, kind:, violations:, expectations: {}, rule_violations: [])
         @capability = capability
         @kind = kind
         @violations = violations
+        @expectations = expectations
+        @rule_violations = rule_violations
 
         details = violations.map { |key, messages| "#{key} #{Array(messages).join(", ")}" }.join("; ")
         super("Invalid #{kind} for capability '#{capability}': #{details}")

@@ -42,15 +42,55 @@ module Agentic
     private
 
     def validate!(kind, declared, values)
-      return if declared.nil? || declared.empty?
+      symbolized = symbolize_keys(values)
 
-      result = schema_for(kind, declared).call(symbolize_keys(values))
-      return if result.success?
+      if declared && !declared.empty?
+        result = schema_for(kind, declared).call(symbolized)
+
+        unless result.success?
+          violations = result.errors.to_h
+          raise Errors::ValidationError.new(
+            capability: @specification.name,
+            kind: kind,
+            violations: violations,
+            expectations: declared.slice(*violations.keys)
+          )
+        end
+      end
+
+      validate_rules!(symbolized) if kind == :inputs
+    end
+
+    # Cross-field rules run after per-key validation, over the whole
+    # inputs hash; every broken rule is reported at once. Rules come in
+    # two forms:
+    #
+    #   "prose description" => ->(inputs) { ... }                # simple
+    #   :rule_id => {message: "...", fields: [:a, :b], check: ->} # structured
+    #
+    # Structured rules declare which fields they read, so violations can
+    # point UIs at the offending inputs.
+    def validate_rules!(inputs)
+      rules = @specification.respond_to?(:rules) ? @specification.rules : nil
+      return if rules.nil? || rules.empty?
+
+      broken = rules.filter_map do |key, definition|
+        check, message, fields =
+          if definition.respond_to?(:call)
+            [definition, key.to_s, []]
+          else
+            [definition.fetch(:check), definition[:message] || key.to_s, definition[:fields] || []]
+          end
+
+        {rule: key, message: message, fields: fields} unless check.call(inputs)
+      end
+      return if broken.empty?
 
       raise Errors::ValidationError.new(
         capability: @specification.name,
-        kind: kind,
-        violations: result.errors.to_h
+        kind: :inputs,
+        violations: {base: broken.map { |b| b[:message] }},
+        rule_violations: broken
       )
     end
 
