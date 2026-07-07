@@ -8,14 +8,18 @@ not this file.
 |---------|---------------|
 | `adaptive_throttle.rb` | The Adaptive Throttle: nobody TELLS you an upstream's capacity - you discover it. An AIMD controller (TCP's algorithm) p... |
 | `allocation_audit.rb` | The Allocation Audit: every object is a promissory note the GC collects on later. This audit counts exactly what each fr... |
+| `always_on_profiler.rb` | The Always-On Profiler: the mini-profiler heresy is that profiling belongs in PRODUCTION, on EVERY request, visible to t... |
 | `api_reference.rb` | The API Reference Generator: walk the registry, emit reference docs for every capability - types, enums, bounds, policie... |
 | `api_riffs.rb` | API Riffs: before an API ships, sketch it three ways and READ the call sites out loud - the design work happens in the c... |
 | `api_surface.rb` | The API Surface Census: your public API is not what you documented - it's every public method a user CAN call, because t... |
+| `attachment_pipeline.rb` | The Attachment Pipeline: Shrine's central lesson is that file uploads are a TWO-PHASE commit wearing a file input - phas... |
 | `backoff_conformance.rb` | Backoff Conformance: every strategy x jitter combination, a thousand draws each through an injected seeded RNG, checked ... |
 | `batch_import.rb` | The Batch Import: 500 rows of the kind of data people actually upload - typos, header drift, impossible combinations - r... |
+| `behavior_spec.rb` | The Behavior Spec: ruby/spec exists because "MRI does X" is not a specification - it's an implementation detail wearing ... |
 | `burst_absorber.rb` | The Burst Absorber: three waves of requests slam a credential with a ceiling of 3 (Agentic::RateLimit - this round's rel... |
 | `cancel_drill.rb` | The Cancel Drill: structured concurrency's core promise is that cancellation is PROMPT - stop means stop, not "finish ev... |
 | `capability_evals.rb` | Capability Evals: golden test cases run against registered capabilities, scored, and gated. When you swap a lambda for a... |
+| `capability_resolver.rb` | The Capability Resolver: CapabilitySpecification has carried a dependencies: field since round 1, and nothing has ever r... |
 | `capacity_planner.rb` | The Capacity Planner: "how many workers do we need?" is not a feeling, it's Little's Law - L = lambda x W. The journal a... |
 | `changelog_scout.rb` | The Changelog Scout: reads real git history, classifies every commit through a contract-checked capability, and drafts t... |
 | `circuit_breaker.rb` | The Circuit Breaker: when an upstream is down, the cheapest request is the one you don't send. The breaker trips after 3... |
@@ -23,6 +27,7 @@ not this file.
 | `collaboration_tracer.rb` | The Collaboration Tracer: lifecycle hooks record every message the orchestrator sends and every reply that comes back, t... |
 | `command_bus.rb` | The Command Bus: every command is a composed capability with its OWN declared contract (new in this round - compositions... |
 | `composed_limits.rb` | Composed Limits: a real provider enforces BOTH a billed quota and a connection ceiling. quota.and(pool) - new this round... |
+| `concurrency_key.rb` | The Concurrency Key: "at most one sync per TENANT, any number of tenants at once" is the concurrency control every multi... |
 | `confident_pipeline.rb` | The Confident Pipeline: timid code checks nil at every step because it trusts nothing, including itself. Confident code ... |
 | `contract_cop.rb` | The Contract Cop: RuboCop for capability specs. Contracts are the most-read documents in this framework - six tools cons... |
 | `contract_fixtures.rb` | Contract Fixtures: example payloads in docs rot the day the contract changes. So don't write them - DERIVE them. This ge... |
@@ -34,8 +39,9 @@ not this file.
 | `critical_path.rb` | The Critical Path: after a run, combine the graph topology with measured durations to find the chain of tasks that deter... |
 | `dead_letter_office.rb` | The Dead Letter Office: three days of journaled runs, every failure collected and triaged by what the errors said about ... |
 | `deploy_train.rb` | The Deploy Train: lint -> test -> build -> canary -> ship, where a red gate stops the train and everything behind it rep... |
+| `did_you_mean.rb` | Did You Mean, for plans: the kindest thing an error can do is finish your sentence. A typo'd capability name, contract f... |
 | `doc_coverage.rb` | The Documentation Surveyor: measures YARD comment coverage for every public method in a lib/ tree. One survey task per f... |
-| `doctest_runner.rb` | The Doctest Runner: Rust taught the industry one enormous docs lesson - EXAMPLES IN DOCS SHOULD EXECUTE. An @example blo... |
+| `doctest_runner.rb` | The Doctest Runner: Rust taught the industry one enormous docs lesson - EXAMPLES IN DOCS SHOULD EXECUTE. This harvests e... |
 | `duck_agents.rb` | Duck Agents: the agent: seam asks one question - "can you be called with a task?" - and five differently-shaped objects ... |
 | `dungeon_crawl.rb` | The Dungeon Crawl: a quest is a plan, rooms are tasks, and doors are dependencies. The map is drawn from the orchestrato... |
 | `durable_batch.rb` | The Durable Batch: six billable "LLM calls" run under an ExecutionJournal. Mid-batch, the process dies for real - exit!,... |
@@ -87,6 +93,7 @@ not this file.
 | `plan_kata.rb` | The Plan Kata: red, green, refactor - for a plan. The "tests" are assertions about the graph (one root, one leaf, labele... |
 | `plan_merge.rb` | The Plan Merge: base, ours, theirs - a three-way merge of plan wire formats. Independent changes combine; the same edge ... |
 | `plan_roundtrip.rb` | The Round Trip: serialize a plan's graph to JSON, rebuild a fresh orchestrator from the JSON, and prove the rebuilt topo... |
+| `plan_server.rb` | The Plan Server: a server is three disciplines wearing one process - accept concurrently, share resources safely, and ab... |
 | `plan_structural_diff.rb` | The Structural Diff: two versions of a plan's wire format, diffed as TOPOLOGY - tasks added and removed, edges rewired, ... |
 | `plan_tour.rb` | The Plan Tour: hand any orchestrator to the guide and it narrates the plan as prose - first this, then that, meanwhile t... |
 | `plans_as_automata.rb` | Plans as Automata: strip away the agents and the LLMs and a plan is a transition system - states are sets of completed t... |
@@ -95,6 +102,8 @@ not this file.
 | `process_drill.rb` | The Process Drill: threads share a Mutex; PROCESSES share nothing but the file. The journal claims flock+fsync, which is... |
 | `projection_agreement.rb` | The Projection Agreement Prover: relation rules now render twice - the validator enforces them in Ruby, and to_json_sche... |
 | `quota_keeper.rb` | The Quota Keeper: the same 20 requests through two different laws. A concurrency ceiling ("3 in flight") models connecti... |
+| `ractor_shareability.rb` | The Ractor Shareability Audit: `freeze` is a promise about one object; Ractor.shareable? is a promise about everything i... |
+| `rbs_export.rb` | The RBS Export: a capability contract already knows its types - it validates them at runtime on every call. RBS is the s... |
 | `readme_verifier.rb` | The README Verifier: every ruby code fence in the README is a promise. This extracts them all, syntax-checks each with P... |
 | `refactor_receipts.rb` | Refactor Receipts: the god-join plan from the graph critic, improved in two small steps - with a receipt after each one.... |
 | `refactoring_dojo.rb` | The Refactoring Dojo: a student submits a method, three critic agents review it from three distinct perspectives, and th... |
@@ -124,6 +133,7 @@ not this file.
 | `traffic_dial.rb` | The Traffic Dial: a canary rollout as one knob. New code starts at one lane of traffic; every healthy stage turns the di... |
 | `tty_status.rb` | The TTY Status Board: terminal output is a UI, and UIs are built from COMPONENTS - a tree for structure, gauges for prog... |
 | `typed_pipeline.rb` | A typed ETL pipeline: extract -> transform -> load, each stage a capability with a declared contract, composed into one ... |
+| `unix_workers.rb` | Unix Workers: I like Unix because the operating system already solved process supervision and nobody told the frameworks... |
 | `variance_detective.rb` | The Variance Detective: ten journaled runs of the same plan, then a hunt for the task whose p90/p50 ratio betrays it. Av... |
 | `weekly_checkin.rb` | The Weekly Check-in: "what did you work on this week?" answered by the journal instead of by memory. Runs a few days of ... |
 | `write_path_profile.rb` | The Write Path Profile: everyone's first instinct about a slow journal is "switch JSON libraries". Before holding that o... |

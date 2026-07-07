@@ -471,6 +471,59 @@ benches the real knob. Then a fourth cast of ten took the bench:
    or retire the learning-system corner whose examples all died with
    LoadErrors (the census-adjacent smell).
 
+## Round 14 — the docs go green, and a fifth cast arrives
+
+The round-13 asks shipped as a release: the doctest runner is now a
+referee (every doc example runs or carries a deliberate
+"illustrative" annotation — 26 run, 4 annotated, 0 dead), the drifted
+README fences were fixed against current APIs, and the learning
+corner was **revived**, not retired: three more missing stdlib
+requires, a double-counting history store (memory cache + files now
+deduped by id), and the never-functional `register_with_orchestrator`
+replaced by `Learning.lifecycle_hooks` — the same construction-time
+seam the journal uses. Then a fifth cast took the bench:
+
+| # | Persona | Built with the gem | Run it | Field notes |
+|---|---------|--------------------|--------|-------------|
+| 1 | Evan Phoenix | Plan server — thread pool, shared quota, a drain with dignity | `examples/plan_server.rb` | [round-14/01-evanphx.md](round-14/01-evanphx.md) |
+| 2 | André Arko | Capability resolver — the dependencies: field, finally resolved | `examples/capability_resolver.rb` | [round-14/02-indirect.md](round-14/02-indirect.md) |
+| 3 | Soutaro Matsumoto | RBS export — shape from contracts; the validator keeps the law | `examples/rbs_export.rb` | [round-14/03-soutaro.md](round-14/03-soutaro.md) |
+| 4 | Benoit Daloze | Behavior spec — six boundary choices, pinned in a 30-line mspec | `examples/behavior_spec.rb` | [round-14/04-eregon.md](round-14/04-eregon.md) |
+| 5 | Yuki Nishijima | Did you mean — three error seams finish your sentence | `examples/did_you_mean.rb` | [round-14/05-yuki24.md](round-14/05-yuki24.md) |
+| 6 | Sam Saffron | Always-on profiler — a badge per plan, budgets that assign work | `examples/always_on_profiler.rb` | [round-14/06-samsaffron.md](round-14/06-samsaffron.md) |
+| 7 | Ryan Tomayko | Unix workers — fork, pipe, kill, wait; 9/9 served, 3/3/3 | `examples/unix_workers.rb` | [round-14/07-rtomayko.md](round-14/07-rtomayko.md) |
+| 8 | Marc-André Lafortune | Ractor audit — send facts, keep machines | `examples/ractor_shareability.rb` | [round-14/08-marcandre.md](round-14/08-marcandre.md) |
+| 9 | Rosa Gutiérrez | Concurrency key — one per tenant, tenants in parallel, judged | `examples/concurrency_key.rb` | [round-14/09-rosa.md](round-14/09-rosa.md) |
+| 10 | Janko Marohnić | Attachment pipeline — cache instantly, promote via journaled plan | `examples/attachment_pipeline.rb` | [round-14/10-janko.md](round-14/10-janko.md) |
+
+### What round 14 surfaced
+
+1. **The learning corner's autopsy generalized round 11's lesson**:
+   three more files used stdlib without requiring it, a store
+   double-counted its own records, and a public API called a method
+   that never existed — dead docs had been pointing at dead-ish code
+   all along, and reviving the docs revived the code.
+2. **The dormant metadata kept paying**: the `dependencies:` field
+   (unused since round 1) became a Bundler-style resolver;
+   contracts became RBS signatures with the shape/law boundary drawn
+   on principle; `try_acquire` became cron-guard semantics
+   (`skip_if_running`); the journal became an upload promotion log.
+3. **Process-grade patterns joined the catalog**: a real socket
+   server with a measured graceful drain, preforked workers reaped
+   by pid, per-tenant serialization with judged interleavings, and a
+   Ractor audit whose one refusal (the mutex-holding limiter) is
+   load-bearing: send facts, keep machines.
+4. **Seventh consecutive round of tools correcting authors**: the
+   burst-fed pipe wasn't fair (9/0/0 until arrivals were paced), the
+   Ractor auditor froze its own evidence, and the Unix example
+   committed the exact missing-require sin the census preaches
+   against. The streak is the methodology.
+5. **Next asks**: thread did-you-mean suggestions into
+   ValidationError and the rewire/remove errors (the candidate lists
+   are already in scope at every raise site — yuki24); and pin
+   fiber-vs-thread safety guarantees per public method as behavior
+   specs, not just drills (eregon).
+
 ### What round 6 surfaced
 
 1. **Plans became artifacts**: narratable (tour), serializable with an
