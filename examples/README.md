@@ -6,6 +6,7 @@ not this file.
 
 | Example | What it shows |
 |---------|---------------|
+| `adaptive_throttle.rb` | The Adaptive Throttle: nobody TELLS you an upstream's capacity - you discover it. An AIMD controller (TCP's algorithm) p... |
 | `api_reference.rb` | The API Reference Generator: walk the registry, emit reference docs for every capability - types, enums, bounds, policie... |
 | `backoff_conformance.rb` | Backoff Conformance: every strategy x jitter combination, a thousand draws each through an injected seeded RNG, checked ... |
 | `burst_absorber.rb` | The Burst Absorber: three waves of requests slam a credential with a ceiling of 3 (Agentic::RateLimit - this round's rel... |
@@ -15,14 +16,17 @@ not this file.
 | `command_bus.rb` | The Command Bus: every command is a composed capability with its OWN declared contract (new in this round - compositions... |
 | `composed_limits.rb` | Composed Limits: a real provider enforces BOTH a billed quota and a connection ceiling. quota.and(pool) - new this round... |
 | `contract_fuzzer.rb` | The Contract Fuzzer: for every registered capability, generate inputs that SHOULD pass its declared contract and mutatio... |
+| `contract_semver.rb` | The Contract Semver Advisor: two versions of a capability's contract, every change classified as breaking or compatible ... |
 | `cost_estimator.rb` | The Cost Estimator: price the plan BEFORE running it - per-task token estimates times a pricing table - gate on budget, ... |
 | `coupling_cartographer.rb` | The Coupling Cartographer: which files lean on which? Every file is surveyed for the constants it DEFINES and the consta... |
 | `critical_path.rb` | The Critical Path: after a run, combine the graph topology with measured durations to find the chain of tasks that deter... |
+| `dead_letter_office.rb` | The Dead Letter Office: three days of journaled runs, every failure collected and triaged by what the errors said about ... |
 | `deploy_train.rb` | The Deploy Train: lint -> test -> build -> canary -> ship, where a red gate stops the train and everything behind it rep... |
 | `doc_coverage.rb` | The Documentation Surveyor: measures YARD comment coverage for every public method in a lib/ tree. One survey task per f... |
 | `dungeon_crawl.rb` | The Dungeon Crawl: a quest is a plan, rooms are tasks, and doors are dependencies. The map is drawn from the orchestrato... |
 | `durable_batch.rb` | The Durable Batch: six billable "LLM calls" run under an ExecutionJournal. Mid-batch, the process dies for real - exit!,... |
 | `error_taxonomy_drill.rb` | The Error Taxonomy Drill: three tasks fail three different ways - a rate limit (retryable, says the error itself), an au... |
+| `eval_scorers.rb` | Eval Scorers: the same eval set scored four ways - exact match, keyword containment, numeric tolerance, and a judge rubr... |
 | `exquisite_corpse.rb` | The Exquisite Corpse: three artists each draw one part of a creature without seeing the others' work; the assembler rece... |
 | `flaky_api_drill.rb` | The Flaky API Drill: a task that times out twice before succeeding, run under a retry policy with exponential backoff an... |
 | `form_errors.rb` | The 422 Generator: turn a ValidationError into the API error document your frontend actually wants - message, allowed va... |
@@ -30,10 +34,13 @@ not this file.
 | `gem_scout.rb` | Gem Scout: describe what you need, get a ranked shortlist of gems. Search and scoring are separate capabilities; the sea... |
 | `graph_critic.rb` | The Graph Critic: reviews a plan's dependency structure BEFORE it runs, the way you'd review a class diagram. God tasks,... |
 | `graph_style.rb` | The Graph Style Guide: RuboCop for plans. Cops with thresholds run against any orchestrator's graph - depth, fan-in, orp... |
+| `graph_to_specs.rb` | Graph to Specs: the plan's structure dictates its test plan - roots need fixture cases, joins need one case per missing ... |
 | `haiku_agent.rb` | The three-line agent. Run me with no API key at all: |
+| `hill_chart.rb` | The Hill Chart: Basecamp's answer to "how's it going?" - work climbs the hill while it's still uncertain (queued, waitin... |
 | `incident_report.rb` | The Incident Report: a nightly batch dies at 3am. The on-call's first three questions - what ran? what broke? what do I ... |
 | `invariant_sentinel.rb` | The Invariant Sentinel: domain invariants checked after EVERY task, from a lifecycle hook. When a task leaves the world ... |
 | `jitter_shootout.rb` | The Jitter Shootout: none vs equal (+/-25%, the default) vs full (uniform over [0, delay], new this round) - same forty ... |
+| `journal_audit.rb` | The Journal Audit: seven tools now trust the journal, so the journal itself gets audited - well-formed lines, monotonic ... |
 | `json_schema_export.rb` | The Schema Export: a capability contract emitted as draft-07 JSON Schema (new this round), then PROVEN faithful - the sa... |
 | `kanban_board.rb` | The Kanban Board: a plan rendered as the three columns everyone actually understands - To Do, Doing, Done - reprinted at... |
 | `knee_finder.rb` | The Knee Finder: runs the same plan at increasing concurrency limits, measures wall time and total queue-wait via the ta... |
@@ -44,8 +51,10 @@ not this file.
 | `perf_history.rb` | Perf History: last release's run left a journal; this release's run is compared against it. No synthetic baseline, no sa... |
 | `performance_detective.rb` | The Performance Detective: one task per Ruby file in lib/, fanned out through the orchestrator, each dissecting a file f... |
 | `plan_diagram.rb` | The Plan Diagrammer: any orchestrator's graph, emitted as Mermaid - paste it into a README, GitHub renders it, and the d... |
+| `plan_forest.rb` | The Plan Forest: your graph drawn as a forest - roots at the soil, leaves in the canopy, every task planted at its depth... |
 | `plan_fortune.rb` | The Plan Fortune Teller: reads your graph's palm - depth, fan-in, roots, breadth - and tells its fortune. Every fortune ... |
 | `plan_gantt.rb` | The Plan Gantt: lifecycle hooks timestamp every task, then the run is rendered as an ASCII timeline - where your wall cl... |
+| `plan_merge.rb` | The Plan Merge: base, ours, theirs - a three-way merge of plan wire formats. Independent changes combine; the same edge ... |
 | `plan_roundtrip.rb` | The Round Trip: serialize a plan's graph to JSON, rebuild a fresh orchestrator from the JSON, and prove the rebuilt topo... |
 | `plan_structural_diff.rb` | The Structural Diff: two versions of a plan's wire format, diffed as TOPOLOGY - tasks added and removed, edges rewired, ... |
 | `plan_tour.rb` | The Plan Tour: hand any orchestrator to the guide and it narrates the plan as prose - first this, then that, meanwhile t... |
@@ -65,4 +74,5 @@ not this file.
 | `three_shapes.rb` | Three Shapes: the same six units of work arranged three ways - a chain, a star, and staged joins - then measured and cri... |
 | `ticket_screener.rb` | A HEY-style ticket screener: every inbound support ticket flows through screen -> categorize -> draft, all tickets in pa... |
 | `typed_pipeline.rb` | A typed ETL pipeline: extract -> transform -> load, each stage a capability with a declared contract, composed into one ... |
+| `variance_detective.rb` | The Variance Detective: ten journaled runs of the same plan, then a hunt for the task whose p90/p50 ratio betrays it. Av... |
 | `weekly_checkin.rb` | The Weekly Check-in: "what did you work on this week?" answered by the journal instead of by memory. Runs a few days of ... |

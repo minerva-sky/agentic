@@ -166,6 +166,50 @@ followed:
    expressible rules, and an eval-scorer seam for LLM-backed
    capabilities.
 
+## Round 8 — structure becomes vocabulary
+
+The round-7 asks shipped as a release (`stats[:roots]`/`stats[:leaves]`,
+journal `duration_samples` with `duration_percentile(desc, pct, last:)`,
+and `x-agentic-rules` emission in `to_json_schema`), and ten more
+experiments followed:
+
+| # | Persona | Built on the round-8 release | Run it | Field notes |
+|---|---------|------------------------------|--------|-------------|
+| 1 | Matz | Plan forest — the graph drawn as trees, depth as altitude | `examples/plan_forest.rb` | [round-8/01-matz.md](round-8/01-matz.md) |
+| 2 | DHH | Hill chart — where the work *is*, from lifecycle hooks | `examples/hill_chart.rb` | [round-8/02-dhh.md](round-8/02-dhh.md) |
+| 3 | Aaron Patterson | Variance detective — flaky vs slow, settled by percentiles | `examples/variance_detective.rb` | [round-8/03-tenderlove.md](round-8/03-tenderlove.md) |
+| 4 | Xavier Noria | Plan merge — three-way merge with conflicts at seam altitude | `examples/plan_merge.rb` | [round-8/04-fxn.md](round-8/04-fxn.md) |
+| 5 | Samuel Williams | Adaptive throttle — AIMD finds the capacity nobody documented | `examples/adaptive_throttle.rb` | [round-8/05-ioquatix.md](round-8/05-ioquatix.md) |
+| 6 | Jeremy Evans | Journal audit — five invariants; a tampered journal named precisely | `examples/journal_audit.rb` | [round-8/06-jeremyevans.md](round-8/06-jeremyevans.md) |
+| 7 | Piotr Solnica | Contract semver — breaking-or-compatible computed, bump advised | `examples/contract_semver.rb` | [round-8/07-solnic.md](round-8/07-solnic.md) |
+| 8 | Mike Perham | Dead letter office — requeue, parked, recovered, by last word | `examples/dead_letter_office.rb` | [round-8/08-mperham.md](round-8/08-mperham.md) |
+| 9 | Sandi Metz | Graph to specs — structural roles dictate the test plan | `examples/graph_to_specs.rb` | [round-8/09-sandimetz.md](round-8/09-sandimetz.md) |
+| 10 | Andrew Kane | Eval scorers — four ways to say "good enough", one seam | `examples/eval_scorers.rb` | [round-8/10-ankane.md](round-8/10-ankane.md) |
+
+### What round 8 surfaced
+
+1. **Structure became vocabulary**: `roots`/`leaves`/`depth` landed and
+   were immediately spent three ways — a drawing (forest), a test plan
+   (graph-to-specs), and merge conflicts named at seam altitude. Metadata
+   that keeps buying unplanned tools is metadata shaped right.
+2. **Durations became distributions**: `duration_samples` turned point
+   readings into percentiles, and two tools acted on them — the variance
+   detective separates flaky from slow (p90/p50 ratio), and the adaptive
+   throttle steers concurrency by p50 drift instead of vibes.
+3. **Signal-to-noise as a design goal**: the dead letter office triages
+   by *most recent* attempt (no paging for ghosts), and the eval scorers
+   flag exactly one real failure where exact-match flags two. Both argue
+   the same point: a report is only as good as what its failures mean.
+4. **The declarations' blind spot held**: Piotr's semver advisor and
+   Jeremy's audit both stop at callable rules — predicates stay opaque
+   to every static tool. Structured rules narrow the gap; they don't
+   close it.
+5. **Next asks**: `RateLimit#resize(n)` so the adaptive throttle can
+   steer the real limiter instead of simulating one, and journaling
+   `retryable:` at write time from `failure.retryable?` so triage
+   survives taxonomy renames. (`eval_scorers.rb` joins the
+   exit-1-by-design set.)
+
 ### What round 6 surfaced
 
 1. **Plans became artifacts**: narratable (tour), serializable with an
