@@ -259,6 +259,63 @@ onto them, and ten more experiments followed:
    (Piotr); and a breaker-friendly convention for `retryable: nil` —
    "no opinion" should mean retry-with-suspicion, not hopeless (Mike).
 
+## Round 10 — predicates become data
+
+The round-9 asks shipped as a release (`Agentic::RelationRules` —
+`sum_lte`/`requires`/`mutually_exclusive` declared as data, enforced
+by the validator with derived messages, projected into real draft-07
+keywords, and carried in `x-agentic-rules`; plus the retryable-nil
+convention on `TaskFailure`: `hopeless?` / `possibly_transient?`),
+the two asking examples were modernized, and ten more experiments
+followed:
+
+| # | Persona | Built on the round-10 release | Run it | Field notes |
+|---|---------|-------------------------------|--------|-------------|
+| 1 | Matz | Polite form — every declaration read aloud as a question | `examples/polite_form.rb` | [round-10/01-matz.md](round-10/01-matz.md) |
+| 2 | DHH | One-file API — schema, 422s, and 201s derived from one declaration | `examples/one_file_api.rb` | [round-10/02-dhh.md](round-10/02-dhh.md) |
+| 3 | Aaron Patterson | Contract overhead — validation priced against the call it guards | `examples/contract_overhead.rb` | [round-10/03-tenderlove.md](round-10/03-tenderlove.md) |
+| 4 | Xavier Noria | Projection agreement — both renderings of the law, proved; the nil frontier mapped | `examples/projection_agreement.rb` | [round-10/04-fxn.md](round-10/04-fxn.md) |
+| 5 | Samuel Williams | Cancel drill — task cancel is prompt; plan cancel bills you anyway | `examples/cancel_drill.rb` | [round-10/05-ioquatix.md](round-10/05-ioquatix.md) |
+| 6 | Jeremy Evans | Relation prober — 13 probes pass; one step off the road draws blood | `examples/relation_prober.rb` | [round-10/06-jeremyevans.md](round-10/06-jeremyevans.md) |
+| 7 | Piotr Solnica | Relation diff — the rules join semver; opacity becomes opt-in | `examples/relation_diff.rb` | [round-10/07-solnic.md](round-10/07-solnic.md) |
+| 8 | Mike Perham | Retry budget — one fleet-wide wallet; 45 doomed calls become 17 | `examples/retry_budget.rb` | [round-10/08-mperham.md](round-10/08-mperham.md) |
+| 9 | Sandi Metz | Rule shapes — one policy, three representations, four consumers | `examples/rule_shapes.rb` | [round-10/09-sandimetz.md](round-10/09-sandimetz.md) |
+| 10 | Andrew Kane | Batch import — a reject file with line, field, and rule, at 162us/row | `examples/batch_import.rb` | [round-10/10-ankane.md](round-10/10-ankane.md) |
+
+### What round 10 surfaced
+
+1. **Predicates as data compounded immediately**: within one round,
+   relation rules were asked as questions (polite form), served as
+   draft-07 keywords (one-file API), satisfied by the generator,
+   diffed for semver, audited for consumer count, and used to explain
+   118 CSV rejections. Six consumers for a feature shipped that
+   morning — the strongest version yet of "metadata keeps buying
+   unplanned tools."
+2. **Two real defects found by drills**: `cancel_plan` under a joined
+   reactor is bookkeeping-only — every agent runs and bills while the
+   status says canceled (Samuel); and a relation rule over an
+   undeclared field escapes as raw TypeError instead of
+   ValidationError, turning 422 paths into 500 paths (Jeremy, whose
+   prober exits 1 by design as the acceptance test).
+3. **Agreement-for-different-reasons is a named hazard**: typed
+   fields guard the nil frontier so both renderings reject
+   `{express: nil}` — for unrelated reasons; relax the type and the
+   renderings diverge. Verdict-only tests would call that a pass
+   (Xavier).
+4. **The meter settled the validation debate**: the largest contract
+   costs 0.14ms against the 800ms call it guards, and rejection
+   costs 12x the happy path — both numbers now on the table (Aaron,
+   Kane concurring at 162us/row with rejects included).
+5. **Next asks**: make `cancel_plan` stop the scheduler and in-flight
+   fibers (the cancel drill is the acceptance test); relation rules
+   must type-check their fields at declaration time or wrap
+   evaluation failures in ValidationError (the relation prober is
+   the acceptance test); `RateLimit#try_acquire` for non-blocking
+   admission so retry budgets can be RateLimits; and align or
+   document presence semantics (Ruby nil vs JSON null) across the
+   projection boundary. (`relation_prober.rb` joins the
+   exit-1-by-design set.)
+
 ### What round 6 surfaced
 
 1. **Plans became artifacts**: narratable (tour), serializable with an

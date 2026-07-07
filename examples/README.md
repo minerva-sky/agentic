@@ -9,7 +9,9 @@ not this file.
 | `adaptive_throttle.rb` | The Adaptive Throttle: nobody TELLS you an upstream's capacity - you discover it. An AIMD controller (TCP's algorithm) p... |
 | `api_reference.rb` | The API Reference Generator: walk the registry, emit reference docs for every capability - types, enums, bounds, policie... |
 | `backoff_conformance.rb` | Backoff Conformance: every strategy x jitter combination, a thousand draws each through an injected seeded RNG, checked ... |
+| `batch_import.rb` | The Batch Import: 500 rows of the kind of data people actually upload - typos, header drift, impossible combinations - r... |
 | `burst_absorber.rb` | The Burst Absorber: three waves of requests slam a credential with a ceiling of 3 (Agentic::RateLimit - this round's rel... |
+| `cancel_drill.rb` | The Cancel Drill: structured concurrency's core promise is that cancellation is PROMPT - stop means stop, not "finish ev... |
 | `capability_evals.rb` | Capability Evals: golden test cases run against registered capabilities, scored, and gated. When you swap a lambda for a... |
 | `changelog_scout.rb` | The Changelog Scout: reads real git history, classifies every commit through a contract-checked capability, and drafts t... |
 | `circuit_breaker.rb` | The Circuit Breaker: when an upstream is down, the cheapest request is the one you don't send. The breaker trips after 3... |
@@ -18,6 +20,7 @@ not this file.
 | `composed_limits.rb` | Composed Limits: a real provider enforces BOTH a billed quota and a connection ceiling. quota.and(pool) - new this round... |
 | `contract_fixtures.rb` | Contract Fixtures: example payloads in docs rot the day the contract changes. So don't write them - DERIVE them. This ge... |
 | `contract_fuzzer.rb` | The Contract Fuzzer: for every registered capability, generate inputs that SHOULD pass its declared contract and mutatio... |
+| `contract_overhead.rb` | The Contract Overhead Bench: "should we validate every call?" is a performance question, so answer it with a measurement... |
 | `contract_semver.rb` | The Contract Semver Advisor: two versions of a capability's contract, every change classified as breaking or compatible ... |
 | `cost_estimator.rb` | The Cost Estimator: price the plan BEFORE running it - per-task token estimates times a pricing table - gate on budget, ... |
 | `coupling_cartographer.rb` | The Coupling Cartographer: which files lean on which? Every file is surveyed for the constants it DEFINES and the consta... |
@@ -54,6 +57,7 @@ not this file.
 | `latency_lab.rb` | The Latency Lab: 20 simulated LLM calls (200ms of IO each) executed through the orchestrator at different concurrency li... |
 | `live_dashboard.rb` | The Live Dashboard: lifecycle hooks publish events onto an Async::Queue; a consumer task IN THE SAME REACTOR renders the... |
 | `namespace_cartographer.rb` | The Namespace Cartographer: maps a gem's constant tree and audits every file against the constant Zeitwerk expects it to... |
+| `one_file_api.rb` | The One-File API: an endpoint is a contract wearing HTTP. Declare the capability once and the rest is derived - the 422s... |
 | `perf_diff.rb` | The Perf Diff: run the plan before and after a change, diff per-task durations, and flag regressions - with the one qual... |
 | `perf_history.rb` | Perf History: last release's run left a journal; this release's run is compared against it. No synthetic baseline, no sa... |
 | `performance_detective.rb` | The Performance Detective: one task per Ruby file in lib/, fanned out through the orchestrator, each dissecting a file f... |
@@ -65,13 +69,19 @@ not this file.
 | `plan_roundtrip.rb` | The Round Trip: serialize a plan's graph to JSON, rebuild a fresh orchestrator from the JSON, and prove the rebuilt topo... |
 | `plan_structural_diff.rb` | The Structural Diff: two versions of a plan's wire format, diffed as TOPOLOGY - tasks added and removed, edges rewired, ... |
 | `plan_tour.rb` | The Plan Tour: hand any orchestrator to the guide and it narrates the plan as prose - first this, then that, meanwhile t... |
+| `polite_form.rb` | The Polite Form: a contract usually speaks AFTER you fail - a 422, a stack of violations. This assistant makes it speak ... |
+| `projection_agreement.rb` | The Projection Agreement Prover: relation rules now render twice - the validator enforces them in Ruby, and to_json_sche... |
 | `quota_keeper.rb` | The Quota Keeper: the same 20 requests through two different laws. A concurrency ceiling ("3 in flight") models connecti... |
 | `readme_verifier.rb` | The README Verifier: every ruby code fence in the README is a promise. This extracts them all, syntax-checks each with P... |
 | `refactor_receipts.rb` | Refactor Receipts: the god-join plan from the graph critic, improved in two small steps - with a receipt after each one.... |
 | `refactoring_dojo.rb` | The Refactoring Dojo: a student submits a method, three critic agents review it from three distinct perspectives, and th... |
+| `relation_diff.rb` | The Relation Diff: round 8's semver advisor classified declaration changes but had to shrug at rules - lambdas can't be ... |
+| `relation_prober.rb` | The Relation Prober: relation-typed rules are new, and new predicates deserve hostility. Each relation is probed with ed... |
 | `renga_circle.rb` | A renga circle: three poet agents compose a linked-verse poem, each verse responding to the one before it. The dependenc... |
 | `resize_torture.rb` | The Resize Torture Test: a feature that changes a limiter's ceiling while fibers are waiting on it had better say exactl... |
+| `retry_budget.rb` | The Retry Budget: a retry storm is a self-inflicted DDoS - every job politely retrying 3x turns one outage into four. Re... |
 | `rule_prober.rb` | The Rule Prober: structured rules declare which fields they read - so now that claim can be AUDITED. For each rule, pert... |
+| `rule_shapes.rb` | Rule Shapes: the same policy - "express shipments need a customs code" - written three ways: a lambda, a structured chec... |
 | `schema_advisor.rb` | The Schema Advisor: give it a schema and a query log, get back the advisories a careful DBA would write - each rule its ... |
 | `setup_doctor.rb` | The Setup Doctor: every onboarding wiki page is a bug. This runs the checks a README asks a new hire to do by hand - rub... |
 | `shared_rate_limit.rb` | The Shared Rate Limit: two plans run concurrently in one reactor, but the API key they share allows only 3 requests in f... |
