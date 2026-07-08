@@ -41,7 +41,8 @@ scribe = Agentic::Agent.build { |a| a.name = "Scribe" }
 scribe.add_capability("classify_commit")
 
 # --- the plan: classify commits in parallel, then one writer fans in --------
-subjects = `git -C #{ROOT} log -#{count} --pretty=format:%s`.lines.map(&:strip)
+subjects = `git -C #{ROOT} log -#{count} --pretty=format:%s`
+  .force_encoding(Encoding::UTF_8).lines.map(&:strip)
 
 orchestrator = Agentic::PlanOrchestrator.new(concurrency_limit: 8)
 classifications = subjects.map.with_index do |subject, i|

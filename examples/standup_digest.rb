@@ -25,7 +25,8 @@ orchestrator = Agentic::PlanOrchestrator.new(concurrency_limit: 3)
 
 commits = repo_task("recent commits")
 orchestrator.add_task(commits, agent: ->(_t) {
-  log = `git -C #{ROOT} log --oneline -12 --pretty=format:"%s"`.lines.map(&:strip)
+  log = `git -C #{ROOT} log --oneline -12 --pretty=format:"%s"`
+    .force_encoding(Encoding::UTF_8).lines.map(&:strip)
   themes = log.group_by { |line| line[/\A(\w+)(?:\(|:)/, 1] || "misc" }
   {count: log.size, themes: themes.transform_values(&:size), latest: log.first}
 })
