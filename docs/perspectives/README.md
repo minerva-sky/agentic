@@ -646,6 +646,63 @@ second time with different obsessions:
    provers can enumerate interleavings instead of sampling them
    (eregon).
 
+## Round 17 — the builders' round
+
+A second lottery (round-16's bench excluded), with a sharpened
+brief: don't probe the framework — **build on it**. Each persona
+shipped a product-shaped thing: a tool, a workflow, an experience
+that solves a problem the framework doesn't solve by itself:
+
+| # | Persona | Built on the gem | Run it | Field notes |
+|---|---------|------------------|--------|-------------|
+| 1 | Ryan Davis | Plan heckler — mutation testing for workflows; specs graded on whether they can FAIL | `examples/plan_heckler.rb` | [round-17/01-zenspider.md](round-17/01-zenspider.md) |
+| 2 | DHH | Omakase scaffold — rails-new for plans; six lines of recipe, a running program back | `examples/omakase_scaffold.rb` | [round-17/02-dhh.md](round-17/02-dhh.md) |
+| 3 | Mike Dalessio | Document refinery — hostile-HTML ETL: decode, sanitize, extract, resolve, referee | `examples/document_refinery.rb` | [round-17/03-flavorjones.md](round-17/03-flavorjones.md) |
+| 4 | Richard Schneeman | Assembly doctor — syntax_suggest for plans: carets, did-you-mean, the loop shown whole | `examples/assembly_doctor.rb` | [round-17/04-schneems.md](round-17/04-schneems.md) |
+| 5 | Nate Berkopec | Queue-time autoscaler — Little's law closes the loop on a live resized pool | `examples/queue_time_autoscaler.rb` | [round-17/05-nateberkopec.md](round-17/05-nateberkopec.md) |
+| 6 | Xavier Noria | Capability autoloader — Zeitwerk's contract for capability packs: lazy, eager-verified, reloadable | `examples/capability_autoloader.rb` | [round-17/06-fxn.md](round-17/06-fxn.md) |
+| 7 | José Valim | Supervision tree — one_for_one / rest_for_one / one_for_all with bounded restart intensity | `examples/supervision_tree.rb` | [round-17/07-josevalim.md](round-17/07-josevalim.md) |
+| 8 | Obie Fernandez | Escalation ladder — confidence tiers as policy data; sensitivity trumps confidence; dossiers on handoff | `examples/support_escalation.rb` | [round-17/08-obie.md](round-17/08-obie.md) |
+| 9 | André Arko | Plan lockfile — constraints resolve once; frozen runs verify digests and refuse drift | `examples/plan_lockfile.rb` | [round-17/09-indirect.md](round-17/09-indirect.md) |
+| 10 | Sandi Metz | Shameless green — golden-master refactoring of a god task, one responsibility per certified step | `examples/shameless_green.rb` | [round-17/10-sandimetz.md](round-17/10-sandimetz.md) |
+
+### What round 17 surfaced
+
+1. **The framework held up as a platform, not just a subject.** Ten
+   products — a mutation tester, a generator, an ETL refinery, a
+   diagnostic UI, an autoscaler, a code loader, a supervisor, a
+   triage ladder, a lockfile, a refactoring engine — and none needed
+   the gem's cooperation beyond its public seams: plans-as-data made
+   mutants one-symbol sabotages and refactoring shapes cheap
+   auditions; the resizable limiter made the autoscaler a 30-line
+   loop; the registry's version tracking gave the autoloader its
+   reload semantics; `Suggestions` gave the doctor its did-you-mean.
+2. **The tools-correct-authors streak reached ten rounds, in
+   volume.** The heckler's fixture never crossed the discount bar
+   (a surviving mutant can mean an input hole, not a missing
+   assertion); the scaffold's first generated program didn't boot —
+   `Dir.tmpdir` without the require, the census sin, now committed
+   by a *generator*; the refinery's first draft ran encoding repair
+   last and the plan itself refused (you can't regex invalid UTF-8);
+   and the autoloader fought both classic reloader wars in one file
+   (stale registrations, cached references) and won them with the
+   registry's own version resolution.
+3. **Recovery/routing policy kept wanting to be data one level up**:
+   the supervisor's strategies are blast-radius declarations; the
+   ladder's thresholds live in a POLICY hash with sensitivity
+   structurally outranking confidence; the lockfile splits "what
+   you accept" from "what you run" with a human diff between them.
+   Same shape three times — policy as data, above the workers,
+   below the humans.
+4. **Soft asks, gently held**: a registry miss-hook (const_missing
+   for capabilities) so loaders can be invisible, and per-execute
+   provider resolution in agents so reloads don't fight add-time
+   snapshots (fxn); assembly-time rendering of the doctor's
+   snippet-and-caret diagnosis inside the framework's own errors
+   (schneems); auto-generated edge mutants from `graph[:edges]`
+   (zenspider); and `restart:` markings per child plus nestable
+   supervisors (josevalim).
+
 ### What round 6 surfaced
 
 1. **Plans became artifacts**: narratable (tour), serializable with an

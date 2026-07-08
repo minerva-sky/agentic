@@ -12,12 +12,14 @@ not this file.
 | `api_reference.rb` | The API Reference Generator: walk the registry, emit reference docs for every capability - types, enums, bounds, policie... |
 | `api_riffs.rb` | API Riffs: before an API ships, sketch it three ways and READ the call sites out loud - the design work happens in the c... |
 | `api_surface.rb` | The API Surface Census: your public API is not what you documented - it's every public method a user CAN call, because t... |
+| `assembly_doctor.rb` | The Assembly Doctor: syntax_suggest for plans. When a 12-step plan won't assemble, "KeyError: task not found" is technic... |
 | `attachment_pipeline.rb` | The Attachment Pipeline: Shrine's central lesson is that file uploads are a TWO-PHASE commit wearing a file input - phas... |
 | `backoff_conformance.rb` | Backoff Conformance: every strategy x jitter combination, a thousand draws each through an injected seeded RNG, checked ... |
 | `batch_import.rb` | The Batch Import: 500 rows of the kind of data people actually upload - typos, header drift, impossible combinations - r... |
 | `behavior_spec.rb` | The Behavior Spec: ruby/spec exists because "MRI does X" is not a specification - it's an implementation detail wearing ... |
 | `burst_absorber.rb` | The Burst Absorber: three waves of requests slam a credential with a ceiling of 3 (Agentic::RateLimit - this round's rel... |
 | `cancel_drill.rb` | The Cancel Drill: structured concurrency's core promise is that cancellation is PROMPT - stop means stop, not "finish ev... |
+| `capability_autoloader.rb` | The Capability Autoloader: Zeitwerk's contract, ported. Drop a file at packs/text/summarize.rb defining Text::Summarize,... |
 | `capability_evals.rb` | Capability Evals: golden test cases run against registered capabilities, scored, and gated. When you swap a lambda for a... |
 | `capability_resolver.rb` | The Capability Resolver: CapabilitySpecification has carried a dependencies: field since round 1, and nothing has ever r... |
 | `capacity_planner.rb` | The Capacity Planner: "how many workers do we need?" is not a feeling, it's Little's Law - L = lambda x W. The journal a... |
@@ -44,6 +46,7 @@ not this file.
 | `discovery_testing.rb` | Discovery Testing: most people use test doubles to ISOLATE code that already exists. The better trick is using them to D... |
 | `doc_coverage.rb` | The Documentation Surveyor: measures YARD comment coverage for every public method in a lib/ tree. One survey task per f... |
 | `doctest_runner.rb` | The Doctest Runner: Rust taught the industry one enormous docs lesson - EXAMPLES IN DOCS SHOULD EXECUTE. This harvests e... |
+| `document_refinery.rb` | The Document Refinery: an HTML-to-digest pipeline where every stage assumes the input is hostile until proven boring - b... |
 | `duck_agents.rb` | Duck Agents: the agent: seam asks one question - "can you be called with a task?" - and five differently-shaped objects ... |
 | `dungeon_crawl.rb` | The Dungeon Crawl: a quest is a plan, rooms are tasks, and doors are dependencies. The map is drawn from the orchestrato... |
 | `durable_batch.rb` | The Durable Batch: six billable "LLM calls" run under an ExecutionJournal. Mid-batch, the process dies for real - exit!,... |
@@ -83,6 +86,7 @@ not this file.
 | `live_dashboard.rb` | The Live Dashboard: lifecycle hooks publish events onto an Async::Queue; a consumer task IN THE SAME REACTOR renders the... |
 | `money_discipline.rb` | Money Discipline: every money bug in production is the same three bugs - floats for currency, arithmetic before validati... |
 | `namespace_cartographer.rb` | The Namespace Cartographer: maps a gem's constant tree and audits every file against the constant Zeitwerk expects it to... |
+| `omakase_scaffold.rb` | The Omakase Scaffold: `rails new` for plans. You bring six lines of intent - a name and some steps. The generator brings... |
 | `onboarding_trail.rb` | The Onboarding Trail: a codebase is a place people live, and new teammates don't need a map of every pipe - they need a ... |
 | `one_file_api.rb` | The One-File API: an endpoint is a contract wearing HTTP. Declare the capability once and the rest is derived - the 422s... |
 | `perf_diff.rb` | The Perf Diff: run the plan before and after a change, diff per-task durations, and flag regressions - with the one qual... |
@@ -94,7 +98,9 @@ not this file.
 | `plan_forest.rb` | The Plan Forest: your graph drawn as a forest - roots at the soil, leaves in the canopy, every task planted at its depth... |
 | `plan_fortune.rb` | The Plan Fortune Teller: reads your graph's palm - depth, fan-in, roots, breadth - and tells its fortune. Every fortune ... |
 | `plan_gantt.rb` | The Plan Gantt: lifecycle hooks timestamp every task, then the run is rendered as an ASCII timeline - where your wall cl... |
+| `plan_heckler.rb` | The Plan Heckler: mutation testing for workflows. Your plan has tests. Cute. Do the tests actually FAIL when the plan is... |
 | `plan_kata.rb` | The Plan Kata: red, green, refactor - for a plan. The "tests" are assertions about the graph (one root, one leaf, labele... |
+| `plan_lockfile.rb` | The Plan Lockfile: Gemfile.lock for workflows. A plan that says "give me text.summarize ~> 1.0" is a WISH; production ru... |
 | `plan_merge.rb` | The Plan Merge: base, ours, theirs - a three-way merge of plan wire formats. Independent changes combine; the same edge ... |
 | `plan_roundtrip.rb` | The Round Trip: serialize a plan's graph to JSON, rebuild a fresh orchestrator from the JSON, and prove the rebuilt topo... |
 | `plan_server.rb` | The Plan Server: a server is three disciplines wearing one process - accept concurrently, share resources safely, and ab... |
@@ -106,6 +112,7 @@ not this file.
 | `process_drill.rb` | The Process Drill: threads share a Mutex; PROCESSES share nothing but the file. The journal claims flock+fsync, which is... |
 | `progress_channel.rb` | The Progress Channel: broadcasting plan progress to N subscribers is easy until one subscriber is slow - then your "real... |
 | `projection_agreement.rb` | The Projection Agreement Prover: relation rules now render twice - the validator enforces them in Ruby, and to_json_sche... |
+| `queue_time_autoscaler.rb` | The Queue-Time Autoscaler: the Speedshop rule, closed-loop. Most autoscalers trigger on utilization, which is a lie with... |
 | `quota_keeper.rb` | The Quota Keeper: the same 20 requests through two different laws. A concurrency ceiling ("3 in flight") models connecti... |
 | `ractor_shareability.rb` | The Ractor Shareability Audit: `freeze` is a promise about one object; Ractor.shareable? is a promise about everything i... |
 | `railway_plan.rb` | The Railway Plan: dry-monads taught Ruby that failure handling is COMPOSITION, not rescue blocks - a pipeline of steps w... |
@@ -127,12 +134,15 @@ not this file.
 | `self_correcting_output.rb` | Self-Correcting Output: the pattern that makes LLM components shippable. The model's output is validated against the cap... |
 | `setup_doctor.rb` | The Setup Doctor: every onboarding wiki page is a bug. This runs the checks a README asks a new hire to do by hand - rub... |
 | `shadow_traffic.rb` | Shadow Traffic: the safest way to replace a component at scale is to never let the replacement answer. The OLD implement... |
+| `shameless_green.rb` | Shameless Green: the 99 Bottles discipline applied to a plan. Step zero is one god task that does everything - and it's ... |
 | `shared_rate_limit.rb` | The Shared Rate Limit: two plans run concurrently in one reactor, but the API key they share allows only 3 requests in f... |
 | `spend_ledger.rb` | The Spend Ledger: LLM plans spend real money, and money has rules older than software - integer cents (floats round YOUR... |
 | `stampede_sim.rb` | The Stampede Simulator: twenty workers hit a hiccuping upstream, all fail at once, all retry. With jitter OFF they come ... |
 | `standup_digest.rb` | The Standup Digest: three collectors gather from the repo in parallel - recent commits, TODO debt, test suite shape - an... |
 | `state_machine.rb` | The Contract State Machine: each transition is a capability whose guard is not an if-statement but an enum predicate on ... |
 | `stdlib_census.rb` | The Stdlib Census: "it's in the standard library" is a statement with a shelf life. Default gems become bundled gems on ... |
+| `supervision_tree.rb` | The Supervision Tree: "let it crash" for plans. The agents in this file contain NO rescue clauses - error handling is no... |
+| `support_escalation.rb` | The Escalation Ladder: the pattern under every AI product that survives contact with customers. The machine does the who... |
 | `telemetry_bus.rb` | The Telemetry Bus: lifecycle hooks are callbacks - one producer, one consumer, coupled at configuration time. A telemetr... |
 | `telephone_game.rb` | The telephone game: a rumor passes through five villagers, each of whom hears the previous version through the orchestra... |
 | `tenant_shards.rb` | Tenant Shards: at scale, "the plan" becomes "the plan, per shard" - same pipeline, isolated blast radius. Each shard get... |
