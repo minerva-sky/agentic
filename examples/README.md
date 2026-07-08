@@ -29,6 +29,7 @@ not this file.
 | `composed_limits.rb` | Composed Limits: a real provider enforces BOTH a billed quota and a connection ceiling. quota.and(pool) - new this round... |
 | `concurrency_key.rb` | The Concurrency Key: "at most one sync per TENANT, any number of tenants at once" is the concurrency control every multi... |
 | `confident_pipeline.rb` | The Confident Pipeline: timid code checks nil at every step because it trusts nothing, including itself. Confident code ... |
+| `configurable_cops.rb` | Configurable Cops: a style guide nobody can configure is a style FIGHT on a delay timer. RuboCop's deepest lesson isn't ... |
 | `contract_cop.rb` | The Contract Cop: RuboCop for capability specs. Contracts are the most-read documents in this framework - six tools cons... |
 | `contract_fixtures.rb` | Contract Fixtures: example payloads in docs rot the day the contract changes. So don't write them - DERIVE them. This ge... |
 | `contract_fuzzer.rb` | The Contract Fuzzer: for every registered capability, generate inputs that SHOULD pass its declared contract and mutatio... |
@@ -40,6 +41,7 @@ not this file.
 | `dead_letter_office.rb` | The Dead Letter Office: three days of journaled runs, every failure collected and triaged by what the errors said about ... |
 | `deploy_train.rb` | The Deploy Train: lint -> test -> build -> canary -> ship, where a red gate stops the train and everything behind it rep... |
 | `did_you_mean.rb` | Did You Mean, for plans: the kindest thing an error can do is finish your sentence. In round 14 this example retrofitted... |
+| `discovery_testing.rb` | Discovery Testing: most people use test doubles to ISOLATE code that already exists. The better trick is using them to D... |
 | `doc_coverage.rb` | The Documentation Surveyor: measures YARD comment coverage for every public method in a lib/ tree. One survey task per f... |
 | `doctest_runner.rb` | The Doctest Runner: Rust taught the industry one enormous docs lesson - EXAMPLES IN DOCS SHOULD EXECUTE. This harvests e... |
 | `duck_agents.rb` | Duck Agents: the agent: seam asks one question - "can you be called with a task?" - and five differently-shaped objects ... |
@@ -56,6 +58,7 @@ not this file.
 | `form_errors.rb` | The 422 Generator: turn a ValidationError into the API error document your frontend actually wants - message, allowed va... |
 | `freight_rules.rb` | The Freight Desk: a quoting capability whose tariff book is written as cross-field contract rules (new this round). Per-... |
 | `gem_scout.rb` | Gem Scout: describe what you need, get a ranked shortlist of gems. Search and scoring are separate capabilities; the sea... |
+| `gentle_deadline.rb` | The Gentle Deadline: most deadline code is violent - a timeout fires, everything dies, the user gets an error page at 30... |
 | `gentle_deprecations.rb` | Gentle Deprecations: the hard part of maintaining a framework isn't adding the better name - it's the two years of not b... |
 | `graph_critic.rb` | The Graph Critic: reviews a plan's dependency structure BEFORE it runs, the way you'd review a class diagram. God tasks,... |
 | `graph_invariants.rb` | The Graph Invariants Prover: the reflection API makes promises - order respects edges, roots have no dependencies, depth... |
@@ -74,6 +77,7 @@ not this file.
 | `journal_tail.rb` | The Journal Tail Pager: production journals grow like production tables, and the question asked of both is always the sa... |
 | `json_schema_export.rb` | The Schema Export: a capability contract emitted as draft-07 JSON Schema (new this round), then PROVEN faithful - the sa... |
 | `kanban_board.rb` | The Kanban Board: a plan rendered as the three columns everyone actually understands - To Do, Doing, Done - reprinted at... |
+| `kill_switch.rb` | The Kill Switch: feature flags answer "who should get this?"; kill switches answer a grimmer question - "how fast can a ... |
 | `knee_finder.rb` | The Knee Finder: runs the same plan at increasing concurrency limits, measures wall time and total queue-wait via the ta... |
 | `latency_lab.rb` | The Latency Lab: 20 simulated LLM calls (200ms of IO each) executed through the orchestrator at different concurrency li... |
 | `live_dashboard.rb` | The Live Dashboard: lifecycle hooks publish events onto an Async::Queue; a consumer task IN THE SAME REACTOR renders the... |
@@ -100,25 +104,31 @@ not this file.
 | `polite_form.rb` | The Polite Form: a contract usually speaks AFTER you fail - a 422, a stack of violations. This assistant makes it speak ... |
 | `ports_and_adapters.rb` | Ports and Adapters: the domain is the part of your app that would survive a framework migration - IF you kept it clean. ... |
 | `process_drill.rb` | The Process Drill: threads share a Mutex; PROCESSES share nothing but the file. The journal claims flock+fsync, which is... |
+| `progress_channel.rb` | The Progress Channel: broadcasting plan progress to N subscribers is easy until one subscriber is slow - then your "real... |
 | `projection_agreement.rb` | The Projection Agreement Prover: relation rules now render twice - the validator enforces them in Ruby, and to_json_sche... |
 | `quota_keeper.rb` | The Quota Keeper: the same 20 requests through two different laws. A concurrency ceiling ("3 in flight") models connecti... |
 | `ractor_shareability.rb` | The Ractor Shareability Audit: `freeze` is a promise about one object; Ractor.shareable? is a promise about everything i... |
+| `railway_plan.rb` | The Railway Plan: dry-monads taught Ruby that failure handling is COMPOSITION, not rescue blocks - a pipeline of steps w... |
 | `rbs_export.rb` | The RBS Export: a capability contract already knows its types - it validates them at runtime on every call. RBS is the s... |
 | `readme_verifier.rb` | The README Verifier: every ruby code fence in the README is a promise. This extracts them all, syntax-checks each with P... |
 | `refactor_receipts.rb` | Refactor Receipts: the god-join plan from the graph critic, improved in two small steps - with a receipt after each one.... |
 | `refactoring_dojo.rb` | The Refactoring Dojo: a student submits a method, three critic agents review it from three distinct perspectives, and th... |
 | `relation_diff.rb` | The Relation Diff: round 8's semver advisor classified declaration changes but had to shrug at rules - lambdas can't be ... |
 | `relation_prober.rb` | The Relation Prober: relation-typed rules are new, and new predicates deserve hostility. Each relation is probed with ed... |
+| `release_rehearsal.rb` | The Release Rehearsal: your repo is not your gem. The gem is whatever the gemspec PACKAGES, installed into a clean GEM_H... |
 | `renga_circle.rb` | A renga circle: three poet agents compose a linked-verse poem, each verse responding to the one before it. The dependenc... |
 | `require_cost.rb` | The Require Cost Report: `require` is a purchase - memory, objects, and boot time, paid again by every process you fork ... |
 | `resize_torture.rb` | The Resize Torture Test: a feature that changes a limiter's ceiling while fibers are waiting on it had better say exactl... |
 | `retry_budget.rb` | The Retry Budget: a retry storm is a self-inflicted DDoS - every job politely retrying 3x turns one outage into four. Re... |
 | `rule_prober.rb` | The Rule Prober: structured rules declare which fields they read - so now that claim can be AUDITED. For each rule, pert... |
 | `rule_shapes.rb` | Rule Shapes: the same policy - "express shipments need a customs code" - written three ways: a lambda, a structured chec... |
+| `schedule_equivalence.rb` | Schedule Equivalence: a plan's declared meaning is its dependency graph - which implies a PROMISE nobody usually tests: ... |
 | `schema_advisor.rb` | The Schema Advisor: give it a schema and a query log, get back the advisories a careful DBA would write - each rule its ... |
 | `self_correcting_output.rb` | Self-Correcting Output: the pattern that makes LLM components shippable. The model's output is validated against the cap... |
 | `setup_doctor.rb` | The Setup Doctor: every onboarding wiki page is a bug. This runs the checks a README asks a new hire to do by hand - rub... |
+| `shadow_traffic.rb` | Shadow Traffic: the safest way to replace a component at scale is to never let the replacement answer. The OLD implement... |
 | `shared_rate_limit.rb` | The Shared Rate Limit: two plans run concurrently in one reactor, but the API key they share allows only 3 requests in f... |
+| `spend_ledger.rb` | The Spend Ledger: LLM plans spend real money, and money has rules older than software - integer cents (floats round YOUR... |
 | `stampede_sim.rb` | The Stampede Simulator: twenty workers hit a hiccuping upstream, all fail at once, all retry. With jitter OFF they come ... |
 | `standup_digest.rb` | The Standup Digest: three collectors gather from the repo in parallel - recent commits, TODO debt, test suite shape - an... |
 | `state_machine.rb` | The Contract State Machine: each transition is a capability whose guard is not an if-statement but an enum predicate on ... |

@@ -590,6 +590,62 @@ directories, and a framework whose contracts, journals, limiters,
 and plans all testify about themselves. The bench is cleared; the
 asks list is empty; everything the room asked for was shipped.
 
+## Round 16 — the lottery round
+
+The close-out lasted one message. With no asks outstanding, the
+bench was drawn by lottery — ten names sampled at random from all
+fifty prior personas — so returning builders faced the framework a
+second time with different obsessions:
+
+| # | Persona | Built with the gem | Run it | Field notes |
+|---|---------|--------------------|--------|-------------|
+| 1 | Yukihiro Matsumoto | Gentle deadline — optional tasks decline with regrets, essentials never starve | `examples/gentle_deadline.rb` | [round-16/01-matz.md](round-16/01-matz.md) |
+| 2 | Piotr Solnica | Railway plan — a 14-line Result monad lifts plan outcomes into `.bind` chains | `examples/railway_plan.rb` | [round-16/02-solnic.md](round-16/02-solnic.md) |
+| 3 | Benoit Daloze | Schedule equivalence — same plan at concurrency 1/2/8 must agree; a smuggler proves the prover | `examples/schedule_equivalence.rb` | [round-16/03-eregon.md](round-16/03-eregon.md) |
+| 4 | Bozhidar Batsov | Configurable cops — a YAML layer over plan lints, with a pending-cop policy | `examples/configurable_cops.rb` | [round-16/04-bbatsov.md](round-16/04-bbatsov.md) |
+| 5 | Noel Rappin | Spend ledger — integer cents, `afford!` before work, an invoice with a running balance | `examples/spend_ledger.rb` | [round-16/05-noelrap.md](round-16/05-noelrap.md) |
+| 6 | Eileen Uchitelle | Shadow traffic — v2 answers every request, serves none; mismatches journaled | `examples/shadow_traffic.rb` | [round-16/06-eileencodes.md](round-16/06-eileencodes.md) |
+| 7 | Justin Searls | Discovery testing — fakes discover interfaces, then reality replaces them shape-checked | `examples/discovery_testing.rb` | [round-16/07-searls.md](round-16/07-searls.md) |
+| 8 | Vladimir Dementyev | Progress channel — every subscriber names its backpressure policy; publish never blocks | `examples/progress_channel.rb` | [round-16/08-palkan.md](round-16/08-palkan.md) |
+| 9 | John Nunemaker | Kill switch — per-capability, use-time, non-retryable by decree, flips audited | `examples/kill_switch.rb` | [round-16/09-jnunemaker.md](round-16/09-jnunemaker.md) |
+| 10 | Hiroshi Shibata | Release rehearsal — build, audit, clean-install, and boot THE PACKAGE, not the repo | `examples/release_rehearsal.rb` | [round-16/10-hsbt.md](round-16/10-hsbt.md) |
+
+### What round 16 surfaced
+
+1. **Second appearances built different organs.** Every returning
+   persona attacked a seam their first visit never touched: Matz went
+   from three-lines-that-smile to time-budget courtesy, solnic from
+   contract boundaries to railway composition, eregon from behavior
+   specs to schedule-equivalence proofs, Nunemaker from feature flags
+   ("who gets this?") to kill switches ("how fast can it stop?").
+   The framework held; the angles were new.
+2. **Ninth consecutive round of tools correcting authors.** The
+   equivalence prover's smuggler never diverged because the shared
+   ledger was created once *outside* the per-run builder — the race
+   detector had its own race removed; and the release rehearsal's
+   first boot probe praised a package it never loaded, because under
+   `bundle exec` RUBYOPT smuggles `bundler/setup` into every child
+   and puts the repo back on the load path. Both catches came from
+   tripwires the examples had written for themselves. The smoke run
+   then added a third: the stacked-PR merge subjects carry em dashes,
+   and in a locale-less container two older git-reading examples
+   (changelog scout, standup digest) choked on US-ASCII-tagged
+   backtick output — fixed with an explicit UTF-8 force.
+3. **The operational trilogy completed itself**: budgets that veto
+   before work (spend ledger), switches that stop mid-incident
+   (kill switch), and channels that shed or disconnect by declared
+   policy (progress channel) — all built on the same two seams,
+   the duck-typed `agent:` wrapper and the lifecycle hooks. Sixteen
+   rounds in, cross-cutting concerns still cost exactly one lambda.
+4. **Soft asks, gently held** (no release planned; recorded for
+   whoever reopens the shop): an `optional:` task marking the
+   scheduler understands, so deadline courtesy is a property instead
+   of a convention (Matz); a scheduling-veto hook so budget/spend
+   gates run before a task is dispatched rather than inside its agent
+   (Noel); and a deterministic seeded-schedule mode so equivalence
+   provers can enumerate interleavings instead of sampling them
+   (eregon).
+
 ### What round 6 surfaced
 
 1. **Plans became artifacts**: narratable (tour), serializable with an
