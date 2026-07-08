@@ -765,9 +765,17 @@ planner = Agentic::TaskPlanner.new("Write a blog post", config)
 client = Agentic::LlmClient.new(config)
 ```
 
+## Examples
+
+A small set of canonical, offline-runnable examples lives in [`examples/`](examples/README.md) — start with `bundle exec ruby examples/ticket_screener.rb`.
+
+The full catalog — 144 example programs covering the entire framework surface, plus the persona-driven field notes that shaped it — lives in [codenamev/agentic-examples](https://github.com/codenamev/agentic-examples), with refs marking which Agentic version each snapshot is certified against (`agentic-v0.2.0` matches this release).
+
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+
+Two repo referees live in `bin/`: `bundle exec ruby bin/doctest.rb` verifies every code example in the docs runs (or is deliberately annotated as illustrative), and `bundle exec ruby bin/release_rehearsal.rb` builds, audits, cleanly installs, and boots the packaged gem before you tag anything.
 
 ### Running Tests
 

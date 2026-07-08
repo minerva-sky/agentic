@@ -7,7 +7,7 @@
 # on this machine, not release day in someone's CI. Build, audit,
 # install, boot: the full ceremony, rehearsed.
 #
-#   bundle exec ruby examples/release_rehearsal.rb
+#   bundle exec ruby bin/release_rehearsal.rb
 #
 # Runs offline; exits 1 if the packaged gem can't do its job.
 

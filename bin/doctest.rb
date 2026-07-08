@@ -9,7 +9,7 @@
 # "<!-- doctest: illustrative (reason) -->" before a README fence.
 # Unannotated failure = exit 1. Docs rot at the speed of a red build.
 #
-#   bundle exec ruby examples/doctest_runner.rb
+#   bundle exec ruby bin/doctest.rb
 #
 # Runs offline; each snippet gets its own process and tmpdir.
 
