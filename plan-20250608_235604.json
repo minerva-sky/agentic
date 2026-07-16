@@ -1,0 +1,52 @@
+{
+  "tasks": [
+    {
+      "description": "Research the Active Agents project and its current status.",
+      "agent": {
+        "name": "Research Agent",
+        "description": "This agent is designed to gather detailed information from various sources about a specific topic.",
+        "instructions": "1. Visit the GitHub repository for Active Agents. \n2. Review the README file and other documentation available in the repository to understand the project's objectives and features.\n3. Search for additional sources online that discuss or review the Active Agents project.\n4. Compile a summary of the project's current status, recent updates, and any notable achievements or challenges."
+      }
+    },
+    {
+      "description": "Identify key topics and questions to discuss with Justin Bowen during the interview.",
+      "agent": {
+        "name": "Content Planning Agent",
+        "description": "This agent specializes in creating structured content outlines and identifying key discussion points for interviews or presentations.",
+        "instructions": "1. Review the summary of the Active Agents project provided by the Research Agent.\n2. Identify interesting aspects or unique features of the project to discuss.\n3. Develop a list of questions that cover the project's goals, challenges, and future plans.\n4. Ensure questions are open-ended to encourage detailed responses and insights from Justin Bowen."
+      }
+    },
+    {
+      "description": "Prepare a technical overview of the Active Agents project to use as a reference during the interview.",
+      "agent": {
+        "name": "Technical Documentation Agent",
+        "description": "This agent compiles and organizes technical information into easily understandable formats for reference or presentation.",
+        "instructions": "1. Review technical details from the Active Agents GitHub repository, focusing on architecture, key functionalities, and use cases.\n2. Create a concise technical overview document that includes diagrams or flowcharts if necessary.\n3. Ensure the document is understandable to both technical and non-technical audiences.\n4. Highlight any innovative or unique technical aspects of the project."
+      }
+    },
+    {
+      "description": "Draft an introduction and conclusion for the podcast episode featuring Justin Bowen.",
+      "agent": {
+        "name": "Script Writing Agent",
+        "description": "This agent crafts introductory and concluding segments for podcasts or presentations, ensuring a cohesive narrative structure.",
+        "instructions": "1. Create a welcoming and engaging introduction that provides context about the Ruby AI Podcast and Justin Bowen's role in the Active Agents project.\n2. Highlight the main topics that will be covered during the interview.\n3. Draft a conclusion that summarizes key points discussed and thanks Justin Bowen for his participation.\n4. Include a call-to-action for listeners, such as visiting the project’s GitHub page or following the podcast for more episodes."
+      }
+    }
+  ],
+  "expected_answer": {
+    "format": null,
+    "sections": [
+      "Introduction to Active Agents",
+      "Overview of Justin Bowen's Background",
+      "Key Features of Active Agents",
+      "Technical Aspects and Innovations",
+      "Use Cases and Applications",
+      "Challenges and Solutions",
+      "Future Developments and Roadmap",
+      "Comparison with Other AI Solutions",
+      "Community and Contribution Opportunities",
+      "Potential Questions for the Interview"
+    ],
+    "length": "medium"
+  }
+}

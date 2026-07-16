@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 RSpec.describe Agentic::AdaptationEngine do
   let(:engine) { described_class.new }
   let(:mock_strategy) { ->(feedback) { {adapted: true, details: feedback} } }

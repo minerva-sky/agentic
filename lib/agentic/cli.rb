@@ -10,6 +10,9 @@ module Agentic
     class_option :verbose, type: :boolean, aliases: "-v", desc: "Enable verbose output"
     class_option :quiet, type: :boolean, aliases: "-q", desc: "Suppress output"
     class_option :config, type: :string, aliases: "-c", desc: "Specify config file"
+    class_option :no_color, type: :boolean, desc: "Disable colored output"
+    class_option :no_file_logging, type: :boolean, desc: "Disable file logging"
+    class_option :log_path, type: :string, desc: "Custom path for observability logs"
 
     def self.exit_on_failure?
       true
@@ -45,6 +48,9 @@ module Agentic
 
       You can also save the plan to a file:
         $ agentic plan "Generate a market research report" --save plan.json
+
+      Use a workspace for file generation tasks:
+        $ agentic plan "Create a Ruby User class" --workspace /tmp/project --execute
     LONGDESC
     option :output, type: :string, aliases: "-o",
       enum: %w[json yaml text], default: "text",
@@ -57,6 +63,8 @@ module Agentic
       desc: "Skip interactive plan adjustment prompt"
     option :execute, type: :boolean,
       desc: "Execute the plan immediately after generation"
+    option :workspace, type: :string, aliases: "-w",
+      desc: "Workspace path for file generation tasks"
     def plan(goal)
       check_api_token!
 
@@ -66,10 +74,12 @@ module Agentic
       config = LlmConfig.new
       config.model = options[:model] if options[:model]
 
-      # Create and run the task planner with spinner
-      execution_plan = UI.with_spinner("Planning tasks for goal", quiet: options[:quiet]) do
+      # Create and run the task planner with progress tracking
+      execution_plan = if options[:quiet]
         planner = TaskPlanner.new(goal, config)
         planner.plan
+      else
+        plan_with_progress_tracking(goal, config)
       end
 
       # Show the plan to the user
@@ -103,6 +113,9 @@ module Agentic
 
       Or pipe in a plan:
         $ cat plan.json | agentic execute --from-stdin
+
+      Use a workspace for file generation tasks:
+        $ agentic execute --plan plan.json --workspace /tmp/project
     LONGDESC
     option :plan, type: :string, aliases: "-p",
       desc: "Path to a plan file"
@@ -116,6 +129,8 @@ module Agentic
       desc: "Output file path (defaults to result-TIMESTAMP.json)"
     option :model, type: :string, aliases: "-m",
       desc: "LLM model to use (defaults to configuration)"
+    option :workspace, type: :string, aliases: "-w",
+      desc: "Workspace path for file generation tasks"
     def execute
       check_api_token!
 
@@ -575,6 +590,9 @@ module Agentic
     desc "capabilities", "Manage capability registry"
     subcommand "capabilities", Capabilities
 
+    desc "portal", "Manage human intervention portal"
+    subcommand "portal", HumanInterventionCommands
+
     private
 
     # Asks the user if they want to adjust the plan
@@ -603,12 +621,16 @@ module Agentic
     # Executes a plan immediately (from plan command)
     # @param execution_plan [ExecutionPlan] The execution plan to execute
     def execute_plan_immediately(execution_plan)
+      # Create workspace if path provided
+      workspace = create_workspace_if_specified
+
       # Convert ExecutionPlan to tasks
       tasks = execution_plan.tasks.map do |task_def|
         Task.new(
           description: task_def.description,
           agent_spec: task_def.agent,
-          input: {}
+          input: {},
+          workspace: workspace
         )
       end
 
@@ -620,6 +642,9 @@ module Agentic
     # @param tasks [Array<Task>] The tasks to execute
     def execute_tasks(tasks)
       say UI.colorize("Executing plan...", :green) unless options[:quiet]
+
+      # Setup observability adapters for CLI execution
+      setup_observability_adapters
 
       # Determine output format from file extension if provided
       output_format = determine_output_format(options[:file])
@@ -929,13 +954,17 @@ module Agentic
 
     # Initializes task instances from plan data
     def initialize_tasks(plan_data)
+      # Create workspace if path provided
+      workspace = create_workspace_if_specified
+
       tasks = []
 
       plan_data["tasks"].each do |task_data|
         task = Task.new(
           description: task_data["description"],
           agent_spec: task_data["agent"],
-          input: task_data["input"] || {}
+          input: task_data["input"] || {},
+          workspace: workspace
         )
         tasks << task
       end
@@ -1013,7 +1042,8 @@ module Agentic
       # Save the content
       File.write(save_path, content)
 
-      say UI.colorize("Execution result saved to #{save_path}", :green) unless options[:quiet]
+      # Note: The execution observer already displays the save path in its summary,
+      # so we don't need a duplicate message here
     end
 
     # Determines output format from file extension
@@ -1062,6 +1092,97 @@ module Agentic
 
         exit(130) # Standard exit code for SIGINT
       end
+    end
+
+    # Setup observability adapters for CLI execution
+    def setup_observability_adapters
+      return if @observability_setup_attempted
+
+      @observability_setup_attempted = true
+
+      # Configure observability adapters based on CLI options
+      cli_options = {
+        quiet: options[:quiet],
+        verbose: options[:verbose],
+        color: !options[:no_color],
+        enable_file_logging: !options[:no_file_logging],
+        log_path: options[:log_path]
+      }.compact
+
+      # For execution mode, disable console adapter to prevent debug timestamps
+      # The ProgressTracker provides clean output instead
+      config = Observability::AdapterFactory.default_cli_config(cli_options)
+      config[:console][:enabled] = false  # Disable console adapter for clean execution output
+
+      # Configure adapters with console disabled
+      Agentic.observability_engine.configure_adapters(config)
+
+      unless options[:quiet]
+        if Agentic.observability_engine.find_adapters(:file).any?
+          file_adapter = Agentic.observability_engine.find_adapters(:file).first
+          say UI.colorize("📁 Logging to: #{file_adapter.status[:log_path]}", :blue)
+        end
+      end
+    end
+
+    # Plans with dynamic progress tracking to show the user what's happening
+    # @param goal [String] The goal to plan for
+    # @param config [LlmConfig] The LLM configuration
+    # @return [ExecutionPlan] The generated execution plan
+    def plan_with_progress_tracking(goal, config)
+      # Create simple, robust streaming observer
+      observer = Streaming::StreamingPlanObserver.new(options)
+
+      # Set up cancellation handler for planning
+      setup_planning_cancellation_handler(observer)
+
+      observer.planning_started(goal)
+
+      begin
+        # Create planner with observer
+        planner = TaskPlanner.new(goal, config, observer: observer)
+
+        # Execute the planning process with observer callbacks
+        execution_plan = planner.plan
+
+        observer.planning_completed(execution_plan)
+        execution_plan
+      rescue Interrupt
+        observer.planning_cancelled
+        raise
+      rescue => error
+        observer.planning_failed(error.message)
+        raise error
+      end
+    end
+
+    # Sets up signal handler for graceful cancellation during planning
+    # @param observer [Streaming::StreamingPlanObserver] The observer to notify
+    def setup_planning_cancellation_handler(observer)
+      Signal.trap("INT") do
+        puts "\n#{UI.colorize("⚠", :yellow)} Cancellation requested during planning..."
+
+        # Notify observer of cancellation
+        observer.planning_cancelled
+
+        exit(130) # Standard exit code for SIGINT
+      end
+    end
+
+    # Creates a workspace if --workspace option is specified
+    # @return [Workspace, nil] The workspace instance or nil if not specified
+    def create_workspace_if_specified
+      return nil unless options[:workspace]
+
+      workspace_path = options[:workspace]
+
+      # Notify user of workspace creation
+      unless options[:quiet]
+        say UI.colorize("📁 Using workspace: #{workspace_path}", :blue)
+      end
+
+      # Create workspace (persistent by default for CLI usage)
+      Workspace.new(workspace_path, persistent: true)
     end
   end
 end

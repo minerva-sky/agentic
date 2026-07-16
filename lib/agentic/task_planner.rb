@@ -20,10 +20,18 @@ module Agentic
     # @return [LlmConfig] The configuration for the LLM
     attr_reader :llm_config
 
+    # @return [Proc] Optional stream callback for real-time progress
+    attr_reader :stream_callback
+
+    # @return [Object] Optional observer for planning progress
+    attr_reader :observer
+
     # Initializes a new TaskPlanner
     # @param goal [String] The goal to be accomplished
     # @param llm_config [LlmConfig] The configuration for the LLM
-    def initialize(goal, llm_config = LlmConfig.new)
+    # @param stream_callback [Proc] Optional callback for streaming progress
+    # @param observer [Object] Optional observer for planning progress
+    def initialize(goal, llm_config = LlmConfig.new, stream_callback: nil, observer: nil)
       @goal = goal
       @tasks = []
       @expected_answer = ExpectedAnswerFormat.new(
@@ -32,11 +40,15 @@ module Agentic
         length: "Undetermined"
       )
       @llm_config = llm_config
+      @stream_callback = stream_callback
+      @observer = observer
     end
 
     # Analyzes the goal and breaks it down into tasks using LLM
     # @return [void]
     def analyze_goal
+      @observer&.phase_started(:analyze_goal, "Breaking down goal into actionable tasks")
+
       system_message = "You are an expert project planner. Your task is to break down complex goals into actionable tasks."
       user_message = "Goal: #{@goal}\n\nBreak this goal down into a series of tasks. For each task:\n1. Specify the type of agent best suited to complete it.\n2. Include a brief description of the agent\n3. Include a set of instructions that the agent can follow to perform this task."
 
@@ -62,18 +74,48 @@ module Agentic
       response = llm_request(system_message, user_message, schema)
 
       if response.successful?
-        @tasks = response.content["tasks"].map do |task_data|
+        tasks_data = response.content["tasks"]
+
+        # Validate the response structure before processing
+        unless tasks_data.is_a?(Array)
+          Agentic.logger.error("Invalid response structure: 'tasks' should be an array, got #{tasks_data.class}")
+          @tasks = []
+          return
+        end
+
+        @tasks = tasks_data.map.with_index do |task_data, index|
+          # Validate each task data structure
+          unless task_data.is_a?(Hash)
+            Agentic.logger.error("Invalid task data at index #{index}: expected Hash, got #{task_data.class}")
+            next
+          end
+
+          unless task_data["description"] && task_data["agent"]
+            Agentic.logger.error("Missing required fields in task data at index #{index}")
+            next
+          end
+
+          agent_data = task_data["agent"]
+          unless agent_data.is_a?(Hash) && agent_data["name"] && agent_data["description"] && agent_data["instructions"]
+            Agentic.logger.error("Invalid agent data in task at index #{index}")
+            next
+          end
+
           TaskDefinition.new(
             description: task_data["description"],
             agent: AgentSpecification.new(
-              name: task_data["agent"]["name"],
-              description: task_data["agent"]["description"],
-              instructions: task_data["agent"]["instructions"]
+              name: agent_data["name"],
+              description: agent_data["description"],
+              instructions: agent_data["instructions"]
             )
           )
-        end
+        end.compact
+
+        @observer&.phase_completed(:analyze_goal, "#{@tasks.length} tasks identified")
       else
-        Agentic.logger.error("Failed to analyze goal: #{response.error&.message || response.refusal}")
+        error_message = response.error&.message || response.refusal || "Unknown error"
+        Agentic.logger.error("Failed to analyze goal: #{error_message}")
+        @observer&.planning_failed("Goal analysis failed: #{error_message}")
         @tasks = []
       end
     end
@@ -81,6 +123,8 @@ module Agentic
     # Determines the expected answer format using LLM
     # @return [void]
     def determine_expected_answer
+      @observer&.phase_started(:determine_format, "Determining optimal output structure")
+
       system_message = "You are an expert in report structuring and formatting. Your task is to determine the best format for a given report goal."
       user_message = "Goal: #{@goal}\n\nDetermine the optimal format, sections, and length for a report addressing this goal."
 
@@ -98,8 +142,13 @@ module Agentic
           sections: response.content["sections"],
           length: response.content["length"]
         )
+
+        format_summary = "#{@expected_answer.format} format with #{@expected_answer.sections.length} sections"
+        @observer&.phase_completed(:determine_format, format_summary)
       else
-        Agentic.logger.error("Failed to determine expected answer format: #{response.error&.message || response.refusal}")
+        error_message = response.error&.message || response.refusal || "Unknown error"
+        Agentic.logger.error("Failed to determine expected answer format: #{error_message}")
+        @observer&.planning_failed("Format determination failed: #{error_message}")
         @expected_answer = ExpectedAnswerFormat.new(
           format: "Undetermined",
           sections: [],
@@ -134,7 +183,22 @@ module Agentic
         {role: "system", content: system_message},
         {role: "user", content: user_message}
       ]
-      llm_client.complete(messages, output_schema: schema)
+
+      # Create observer-aware stream callback
+      enhanced_stream_callback = if @observer && @stream_callback
+        proc do |event_type, data|
+          @observer.token_received(data) if event_type == :token_received
+          @stream_callback.call(event_type, data)
+        end
+      elsif @observer
+        proc do |event_type, data|
+          @observer.token_received(data) if event_type == :token_received
+        end
+      else
+        @stream_callback
+      end
+
+      llm_client.complete(messages, output_schema: schema, stream_callback: enhanced_stream_callback)
     end
 
     def llm_client

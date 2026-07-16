@@ -115,6 +115,8 @@ module Agentic
 
     # Base class for all LLM-related errors
     class LlmError < StandardError
+      include Security::SecureErrorMixin
+
       # @return [Hash, nil] The raw response from the LLM API, if available
       attr_reader :response
 

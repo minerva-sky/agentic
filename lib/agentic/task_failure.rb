@@ -22,10 +22,10 @@ module Agentic
     # @param retryable [Boolean, nil] The originating error's own retryability verdict
     # @return [TaskFailure] A new task failure instance
     def initialize(message:, type:, context: {}, retryable: nil)
-      @message = message
+      @message = sanitize_message(message)
       @type = type
       @timestamp = Time.now
-      @context = context
+      @context = sanitize_context(context)
       @retryable = retryable
     end
 
@@ -68,12 +68,19 @@ module Agentic
     # @param context [Hash] Additional context about the failure
     # @return [TaskFailure] A new task failure instance
     def self.from_exception(exception, context = {})
+      # Sanitize backtrace based on security configuration
+      safe_backtrace = if Security::Config.backtrace_sanitization_enabled? && exception.backtrace
+        Security::Config.sanitizer.sanitize(exception.backtrace.first(10), context: :backtrace)
+      else
+        exception.backtrace&.first(10)
+      end
+
       new(
         message: exception.message,
         type: exception.class.name,
         retryable: exception.respond_to?(:retryable?) ? exception.retryable? : nil,
         context: context.merge(
-          backtrace: exception.backtrace&.first(10)
+          backtrace: safe_backtrace
         )
       )
     end
@@ -93,6 +100,39 @@ module Agentic
         type: hash[:type] || "UnknownError",
         context: hash[:context] || {}
       )
+    end
+
+    # Get sanitized failure for logging purposes
+    # @return [Hash] Sanitized failure data suitable for logging
+    def to_secure_hash
+      {
+        message: @message, # Already sanitized during initialization
+        type: @type,
+        timestamp: @timestamp.iso8601,
+        context: @context # Already sanitized during initialization
+      }
+    end
+
+    private
+
+    # Sanitize message content to remove PII
+    # @param message [String] The original message
+    # @return [String] Sanitized message
+    def sanitize_message(message)
+      return message unless Security::Config.pii_detection_enabled?
+      return "" if message.nil?
+
+      Security::Config.sanitizer.sanitize_error(message)
+    end
+
+    # Sanitize context data to remove sensitive information
+    # @param context [Hash] The original context
+    # @return [Hash] Sanitized context
+    def sanitize_context(context)
+      return context unless Security::Config.pii_detection_enabled?
+      return {} if context.nil?
+
+      Security::Config.sanitizer.sanitize(context, context: :error)
     end
   end
 end

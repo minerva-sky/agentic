@@ -31,7 +31,9 @@ module Agentic
   # interactive use; library consumers opt in via Agentic.logger.level=
   self.logger ||= Logger.new($stdout, level: :warn)
 
-  class Configuration
+  # Runtime configuration object (named to avoid colliding with the
+  # Agentic::Configuration schema module)
+  class LegacyConfiguration
     attr_accessor :access_token, :agent_store_path, :api_base_url
 
     def initialize
@@ -44,7 +46,7 @@ module Agentic
     # token (hosted APIs) or a custom base URL (local endpoints such as
     # Ollama, which accept any token).
     #
-    # @return [Configuration] self, for chaining
+    # @return [LegacyConfiguration] self, for chaining
     # @raise [Errors::ConfigurationError] when no credentials are configured
     def validate!
       return self if access_token || api_base_url
@@ -57,12 +59,18 @@ module Agentic
   end
 
   class << self
-    attr_writer :configuration
+    attr_writer :configuration, :observability_engine
     attr_reader :agent_capability_registry, :agent_assembly_engine, :agent_store
   end
 
+  # Central coordinator for observability events, created lazily
+  # @return [ObservabilityEngine] The engine instance
+  def self.observability_engine
+    @observability_engine ||= ObservabilityEngine.new
+  end
+
   def self.configuration
-    @configuration ||= Configuration.new
+    @configuration ||= LegacyConfiguration.new
   end
 
   def self.configure
@@ -117,12 +125,54 @@ module Agentic
       # Register standard capabilities
       Capabilities.register_standard_capabilities
 
+      # Initialize the security, configuration, and performance subsystems
+      initialize_security
+      initialize_configuration
+      initialize_performance
+
       # Assigned last: this ivar doubles as the initialized flag, so it must
       # only become visible once the store and engine are fully built
       @agent_capability_registry = registry
 
       logger.info("Initialized agent assembly system")
     end
+  end
+
+  # Initialize security system with environment-appropriate settings
+  def self.initialize_security
+    env = ENV["AGENTIC_ENV"] || ENV["RAILS_ENV"] || ENV["RACK_ENV"] || "development"
+    Security.initialize_for_environment(env)
+    logger&.debug("Security initialized for #{env} environment (level: #{Security::Config.current_config[:sanitization_level]})")
+  rescue => e
+    logger&.warn("Failed to initialize security: #{e.message}")
+    # Fallback to basic security configuration
+    Security::Config.configure(sanitization_level: :basic)
+  end
+
+  # Initialize configuration system
+  def self.initialize_configuration
+    Configuration.initialize!
+    logger&.debug("Configuration system initialized with #{Configuration.list_schemas.size} schemas")
+  rescue => e
+    logger&.warn("Failed to initialize configuration system: #{e.message}")
+  end
+
+  # Initialize performance optimization system
+  def self.initialize_performance
+    env = ENV["AGENTIC_ENV"] || ENV["RAILS_ENV"] || ENV["RACK_ENV"] || "development"
+
+    case env
+    when "development", "test"
+      Performance.configure_for_development
+    when "production"
+      Performance.configure_for_production
+    else
+      Performance.initialize!
+    end
+
+    logger&.debug("Performance system initialized for #{env} environment")
+  rescue => e
+    logger&.warn("Failed to initialize performance system: #{e.message}")
   end
 
   # Register a capability with the system

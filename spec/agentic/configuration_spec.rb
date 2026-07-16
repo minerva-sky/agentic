@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-RSpec.describe Agentic::Configuration do
+RSpec.describe Agentic::LegacyConfiguration do
   around do |example|
     original = Agentic.instance_variable_get(:@configuration)
     example.run

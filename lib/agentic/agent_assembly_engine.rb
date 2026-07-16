@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "time" # Time#iso8601/Time.parse - require what you use
+require "did_you_mean/levenshtein"
 
 module Agentic
   # Engine for assembling agents based on task requirements
@@ -25,27 +26,37 @@ module Agentic
     def assemble_agent(task, strategy: nil, store: true)
       # Check if we should try to find an existing agent in the store
       if store && @agent_store
+        notify_observability(:agent_assembly_searching_store, task_id: task.id)
         existing_agent = find_suitable_agent(task)
         if existing_agent
           Agentic.logger.info("Using existing agent from store for task: #{task.id}")
+          notify_observability(:agent_assembly_found_existing, task_id: task.id, agent_role: existing_agent.role)
           return existing_agent
         end
+        notify_observability(:agent_assembly_no_existing, task_id: task.id)
       end
 
       # Use the default strategy if none provided
       strategy ||= DefaultCompositionStrategy.new
 
       # Analyze task requirements
+      notify_observability(:agent_assembly_analyzing_requirements, task_id: task.id, task_description: task.description)
       requirements = analyze_requirements(task)
+      notify_observability(:agent_assembly_requirements_analyzed, task_id: task.id, requirements: requirements.keys, count: requirements.size)
 
       # Select capabilities based on requirements
+      notify_observability(:agent_assembly_selecting_capabilities, task_id: task.id, requirement_count: requirements.size)
       capabilities = select_capabilities(requirements, strategy)
+      notify_observability(:agent_assembly_capabilities_selected, task_id: task.id, capabilities: capabilities.map { |c| c[:name] }, count: capabilities.size)
 
       # Create a new agent with the selected capabilities
+      notify_observability(:agent_assembly_building_agent, task_id: task.id, capability_count: capabilities.size)
       agent = build_agent(task, capabilities)
+      notify_observability(:agent_assembly_agent_built, task_id: task.id, agent_role: agent.role, agent_purpose: agent.purpose)
 
       # Store the assembled agent if requested
       if store && @agent_store
+        notify_observability(:agent_assembly_storing_agent, task_id: task.id, agent_role: agent.role)
         store_agent(agent, task, requirements)
       end
 
@@ -116,36 +127,30 @@ module Agentic
     def find_suitable_agent(task)
       return nil unless @agent_store
 
-      # Analyze task requirements
+      # Get all stored agents
+      all_agents = @agent_store.all
+      return nil if all_agents.empty?
+
+      # Generate the name and extract description for the current task
+      candidate_name = generate_agent_name(task)
+      candidate_description = task.description
+
+      # Analyze task requirements for capability comparison
       requirements = analyze_requirements(task)
+      candidate_capabilities = requirements.keys.sort
 
-      # Get required capabilities
-      required_capabilities = requirements.keys
-      return nil if required_capabilities.empty?
+      # Score each agent based on Levenshtein distance similarity
+      scored_agents = all_agents.map do |agent_config|
+        agent_capabilities = (agent_config[:capabilities] || []).map { |c| c[:name] }.sort
+        capability_score = capability_similarity(agent_capabilities, candidate_capabilities)
 
-      # Find agents with matching capabilities
-      matching_agents = []
-
-      # Start with the most important capabilities
-      primary_capabilities = requirements.select { |_, info| info[:importance] >= 0.8 }.keys
-      return nil if primary_capabilities.empty?
-
-      # Find agents with the primary capabilities
-      primary_capabilities.each do |capability|
-        # Find agents with this capability
-        agents = @agent_store.all(capability: capability)
-
-        # Add to matching agents
-        matching_agents.concat(agents)
-      end
-
-      # Return nil if no matching agents found
-      return nil if matching_agents.empty?
-
-      # Score each agent based on how well it matches the requirements
-      scored_agents = matching_agents.map do |agent_config|
-        score = calculate_agent_match_score(agent_config, requirements)
-        {config: agent_config, score: score}
+        similarity_score = calculate_agent_similarity(
+          agent_config,
+          candidate_name,
+          candidate_description,
+          candidate_capabilities
+        )
+        {config: agent_config, score: similarity_score, capability_score: capability_score}
       end
 
       # Sort by score (highest first)
@@ -155,7 +160,15 @@ module Agentic
       best_match = scored_agents.first
 
       # If the best match has a score below threshold, don't use it
+      # Using 0.5 as threshold to allow for flexibility in capability inference
+      # This accounts for cases where requirements analysis may infer extra capabilities
       return nil if best_match[:score] < 0.5
+
+      # Also return nil if capability similarity is too low (< 0.5)
+      # This prevents matching agents that have significantly different capabilities
+      return nil if best_match[:capability_score] < 0.5
+
+      Agentic.logger.info("Found similar agent '#{best_match[:config][:name]}' with similarity score: #{best_match[:score].round(3)}")
 
       # Build the agent from the stored configuration
       @agent_store.build_agent(best_match[:config][:id])
@@ -186,6 +199,73 @@ module Agentic
     end
 
     private
+
+    # Calculate similarity score (0.0 to 1.0) based on Levenshtein distance
+    # @param str1 [String] First string
+    # @param str2 [String] Second string
+    # @return [Float] Similarity score (1.0 = identical, 0.0 = completely different)
+    def string_similarity(str1, str2)
+      return 1.0 if str1 == str2
+      return 0.0 if str1.nil? || str2.nil? || str1.empty? || str2.empty?
+
+      # Normalize strings (downcase and strip whitespace)
+      s1 = str1.to_s.downcase.strip
+      s2 = str2.to_s.downcase.strip
+
+      # Use Ruby's built-in Levenshtein distance calculation from DidYouMean
+      distance = DidYouMean::Levenshtein.distance(s1, s2)
+      max_length = [s1.length, s2.length].max
+
+      # Convert distance to similarity (0.0 to 1.0)
+      1.0 - (distance.to_f / max_length)
+    end
+
+    # Calculate similarity between two capability lists
+    # @param caps1 [Array<String>] First capability list
+    # @param caps2 [Array<String>] Second capability list
+    # @return [Float] Similarity score (0.0 to 1.0)
+    def capability_similarity(caps1, caps2)
+      return 1.0 if caps1.empty? && caps2.empty?
+      return 0.0 if caps1.empty? || caps2.empty?
+
+      # Count matching capabilities
+      matching = (caps1 & caps2).size
+      total = (caps1 | caps2).size
+
+      # Jaccard similarity coefficient
+      matching.to_f / total
+    end
+
+    # Calculate overall similarity between an agent and a candidate task
+    # @param agent_config [Hash] The stored agent configuration
+    # @param candidate_name [String] Generated name for candidate agent
+    # @param candidate_description [String] Task description
+    # @param candidate_capabilities [Array<String>] Required capabilities
+    # @return [Float] Overall similarity score (0.0 to 1.0)
+    def calculate_agent_similarity(agent_config, candidate_name, candidate_description, candidate_capabilities)
+      # Extract agent information
+      agent_name = agent_config[:name]
+      agent_description = agent_config.dig(:metadata, :task_description) || ""
+      agent_capabilities = (agent_config[:capabilities] || []).map { |c| c[:name] }.sort
+
+      # Calculate individual similarity scores
+      name_score = string_similarity(agent_name, candidate_name)
+
+      # If description is missing from metadata, rely more heavily on capabilities
+      # This handles cases where agents are stored without task metadata
+      if agent_description.empty? && !candidate_description.to_s.empty?
+        # When description is missing, weight capabilities more heavily
+        capability_score = capability_similarity(agent_capabilities, candidate_capabilities)
+        weighted_score = (name_score * 0.4) + (capability_score * 0.6)
+      else
+        # Normal case with description available
+        description_score = string_similarity(agent_description, candidate_description)
+        capability_score = capability_similarity(agent_capabilities, candidate_capabilities)
+        weighted_score = (name_score * 0.4) + (description_score * 0.3) + (capability_score * 0.3)
+      end
+
+      weighted_score
+    end
 
     # Calculate a score for how well an agent matches requirements
     # @param agent_config [Hash] The agent configuration
@@ -387,6 +467,22 @@ module Agentic
           end
         end
       end
+    end
+
+    # Notify the observability engine about assembly events
+    # @param event_type [Symbol] The event type
+    # @param data [Hash] The event data
+    # @return [void]
+    def notify_observability(event_type, **data)
+      return unless Agentic.respond_to?(:observability_engine)
+
+      Agentic.observability_engine.notify(
+        event_type,
+        data: data,
+        source: "agent_assembly_engine"
+      )
+    rescue => e
+      Agentic.logger.debug("Failed to notify observability engine: #{e.message}")
     end
   end
 

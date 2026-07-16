@@ -1,0 +1,162 @@
+# AI Software Architect Configuration
+
+# Implementation Guidance Configuration
+# Defines the methodology, influences, and practices that guide feature implementation
+implementation:
+  enabled: true
+  methodology: "TDD"
+
+  influences:
+    - "Kent Beck - TDD by Example (test-first methodology)"
+    - "Sandi Metz - POODR, 99 Bottles (OO design and Ruby idioms)"
+    - "Martin Fowler - Refactoring (patterns and code quality)"
+    - "Jeremy Evans - Roda, Sequel (Ruby idioms and patterns)"
+    - "Vladimir Dementyev - Modern Ruby practices"
+    - "Domain-Driven Design principles for agent orchestration"
+
+  languages:
+    ruby:
+      style_guide: "StandardRB"
+      idioms: "Prefer blocks over loops, meaningful method names, Ruby 3+ features, factory patterns for object creation"
+      patterns:
+        - "Registry pattern for plugin management"
+        - "Observer pattern for event notification"
+        - "Strategy pattern for verification approaches"
+        - "Factory pattern for component instantiation"
+      frameworks:
+        gem_structure: "Follow standard Ruby gem conventions, maintain clean public API surface"
+
+  testing:
+    framework: "RSpec"
+    style: "Outside-in TDD (Detroit school)"
+    approach: "Mock judiciously, prefer real objects, use VCR for API interactions"
+    speed: "Fast unit tests (<100ms), isolated integration tests"
+    coverage: "Test public interfaces thoroughly, document edge cases"
+
+  documentation:
+    style: "YARD"
+    requirements:
+      - "Document all public classes and methods"
+      - "Include parameter types and return values"
+      - "Provide usage examples for complex APIs"
+      - "Document architectural decisions in ADRs"
+
+  refactoring:
+    when:
+      - "After tests green (red-green-REFACTOR)"
+      - "When code smells emerge"
+      - "Rule of Three: refactor on third occurrence"
+      - "Before adding new features to existing components"
+    principles:
+      - "Small, focused methods with clear responsibilities"
+      - "Clear names over comments"
+      - "Separation of concerns across system layers"
+      - "Dependency injection for testability"
+      - "Immutability where appropriate"
+
+  architecture:
+    approach: "Domain-agnostic, self-improving framework design"
+    principles:
+      - "Extensibility through well-defined interfaces"
+      - "Progressive automation with human oversight"
+      - "Learning capability through execution history"
+      - "Clear separation of concerns across system layers"
+    reference_documents:
+      - "ArchitectureConsiderations.md"
+      - "ArchitecturalFeatureBuilder.md"
+      - ".architecture/principles.md"
+      - ".architecture/decisions/adrs/ folder"
+
+  quality:
+    definition_of_done:
+      - "Tests passing (unit and integration)"
+      - "Code refactored following established patterns"
+      - "No StandardRB violations"
+      - "YARD documentation complete"
+      - "Architectural alignment verified"
+      - "Performance impact assessed"
+    priorities:
+      - "Correctness first (tests must pass)"
+      - "Clarity second (code must be understandable)"
+      - "Simplicity third (avoid premature optimization)"
+      - "Performance fourth (optimize when measured need exists)"
+
+  security:
+    mandatory_practices:
+      - "Input validation and sanitization"
+      - "Environment-aware content filtering"
+      - "Secure handling of API keys and credentials"
+      - "Parameterized queries (when applicable)"
+      - "Security-aware error messages (no sensitive data leakage)"
+
+pragmatic_mode:
+  enabled: true
+  intensity: balanced
+
+  apply_to:
+    individual_reviews: true
+    collaborative_discussions: true
+    implementation_planning: true
+    adr_creation: true
+    specific_reviews: true
+
+  exemptions:
+    security_critical: true
+    data_integrity: true
+    compliance_required: true
+    accessibility: true
+
+  triggers:
+    new_abstraction_layer: true
+    new_dependency: true
+    new_pattern_introduction: true
+    scope_expansion: true
+    performance_optimization: true
+    test_infrastructure: true
+    flexibility_addition: true
+
+  thresholds:
+    min_complexity_score: 5
+    min_necessity_score: 7
+    max_complexity_ratio: 1.5
+
+  behavior:
+    require_justification: true
+    always_propose_alternative: true
+    show_cost_of_waiting: true
+    track_deferrals: true
+    deferral_log: .architecture/deferrals.md
+
+  custom_questions:
+    necessity: []
+    simplicity: []
+    cost: []
+    alternatives: []
+    best_practices: []
+
+review_process:
+  require_all_members: true
+  max_individual_phase_days: 3
+  max_collaborative_phase_days: 2
+
+adr:
+  numbering_format: sequential
+  require_alternatives: true
+  require_validation: true
+
+members:
+  definition_file: members.yml
+  allow_dynamic_creation: true
+
+templates:
+  directory: templates
+  auto_populate_metadata: true
+
+output:
+  verbosity: normal
+  include_reasoning: true
+  format: markdown
+
+version:
+  framework_version: "0.1.0"
+  architecture_version: "1.0.0"

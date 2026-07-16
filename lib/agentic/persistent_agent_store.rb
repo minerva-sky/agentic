@@ -43,6 +43,9 @@ module Agentic
       id = agent&.id || SecureRandom.uuid
       agent.id = id if agent&.respond_to?(:id=) && agent.id.nil?
 
+      # Set the agent's ID if it doesn't have one yet
+      agent.id = id unless agent.id
+
       # Generate version
       version = generate_version(id)
 
@@ -120,21 +123,24 @@ module Agentic
       results = []
 
       @index.each do |id, versions|
+        # Convert symbol ID to string for get_latest_version
+        string_id = id.to_s
+
         # Get the latest version for each agent by default
-        version = get_latest_version(id)
+        version = get_latest_version(string_id)
 
         # Skip if no version found
         next unless version
 
-        # Get the agent data
-        agent_data = versions[version]
+        # Get the agent data (version is returned as string, convert to symbol for lookup)
+        agent_data = versions[version.to_sym]
 
         # Skip if no data found
         next unless agent_data
 
-        # Add ID and version to the data
+        # Add ID and version to the data (as strings for CLI compatibility)
         full_data = agent_data.merge(
-          id: id,
+          id: string_id,
           version: version
         )
 
@@ -157,15 +163,18 @@ module Agentic
     # @param id [String] The ID of the agent
     # @return [Array<Hash>] The version history or empty array if not found
     def version_history(id)
+      # Convert string ID to symbol for index lookup
+      id_sym = id.to_sym
+
       # Check if the agent exists
-      return [] unless @index[id]
+      return [] unless @index[id_sym]
 
       # Get all versions and sort by timestamp
-      versions = @index[id].map do |version, data|
+      versions = @index[id_sym].map do |version, data|
         {
           id: id,
           name: data[:name],
-          version: version,
+          version: version.to_s,
           timestamp: data[:timestamp],
           capabilities: data[:capabilities],
           metadata: data[:metadata]
@@ -181,32 +190,37 @@ module Agentic
     # @param version [String, nil] The version to delete (all versions if nil)
     # @return [Boolean] True if successfully deleted
     def delete(id_or_name, version: nil)
-      # First try to find by ID
-      id = id_or_name
+      # First try to find by ID (convert to symbol for index lookup)
+      id = id_or_name.to_sym
 
       # If not found in index, try to find by name
       unless @index[id]
         id = find_id_by_name(id_or_name)
         return false unless id
+        id = id.to_sym
       end
 
       # Check if the agent exists
       return false unless @index[id]
 
+      # Convert string ID back for file operations
+      string_id = id.to_s
+
       if version
         # Delete specific version
-        return false unless @index[id][version]
+        version_sym = version.to_sym
+        return false unless @index[id][version_sym]
 
         # Delete from storage
-        delete_from_storage(id, version)
+        delete_from_storage(string_id, version)
 
         # Update index
-        @index[id].delete(version)
+        @index[id].delete(version_sym)
         @index.delete(id) if @index[id].empty?
       else
         # Delete all versions
         @index[id].each_key do |ver|
-          delete_from_storage(id, ver)
+          delete_from_storage(string_id, ver.to_s)
         end
 
         # Update index
@@ -258,9 +272,13 @@ module Agentic
     end
 
     def update_index(id, version, agent_data)
+      # Convert string ID to symbol for index storage
+      id_sym = id.to_sym
+      version_sym = version.to_sym
+
       # Add to the index
-      @index[id] ||= {}
-      @index[id][version] = {
+      @index[id_sym] ||= {}
+      @index[id_sym][version_sym] = {
         name: agent_data[:name],
         timestamp: agent_data[:timestamp],
         capabilities: agent_data[:capabilities],
@@ -282,15 +300,18 @@ module Agentic
     end
 
     def find_agent_data(id, version = nil)
+      # Convert string ID to symbol for index lookup
+      id_sym = id.to_sym
+
       # Check if the agent exists
-      return nil unless @index[id]
+      return nil unless @index[id_sym]
 
       # Determine which version to load
       version ||= get_latest_version(id)
       return nil unless version
 
-      # Load from storage
-      agent_path = File.join(@storage_path, id, "#{version}.json")
+      # Load from storage (use string ID for file path)
+      agent_path = File.join(@storage_path, id.to_s, "#{version}.json")
       return nil unless File.exist?(agent_path)
 
       begin
@@ -305,7 +326,8 @@ module Agentic
       # Find an agent ID by name
       @index.each do |id, versions|
         versions.each do |_, data|
-          return id if data[:name] == name
+          # Return as string for consistency with caller expectations
+          return id.to_s if data[:name] == name
         end
       end
 
@@ -313,16 +335,19 @@ module Agentic
     end
 
     def get_latest_version(id)
+      # Convert string ID to symbol for index lookup
+      id_sym = id.to_sym
+
       # Check if the agent exists
-      return nil unless @index[id]
+      return nil unless @index[id_sym]
 
       # Get all versions
-      versions = @index[id].keys
+      versions = @index[id_sym].keys
 
-      # Sort versions semantically
+      # Sort versions semantically (versions are symbols, convert to strings for parsing)
       versions.max do |a, b|
-        a_parts = a.split(".").map(&:to_i)
-        b_parts = b.split(".").map(&:to_i)
+        a_parts = a.to_s.split(".").map(&:to_i)
+        b_parts = b.to_s.split(".").map(&:to_i)
 
         # Compare major version
         major_comparison = a_parts[0] <=> b_parts[0]
@@ -334,12 +359,15 @@ module Agentic
 
         # Compare patch version
         a_parts[2] <=> b_parts[2]
-      end
+      end.to_s # Convert back to string for consistency
     end
 
     def generate_version(id)
+      # Convert string ID to symbol for index lookup
+      id_sym = id.to_sym
+
       # Get the current versions
-      versions = @index[id] ? @index[id].keys : []
+      versions = @index[id_sym] ? @index[id_sym].keys : []
 
       if versions.empty?
         # First version
@@ -366,7 +394,7 @@ module Agentic
       filter.all? do |key, value|
         case key
         when :capability, "capability"
-          agent_data[:capabilities].any? { |cap| cap[:name] == value }
+          agent_data[:capabilities]&.any? { |cap| cap[:name] == value }
         when :capability_version, "capability_version"
           name, version = value.split(":", 2)
           agent_data[:capabilities].any? { |cap| cap[:name] == name && cap[:version] == version }

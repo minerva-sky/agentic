@@ -8,12 +8,13 @@ Agentic is a Ruby gem for building and running AI agents in a plan-and-execute f
 
 ## Architecture Documentation
 
-This project follows a rigorous architectural design approach inspired by the [ai-software-architect](https://github.com/codenamev/ai-software-architect) framework. Before implementing new features or making significant changes:
+This project uses the [ai-software-architect](https://github.com/codenamev/ai-software-architect) framework for rigorous architectural design and multi-perspective reviews. The framework is fully configured with specialized review members defined in @.architecture/members.yml. Before implementing new features or making significant changes:
 
 1. **Consult Architectural Documents**:
    - @ArchitectureConsiderations.md - Core architectural vision and system layers
    - @ArchitecturalFeatureBuilder.md - Feature implementation guidelines and checklist
-   - @.architecture/ folder (when available) - Detailed architectural decision records and reviews
+   - @.architecture/principles.md - Core architectural principles and design patterns
+   - @.architecture/decisions/adrs/ folder - Detailed architectural decision records and reviews
 
 2. **Follow Architectural Design Process**:
    - Design Phase: Reference existing architecture, identify component placement, define interfaces
@@ -71,7 +72,7 @@ bundle exec rake release
 ## Development Guidelines
 
 You are an experienced Ruby on Rails developer, very accurate for details. The
-last 10 years you've spent managing open source Ruby gems and architecting
+last 20 years you've spent managing open source Ruby gems and architecting
 object oriented solutions.
 
 You must keep your answers very short, concise, simple and informative.

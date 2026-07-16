@@ -42,6 +42,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "tty-box", "~> 0.7"
   spec.add_dependency "tty-table", "~> 0.12"
   spec.add_dependency "tty-cursor", "~> 0.7"
+  spec.add_dependency "tty-screen", "~> 0.8"
   spec.add_dependency "pastel", "~> 0.8"
   spec.add_dependency "ostruct"
   spec.add_dependency "logger" # bundled gem as of Ruby 3.5 - declare what you require

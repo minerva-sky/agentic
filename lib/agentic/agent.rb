@@ -56,6 +56,17 @@ module Agentic
       end
     end
 
+    # Executes a prompt with workspace context for file generation
+    # @param prompt [String] The prompt to execute
+    # @param workspace [Workspace] The workspace for file generation
+    # @return [String] The response with artifact descriptions
+    def execute_with_workspace(prompt, workspace)
+      workspace_context = build_workspace_context(workspace)
+      full_prompt = "#{workspace_context}\n\n#{prompt}"
+
+      execute_prompt(full_prompt)
+    end
+
     # Adds a capability to the agent
     # @param capability_name [String] The name of the capability
     # @param version [String, nil] The version of the capability, or nil for latest
@@ -109,8 +120,21 @@ module Agentic
       # Get the provider
       provider = @capabilities[capability_name][:provider]
 
+      # For capabilities that need agent reference (like file_generation), inject it
+      if requires_agent_context?(capability_name)
+        inputs = inputs.merge(agent: self)
+      end
+
       # Execute the capability
       provider.execute(inputs)
+    end
+
+    # Check if a capability requires agent context
+    # @param capability_name [String] The name of the capability
+    # @return [Boolean] True if capability needs agent reference
+    def requires_agent_context?(capability_name)
+      # Capabilities that need access to the agent itself
+      %w[file_generation].include?(capability_name)
     end
 
     # Converts the agent to a hash representation
@@ -192,6 +216,40 @@ module Agentic
       end
 
       parts.join("\n\n")
+    end
+
+    # Builds workspace context for file generation tasks
+    # @param workspace [Workspace] The workspace
+    # @return [String] The workspace context
+    def build_workspace_context(workspace)
+      <<~CONTEXT
+        [Workspace Information]
+        You have access to an isolated workspace for generating files.
+        Workspace ID: #{workspace.id}
+        Workspace path: #{workspace.path}
+        Current artifacts: #{workspace.artifact_count}
+
+        [File Generation Instructions]
+        When generating files, respond with JSON describing each artifact in this exact format:
+        {
+          "artifacts": [
+            {
+              "name": "relative/path/to/file.rb",
+              "type": "ruby_class",
+              "content": "complete file content here including all code",
+              "references": ["other_file.rb"]
+            }
+          ]
+        }
+
+        Artifact types: ruby_class, javascript_module, python_module, json, markdown, text, yaml, css, html, xml, sql
+
+        IMPORTANT:
+        - Use relative paths from workspace root (no absolute paths, no ../)
+        - Include complete, working file content
+        - List all file references/dependencies
+        - Generate only the files requested in the task
+      CONTEXT
     end
   end
 end

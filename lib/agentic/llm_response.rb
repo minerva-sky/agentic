@@ -8,6 +8,7 @@ module Agentic
 
     # @return [String, nil] The refusal message, if the LLM refused the request
     attr_reader :refusal
+    alias_method :refusal_reason, :refusal
 
     # @return [Hash] The raw response from the LLM API
     attr_reader :raw_response
@@ -68,12 +69,14 @@ module Agentic
     def successful?
       !refused? && !error?
     end
+    alias_method :success?, :successful?
 
     # Checks if the request was refused
     # @return [Boolean] True if the request was refused
     def refused?
       !@refusal.nil? || !@refusal_error.nil?
     end
+    alias_method :refusal?, :refused?
 
     # Gets the refusal category if available
     # @return [Symbol, nil] The refusal category, or nil if not refused
