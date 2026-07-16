@@ -93,9 +93,12 @@ module Agentic
       # @option inputs [String] :task_description Description of files to generate
       # @option inputs [Workspace] :workspace Workspace for file generation
       # @option inputs [Hash] :constraints Optional constraints
-      # @return [Hash] Execution result with artifacts and workspace info
+      # @return [Hash] Execution result with artifacts and workspace info;
+      #   generation failures (parse errors, constraint violations) are
+      #   returned as `{success: false, error: ...}` rather than raised
       # @raise [ArgumentError] If required inputs missing
-      # @raise [FileGenerationError] If generation fails
+      # @raise [SecurityError] If an artifact fails workspace security validation
+      # @raise [StandardError] If agent execution fails (propagated unwrapped)
       def self.execute(agent:, inputs:)
         # Validate inputs
         validate_inputs(inputs)
@@ -107,12 +110,9 @@ module Agentic
         # Build prompt for agent
         prompt = build_file_generation_prompt(task_description, constraints)
 
-        # Execute agent with workspace context
-        begin
-          response = agent.execute_with_workspace(prompt, workspace)
-        rescue => e
-          raise FileGenerationError, "Agent execution failed: #{e.message}"
-        end
+        # Execute agent with workspace context. Agent errors propagate
+        # unwrapped so callers can report the original exception class.
+        response = agent.execute_with_workspace(prompt, workspace)
 
         # Parse artifact descriptions from response
         artifact_descriptions = parse_artifact_descriptions(response)
@@ -148,7 +148,7 @@ module Agentic
           artifact_count: artifacts.size,
           success: true
         }
-      rescue => e
+      rescue FileGenerationError => e
         {
           success: false,
           error: e.message,

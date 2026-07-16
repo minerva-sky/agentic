@@ -20,8 +20,11 @@ module Agentic
       if task.is_a?(String)
         # Simple string prompt
         execute_prompt(task)
+      elsif task.respond_to?(:requires_artifacts?) && task.requires_artifacts? && task.has_workspace?
+        # Artifact generation task
+        execute_artifact_task(task)
       else
-        # Task object
+        # Regular task object
         task.perform(self)
       end
     end
@@ -162,6 +165,14 @@ module Agentic
     end
 
     private
+
+    # Executes an artifact generation task
+    # @param task [Task] Task with workspace and artifact_mode
+    # @return [ArtifactGenerationResult] The generation result
+    def execute_artifact_task(task)
+      generator = ArtifactGenerator.new(self, task.workspace)
+      generator.generate(task.description, input: task.input)
+    end
 
     # Executes a simple string prompt
     # @param prompt [String] The prompt to execute

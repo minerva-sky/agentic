@@ -44,11 +44,12 @@ module Agentic
         registry = AgentCapabilityRegistry.instance
         registry.register(capability_spec, provider)
 
-        Agentic.logger.info("Registered file_generation capability v#{spec_data[:version]}")
+        Agentic.logger&.info("Registered file_generation capability v#{spec_data[:version]}")
       end
     end
   end
 end
 
-# Auto-register when this file is loaded
-Agentic::Capabilities::RegisterFileGeneration.register
+# NOTE: Auto-registration removed. Registration is triggered via
+# Capabilities.register_standard_capabilities which is called during
+# Agentic.initialize_agent_assembly after the logger is available.

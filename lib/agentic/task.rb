@@ -14,12 +14,13 @@ module Agentic
   # @attr_reader [TaskFailure, nil] failure Failure information if the task failed, nil otherwise
   # @attr_reader [Boolean, nil] ready_to_execute Flag indicating if the task is ready to be executed
   # @attr_reader [Workspace, nil] workspace Optional workspace for file generation
+  # @attr_reader [Boolean] artifact_mode Whether this task generates artifacts
   # @attr_accessor [Integer, nil] retry_count Number of times the task has been retried
   # @attr_accessor [Symbol, nil] output_schema_name Name of the output schema to use
   class Task
     include Agentic::Observable
 
-    attr_reader :id, :description, :agent_spec, :input, :output, :status, :failure, :ready_to_execute, :workspace
+    attr_reader :id, :description, :agent_spec, :input, :output, :status, :failure, :ready_to_execute, :workspace, :artifact_mode
     attr_accessor :retry_count, :output_schema_name
 
     # @return [Object, nil] Arbitrary domain object carried by the task,
@@ -33,8 +34,9 @@ module Agentic
     # @param payload [Object, nil] Arbitrary domain data for the agent executing this task
     # @param workspace [Workspace, nil] Optional workspace for file generation
     # @param output_schema_name [Symbol, nil] Name of the output schema to use for structured output
+    # @param artifact_mode [Boolean] Whether this task generates artifacts (default: false)
     # @return [Task] A new task instance
-    def initialize(description:, agent_spec:, input: {}, payload: nil, workspace: nil, output_schema_name: nil)
+    def initialize(description:, agent_spec:, input: {}, payload: nil, workspace: nil, output_schema_name: nil, artifact_mode: false)
       @id = SecureRandom.uuid
       @description = description
 
@@ -58,6 +60,7 @@ module Agentic
       @ready_to_execute = nil
       @output_schema_name = output_schema_name
       @dependency_outputs = {}
+      @artifact_mode = artifact_mode
     end
 
     # Creates a task from a TaskDefinition
@@ -224,6 +227,12 @@ module Agentic
     # @return [Boolean] True if task has a workspace
     def has_workspace?
       !@workspace.nil?
+    end
+
+    # Checks if this task requires artifact generation
+    # @return [Boolean] True if artifact_mode is enabled or task has a workspace
+    def requires_artifacts?
+      @artifact_mode || has_workspace?
     end
 
     # Gets the workspace path for agent to use
