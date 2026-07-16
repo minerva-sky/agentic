@@ -165,8 +165,16 @@ RSpec.describe Agentic::Observability::FileAdapter do
     let(:base_time) { Time.parse("2025-01-01 12:00:00") }
 
     before do
-      # Mock Time.now to control timestamps
-      allow(Time).to receive(:now).and_return(base_time, base_time + 1, base_time + 2)
+      # Capture the start time while Time.now is still real (base_time is built
+      # with Time.parse, which itself calls Time.now for default fields).
+      start = base_time
+
+      # Time.now is consumed multiple times per event (EventData construction,
+      # log entry timestamp, statistics), so return a monotonically increasing
+      # sequence to guarantee each logged event gets a distinct, ordered
+      # whole-second timestamp regardless of how many internal calls occur.
+      tick = 0
+      allow(Time).to receive(:now) { start + (tick += 1) }
 
       3.times do |i|
         event = Agentic::Observability::EventData.new(
@@ -179,7 +187,10 @@ RSpec.describe Agentic::Observability::FileAdapter do
     end
 
     it "returns events since a specific timestamp" do
-      since_time = base_time + 0.5 # Between first and second event
+      logged = adapter.recent_events
+      # Use the first event's own timestamp; strict > excludes it and returns
+      # the two later events.
+      since_time = Time.parse(logged.first["timestamp"])
 
       events = adapter.events_since(since_time)
 
@@ -188,7 +199,8 @@ RSpec.describe Agentic::Observability::FileAdapter do
     end
 
     it "handles string timestamp input" do
-      since_string = (base_time + 0.5).iso8601
+      logged = adapter.recent_events
+      since_string = logged.first["timestamp"]
 
       events = adapter.events_since(since_string)
 

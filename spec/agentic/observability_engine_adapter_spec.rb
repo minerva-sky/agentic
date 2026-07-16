@@ -59,6 +59,7 @@ RSpec.describe Agentic::ObservabilityEngine, "adapter functionality" do
 
     it "handles removing non-existent adapter gracefully" do
       other_adapter = double("OtherAdapter")
+      allow(other_adapter).to receive(:adapter_type).and_return("other")
 
       expect {
         engine.remove_adapter(other_adapter)
@@ -85,6 +86,7 @@ RSpec.describe Agentic::ObservabilityEngine, "adapter functionality" do
       adapter = double("ConsoleAdapter")
       allow(adapter).to receive(:adapter_type).and_return("console")
       allow(adapter).to receive(:enabled?).and_return(true)
+      allow(adapter).to receive(:shutdown)
       adapter
     end
 
@@ -92,6 +94,7 @@ RSpec.describe Agentic::ObservabilityEngine, "adapter functionality" do
       adapter = double("FileAdapter")
       allow(adapter).to receive(:adapter_type).and_return("file")
       allow(adapter).to receive(:enabled?).and_return(true)
+      allow(adapter).to receive(:shutdown)
       adapter
     end
 
@@ -119,7 +122,7 @@ RSpec.describe Agentic::ObservabilityEngine, "adapter functionality" do
     it "clears existing adapters and creates new ones from config" do
       # Add an initial adapter
       engine.add_adapter(mock_adapter)
-      expect(engine.all_adapters).to have(1).item
+      expect(engine.all_adapters.size).to eq(1)
 
       # Configure with new adapters
       config = {
@@ -130,7 +133,7 @@ RSpec.describe Agentic::ObservabilityEngine, "adapter functionality" do
       engine.configure_adapters(config)
 
       # Should have replaced the mock adapter with real ones
-      expect(engine.all_adapters).to have(2).items
+      expect(engine.all_adapters.size).to eq(2)
       expect(engine.find_adapters(:console)).not_to be_empty
       expect(engine.find_adapters(:file)).not_to be_empty
     end
@@ -155,8 +158,8 @@ RSpec.describe Agentic::ObservabilityEngine, "adapter functionality" do
 
       engine.enable_default_cli_adapters(cli_options)
 
-      expect(engine.find_adapters(:console)).to have(1).item
-      expect(engine.find_adapters(:file)).to have(1).item
+      expect(engine.find_adapters(:console).size).to eq(1)
+      expect(engine.find_adapters(:file).size).to eq(1)
 
       console_adapter = engine.find_adapters(:console).first
       expect(console_adapter.enabled?).to be true
@@ -182,10 +185,14 @@ RSpec.describe Agentic::ObservabilityEngine, "adapter functionality" do
       allow(adapter1).to receive(:enabled?).and_return(true)
       allow(adapter1).to receive(:adapter_type).and_return("adapter1")
       allow(adapter1).to receive(:handle_event)
+      allow(adapter1).to receive(:shutdown)
+      allow(adapter1).to receive(:status).and_return({enabled: true, type: "adapter1", statistics: {}})
 
       allow(adapter2).to receive(:enabled?).and_return(true)
       allow(adapter2).to receive(:adapter_type).and_return("adapter2")
       allow(adapter2).to receive(:handle_event)
+      allow(adapter2).to receive(:shutdown)
+      allow(adapter2).to receive(:status).and_return({enabled: true, type: "adapter2", statistics: {}})
 
       engine.add_adapter(adapter1)
       engine.add_adapter(adapter2)
@@ -233,12 +240,13 @@ RSpec.describe Agentic::ObservabilityEngine, "adapter functionality" do
       allow(file_adapter).to receive(:recent_events).with(limit: 10).and_return([
         {"type" => "test_event", "timestamp" => Time.now.iso8601}
       ])
+      allow(file_adapter).to receive(:shutdown)
 
       engine.add_adapter(file_adapter)
 
       events = engine.recent_events(limit: 10)
 
-      expect(events).to have(1).item
+      expect(events.size).to eq(1)
       expect(events.first["type"]).to eq("test_event")
     end
 
@@ -258,12 +266,13 @@ RSpec.describe Agentic::ObservabilityEngine, "adapter functionality" do
       allow(file_adapter).to receive(:events_since).with(since_time).and_return([
         {"type" => "recent_event", "timestamp" => Time.now.iso8601}
       ])
+      allow(file_adapter).to receive(:shutdown)
 
       engine.add_adapter(file_adapter)
 
       events = engine.events_since(since_time)
 
-      expect(events).to have(1).item
+      expect(events.size).to eq(1)
       expect(events.first["type"]).to eq("recent_event")
     end
 
@@ -289,7 +298,7 @@ RSpec.describe Agentic::ObservabilityEngine, "adapter functionality" do
       stats = engine.statistics
 
       expect(stats[:adapters_count]).to eq(1)
-      expect(stats[:adapters]).to have(1).item
+      expect(stats[:adapters].size).to eq(1)
       expect(stats[:adapters].first[:type]).to eq("mock")
       expect(stats[:adapters].first[:statistics][:events_processed]).to eq(5)
     end

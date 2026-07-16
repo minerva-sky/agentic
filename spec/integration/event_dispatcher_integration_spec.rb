@@ -74,7 +74,7 @@ RSpec.describe "EventDispatcher Integration", type: :integration do
       # Test filtered and transformed event
       engine.notify(
         :task_started,
-        {importance: "high", task_id: "123"},
+        data: {importance: "high", task_id: "123"},
         correlation_context: {workflow: "test"}
       )
 
@@ -114,7 +114,7 @@ RSpec.describe "EventDispatcher Integration", type: :integration do
       # Test orchestrator agent event
       engine.notify(
         :agent_planning,
-        {plan: "complex_task_breakdown"},
+        data: {plan: "complex_task_breakdown"},
         correlation_context: {
           agent_type: "orchestrator",
           agent_id: "orchestrator-001"
@@ -124,7 +124,7 @@ RSpec.describe "EventDispatcher Integration", type: :integration do
       # Test worker agent event
       engine.notify(
         :task_execution,
-        {subtask: "data_processing"},
+        data: {subtask: "data_processing"},
         correlation_context: {
           agent_type: "worker",
           parent_agent_id: "orchestrator-001",
@@ -158,7 +158,7 @@ RSpec.describe "EventDispatcher Integration", type: :integration do
       # Test planning stage events
       engine.notify(
         :task_analysis_started,
-        {complexity: "high", estimated_duration: 300},
+        data: {complexity: "high", estimated_duration: 300},
         correlation_context: {
           stage: "planning",
           workflow_id: "wf-123",
@@ -169,7 +169,7 @@ RSpec.describe "EventDispatcher Integration", type: :integration do
       # Test execution stage events
       engine.notify(
         :task_progress_update,
-        {progress: 25, current_step: "data_gathering"},
+        data: {progress: 25, current_step: "data_gathering"},
         correlation_context: {
           stage: "execution",
           workflow_id: "wf-123",
@@ -203,7 +203,7 @@ RSpec.describe "EventDispatcher Integration", type: :integration do
       # Parent agent starts workflow
       engine.notify(
         :workflow_initiated,
-        {workflow_type: "data_pipeline", complexity: "high"},
+        data: {workflow_type: "data_pipeline", complexity: "high"},
         correlation_context: {
           correlation_id: correlation_id,
           workflow_id: workflow_id,
@@ -216,7 +216,7 @@ RSpec.describe "EventDispatcher Integration", type: :integration do
       3.times do |i|
         engine.notify(
           :agent_registered,
-          {capability: "data_processing", agent_name: "worker-#{i + 1}"},
+          data: {capability: "data_processing", agent_name: "worker-#{i + 1}"},
           correlation_context: {
             correlation_id: correlation_id,
             workflow_id: workflow_id,
@@ -325,7 +325,7 @@ RSpec.describe "EventDispatcher Integration", type: :integration do
       100.times do |i|
         engine.notify(
           :load_test,
-          {iteration: i, payload: "x" * 100},  # Small payload
+          data: {iteration: i, payload: "x" * 100},  # Small payload
           correlation_context: {test_id: "load-#{i}"}
         )
       end

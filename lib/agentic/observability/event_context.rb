@@ -411,7 +411,10 @@ module Agentic
         context.instance_variable_set(:@depth, hash[:depth])
         context.instance_variable_set(:@created_at, hash[:created_at])
         context.instance_variable_set(:@updated_at, hash[:updated_at])
-        context.instance_variable_set(:@metadata, hash[:metadata])
+        # Metadata is contracted to use string keys (see #get_metadata). JSON
+        # deserialization symbolizes names, so restore string keys throughout
+        # the metadata subtree to keep round-tripped lookups working.
+        context.instance_variable_set(:@metadata, deep_stringify_keys(hash[:metadata] || {}))
         context.instance_variable_set(:@tags, hash[:tags])
         context.instance_variable_set(:@extensions, {})
         context.instance_variable_set(:@metrics, hash[:metrics])
@@ -431,6 +434,22 @@ module Agentic
       def self.from_json(json_string, parent_context: nil)
         hash = JSON.parse(json_string, symbolize_names: true)
         from_hash(hash, parent_context: parent_context)
+      end
+
+      # Recursively convert all Hash keys to strings within nested structures
+      # @param value [Object] The value to stringify (Hash, Array, or scalar)
+      # @return [Object] The value with all Hash keys stringified
+      def self.deep_stringify_keys(value)
+        case value
+        when Hash
+          value.each_with_object({}) do |(key, nested), result|
+            result[key.to_s] = deep_stringify_keys(nested)
+          end
+        when Array
+          value.map { |item| deep_stringify_keys(item) }
+        else
+          value
+        end
       end
 
       # Context inspection and debugging

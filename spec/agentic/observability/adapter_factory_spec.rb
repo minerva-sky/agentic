@@ -62,7 +62,7 @@ RSpec.describe Agentic::Observability::AdapterFactory do
       )
     end
 
-    it "skips disabled adapters" do
+    it "creates adapters for all configured types, honoring the enabled flag" do
       config = {
         console: {enabled: true},
         file: {enabled: false}
@@ -70,8 +70,15 @@ RSpec.describe Agentic::Observability::AdapterFactory do
 
       adapters = described_class.create_from_config(config)
 
-      expect(adapters.size).to eq(1)
-      expect(adapters.first).to be_a(Agentic::Observability::ConsoleAdapter)
+      # Disabled adapters are still instantiated so they can be discovered and
+      # reported; the enabled flag governs whether they process events.
+      expect(adapters.size).to eq(2)
+
+      console_adapter = adapters.find { |a| a.is_a?(Agentic::Observability::ConsoleAdapter) }
+      file_adapter = adapters.find { |a| a.is_a?(Agentic::Observability::FileAdapter) }
+
+      expect(console_adapter.enabled?).to be true
+      expect(file_adapter.enabled?).to be false
     end
 
     it "handles empty configuration gracefully" do

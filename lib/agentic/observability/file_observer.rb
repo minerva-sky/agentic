@@ -162,7 +162,11 @@ module Agentic
           end
         end
       rescue => e
+        # Log for visibility, then propagate so callers (e.g. FileAdapter's
+        # error handling) can record the failure in their statistics. The
+        # adapter and engine layers keep observability failures non-fatal.
         Agentic.logger.error("Failed to write observability event: #{e.message}")
+        raise
       end
 
       def ensure_log_directory

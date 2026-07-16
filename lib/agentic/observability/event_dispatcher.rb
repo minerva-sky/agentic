@@ -276,11 +276,13 @@ module Agentic
 
       # Determine default priority based on event type
       def determine_priority(event_type)
-        case event_type
-        when /error/, /failure/, /security/
+        case event_type.to_s
+        when /security/, /breach/
           PRIORITY_CRITICAL
-        when /task_failed/, /agent_error/, /verification_failed/
+        when /task_failed/, /agent_error/, /verification_failed/, /_failed\z/
           PRIORITY_HIGH
+        when /error/, /failure/
+          PRIORITY_CRITICAL
         when /task_/, /agent_/, /plan_/
           PRIORITY_NORMAL
         else
@@ -312,6 +314,14 @@ module Agentic
 
       # Route event based on priority
       def route_by_priority(event, priority, observers)
+        # Asynchronous batching (the EventPipeline or priority queues) only applies
+        # once #start_processing has been invoked to drain them. Until then, deliver
+        # events synchronously so they are never silently buffered without a consumer.
+        unless @processing
+          process_immediately(event, observers)
+          return
+        end
+
         # v0.3.0 Pipeline Integration: Route through EventPipeline for batched processing
         if @event_pipeline && @config[:enable_pipeline_integration]
           route_through_pipeline(event, priority, observers)

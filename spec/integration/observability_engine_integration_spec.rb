@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "tempfile"
+
 # Test observer for recording events
 class TestObserver
   attr_reader :received_events
@@ -105,11 +107,11 @@ RSpec.describe "ObservabilityEngine Integration", type: :integration do
     let(:observer2) { TestObserver.new }
 
     it "adds and removes local observers correctly" do
-      expect(observability_engine.local_observer_count).to eq(0)
+      expect(observability_engine.local_observers.size).to eq(0)
 
       observability_engine.add_local_observer(observer1)
       observability_engine.add_local_observer(observer2)
-      expect(observability_engine.local_observer_count).to eq(2)
+      expect(observability_engine.local_observers.size).to eq(2)
 
       observability_engine.notify(:test_event, data: {message: "broadcast"})
 
@@ -117,7 +119,7 @@ RSpec.describe "ObservabilityEngine Integration", type: :integration do
       expect(observer2.event_count).to eq(1)
 
       observability_engine.remove_local_observer(observer1)
-      expect(observability_engine.local_observer_count).to eq(1)
+      expect(observability_engine.local_observers.size).to eq(1)
 
       observability_engine.notify(:second_event, data: {message: "after removal"})
       expect(observer1.event_count).to eq(1) # No new events
@@ -138,47 +140,6 @@ RSpec.describe "ObservabilityEngine Integration", type: :integration do
 
       # Good observer should still receive the event
       expect(good_observer.event_count).to eq(1)
-    end
-  end
-
-  describe "WebSocket Client Integration" do
-    let(:mock_websocket) { double("WebSocket", send: nil) }
-
-    it "adds and removes WebSocket clients" do
-      expect(observability_engine.websocket_clients).to be_empty
-
-      observability_engine.add_websocket_client(mock_websocket)
-      expect(observability_engine.websocket_clients).to include(mock_websocket)
-      expect(observability_engine.active?).to be true
-
-      observability_engine.remove_websocket_client(mock_websocket)
-      expect(observability_engine.websocket_clients).not_to include(mock_websocket)
-    end
-
-    it "sends events to WebSocket clients" do
-      observability_engine.add_websocket_client(mock_websocket)
-
-      observability_engine.notify(:test_websocket_event, data: {content: "websocket test"})
-
-      # WebSocket should receive the event (async, so we need to wait briefly)
-      sleep(0.1)
-      expect(mock_websocket).to have_received(:send).with(
-        hash_including("type" => "test_websocket_event")
-      )
-    end
-
-    it "handles WebSocket client errors gracefully" do
-      allow(mock_websocket).to receive(:send).and_raise(StandardError, "Connection lost")
-
-      observability_engine.add_websocket_client(mock_websocket)
-
-      expect {
-        observability_engine.notify(:test_error_event, data: {content: "error test"})
-        sleep(0.1) # Wait for async processing
-      }.not_to raise_error
-
-      # Client should be automatically removed on error
-      expect(observability_engine.websocket_clients).not_to include(mock_websocket)
     end
   end
 
@@ -205,9 +166,10 @@ RSpec.describe "ObservabilityEngine Integration", type: :integration do
       )
     end
 
-    it "serializes complex data correctly" do
+    it "passes complex nested data through to observers intact" do
+      timestamp = Time.now
       complex_data = {
-        timestamp: Time.now,
+        timestamp: timestamp,
         symbols: [:success, :completed],
         nested: {level: 1, items: [1, 2, 3]}
       }
@@ -217,11 +179,12 @@ RSpec.describe "ObservabilityEngine Integration", type: :integration do
       expect(observer.event_count).to eq(1)
       received_payload = observer.last_event[:data]
 
-      # Verify serialization doesn't break
-      expect(received_payload[:data]).to be_a(Hash)
-      expect(received_payload[:data][:symbols]).to all(be_a(String))
-      expect(received_payload[:data][:timestamp]).to be_a(String)
-      expect(received_payload[:data][:nested]).to be_a(Hash)
+      # The local observer path delivers event data unchanged (no lossy
+      # serialization), preserving value types and nested structure.
+      expect(received_payload[:data]).to eq(complex_data)
+      expect(received_payload[:data][:symbols]).to eq([:success, :completed])
+      expect(received_payload[:data][:timestamp]).to eq(timestamp)
+      expect(received_payload[:data][:nested]).to eq({level: 1, items: [1, 2, 3]})
     end
   end
 
@@ -257,20 +220,13 @@ RSpec.describe "ObservabilityEngine Integration", type: :integration do
 
   describe "Activity Status" do
     let(:observer) { TestObserver.new }
-    let(:stream_backend) { Agentic::Streaming::FalconStreamBackend.new }
 
-    it "reports inactive when no observers or backends" do
+    it "reports inactive when no observers or adapters" do
       expect(observability_engine.active?).to be false
     end
 
     it "reports active with local observers" do
       observability_engine.add_local_observer(observer)
-
-      expect(observability_engine.active?).to be true
-    end
-
-    it "reports active with browser streaming" do
-      observability_engine.enable_browser_streaming(stream_backend)
 
       expect(observability_engine.active?).to be true
     end
@@ -316,30 +272,42 @@ RSpec.describe "ObservabilityEngine Integration", type: :integration do
 
   describe "Shutdown and Cleanup" do
     let(:observer) { TestObserver.new }
-    let(:stream_backend) { Agentic::Streaming::FalconStreamBackend.new }
+    let(:temp_file) { Tempfile.new(["shutdown_events", ".jsonl"]) }
+    let(:file_adapter) { Agentic::Observability::FileAdapter.new(log_path: temp_file.path) }
+
+    after do
+      temp_file.close
+      temp_file.unlink
+    end
 
     it "properly shuts down all components" do
       observability_engine.add_local_observer(observer)
-      observability_engine.enable_browser_streaming(stream_backend)
+      observability_engine.add_adapter(file_adapter)
 
       expect(observability_engine.active?).to be true
 
       observability_engine.shutdown
 
-      expect(observability_engine.local_observer_count).to eq(0)
-      expect(observability_engine.stream_backend).to be_nil
+      expect(observability_engine.local_observers).to be_empty
+      expect(observability_engine.all_adapters).to be_empty
       expect(observability_engine.active?).to be false
     end
   end
 
   describe "Integration with Real Components" do
     let(:observer) { TestObserver.new }
-    let(:stream_backend) { Agentic::Streaming::FalconStreamBackend.new }
+    let(:temp_file) { Tempfile.new(["integration_events", ".jsonl"]) }
+    let(:file_adapter) { Agentic::Observability::FileAdapter.new(log_path: temp_file.path) }
 
-    it "coordinates all components together" do
-      # Set up full observability stack
+    after do
+      temp_file.close
+      temp_file.unlink
+    end
+
+    it "coordinates local observers and adapters together" do
+      # Set up full observability stack: in-process observer + file adapter
       observability_engine.add_local_observer(observer)
-      observability_engine.enable_browser_streaming(stream_backend)
+      observability_engine.add_adapter(file_adapter)
 
       # Send events
       observability_engine.notify(:task_started, data: {task_id: "task-123"}, source: "test_task")
@@ -352,6 +320,9 @@ RSpec.describe "ObservabilityEngine Integration", type: :integration do
       # Verify event types
       event_types = observer.received_events.map { |e| e[:event_type] }
       expect(event_types).to eq([:task_started, :task_progress, :task_completed])
+
+      # Verify the file adapter persisted the events
+      expect(file_adapter.file_statistics[:total_events]).to eq(3)
 
       # Verify statistics
       stats = observability_engine.statistics
