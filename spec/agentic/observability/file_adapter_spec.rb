@@ -18,16 +18,19 @@ RSpec.describe Agentic::Observability::FileAdapter do
   end
 
   after do
+    # Capture the path before unlink — Tempfile#path returns nil afterwards,
+    # which would turn the cleanup glob into ".*" and delete repo dotfiles
+    rotated_glob = temp_file.path && "#{temp_file.path}.*"
     temp_file.close
     temp_file.unlink
     # Clean up any rotated files
-    Dir.glob("#{log_path}.*").each { |f|
-      begin
+    if rotated_glob
+      Dir.glob(rotated_glob).each do |f|
         File.delete(f)
       rescue
         nil
       end
-    }
+    end
   end
 
   describe "#initialize" do
