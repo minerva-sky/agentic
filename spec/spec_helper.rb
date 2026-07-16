@@ -29,11 +29,16 @@ Agentic.configure do |config|
 end
 
 # Compatibility shims for ruby-openai 8.x
-# The gem simplified error classes, but our tests expect the old ones
+# The gem simplified error classes, but our tests expect the old ones.
+# Zeitwerk defers loading LlmClient (and with it the openai gem), so load
+# the gem here before reopening its namespace.
+require "openai"
 unless defined?(OpenAI::RateLimitError)
   module OpenAI
     # Define missing error classes as subclasses of OpenAI::Error for test compatibility
     class RateLimitError < Error; end
+
+    class AuthenticationError < Error; end
 
     class APIError < Error; end
 

@@ -169,7 +169,7 @@ module Agentic
       error = Errors::LlmTimeoutError.new("Request to LLM timed out: #{e.message}", context: {timeout_type: e.class.name})
       Agentic.logger.error(error.message)
       handle_error(error, fail_on_error)
-    rescue JSON::ParserError, Oj::ParseError => e
+    rescue JSON::ParserError => e
       error = Errors::LlmParseError.new("Failed to parse JSON response: #{e.message}", parse_exception: e)
       Agentic.logger.error(error.message)
       handle_error(error, fail_on_error)
@@ -259,7 +259,7 @@ module Agentic
           retry_after: retry_after,
           response: error.respond_to?(:response) ? error.response&.to_h : nil
         )
-      when OpenAI::AuthenticationError
+      when defined?(OpenAI::AuthenticationError) && OpenAI::AuthenticationError
         Errors::LlmAuthenticationError.new(
           "OpenAI API authentication error: #{error.message}",
           response: error.respond_to?(:response) ? error.response&.to_h : nil
