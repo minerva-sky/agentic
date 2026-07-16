@@ -11,4 +11,5 @@
 .rspec_status
 # environment variables
 .env
+# plan execution results written by the CLI to the current directory
 result-*.json
