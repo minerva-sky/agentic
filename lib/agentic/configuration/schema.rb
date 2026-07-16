@@ -93,15 +93,13 @@ module Agentic
           array: array
         }
 
+        # Type/required checks live on the field; the detailed per-item
+        # validation (with contextual error messages) is handled by
+        # #validate_nested_field! so no boolean constraint is added here.
         field(
           field_name,
           type: array ? Array : Hash,
-          required: required,
-          constraints: [
-            array ?
-              ->(v) { v.all? { |item| schema.valid?(item) } } :
-              ->(v) { schema.valid?(v) }
-          ]
+          required: required
         )
 
         self
@@ -265,7 +263,11 @@ module Agentic
 
         # Type validation
         unless type_valid?(value, type_constraint)
-          expected_type = type_constraint.is_a?(Symbol) ? type_constraint : type_constraint.name
+          expected_type = case type_constraint
+          when Symbol then type_constraint
+          when Class then type_constraint.name
+          else "custom"
+          end
           raise ValidationError.new(
             "Field #{field_name} must be of type #{expected_type}, got #{value.class.name}",
             field: field_name,
@@ -302,7 +304,7 @@ module Agentic
           end
 
           value.each_with_index do |item, index|
-            schema.validate!(item)
+            schema.validate!(schema.apply_defaults(item))
           rescue ValidationError => e
             raise ValidationError.new(
               "Field #{field_name}[#{index}]: #{e.message}",
@@ -312,7 +314,7 @@ module Agentic
           end
         else
           begin
-            schema.validate!(value)
+            schema.validate!(schema.apply_defaults(value))
           rescue ValidationError => e
             raise ValidationError.new(
               "Field #{field_name}: #{e.message}",

@@ -68,21 +68,24 @@ module Agentic
       # @param strict [Boolean] Whether to reject unknown fields
       # @return [ConfigurationInstance] Validated configuration instance
       def build(strict: false)
-        @schema.create(@data, strict)
+        @schema.create(@data, strict: strict)
       end
 
       # Check if current configuration is valid
       # @param strict [Boolean] Whether to reject unknown fields
       # @return [Boolean] True if valid
       def valid?(strict: false)
-        @schema.valid?(@data, strict)
+        @schema.create(@data, strict: strict)
+        true
+      rescue Schema::ValidationError
+        false
       end
 
       # Get validation errors without raising
       # @param strict [Boolean] Whether to reject unknown fields
       # @return [Array<String>] Array of error messages, empty if valid
       def validation_errors(strict: false)
-        @schema.validate!(@data, strict)
+        @schema.create(@data, strict: strict)
         []
       rescue Schema::ValidationError => e
         [e.message]

@@ -14,7 +14,7 @@ module Agentic
           example: "gpt-4")
 
         schema.field(:temperature, type: :float, required: false, default: 0.7,
-          constraints: [->(v) { v >= 0.0 && v <= 2.0 }],
+          constraints: [->(v) { v.between?(0.0, 2.0) }],
           description: "Controls randomness in responses (0.0 to 2.0)",
           example: 0.7)
 
@@ -24,17 +24,17 @@ module Agentic
           example: 2000)
 
         schema.field(:top_p, type: :float, required: false, default: 1.0,
-          constraints: [->(v) { v >= 0.0 && v <= 1.0 }],
+          constraints: [->(v) { v.between?(0.0, 1.0) }],
           description: "Nucleus sampling parameter",
           example: 0.9)
 
         schema.field(:frequency_penalty, type: :float, required: false, default: 0.0,
-          constraints: [->(v) { v >= -2.0 && v <= 2.0 }],
+          constraints: [->(v) { v.between?(-2.0, 2.0) }],
           description: "Penalize repeated tokens",
           example: 0.1)
 
         schema.field(:presence_penalty, type: :float, required: false, default: 0.0,
-          constraints: [->(v) { v >= -2.0 && v <= 2.0 }],
+          constraints: [->(v) { v.between?(-2.0, 2.0) }],
           description: "Penalize tokens that have appeared",
           example: 0.1)
 
@@ -206,7 +206,7 @@ module Agentic
           description: "Enabled verification strategies")
 
         schema.field(:confidence_threshold, type: :float, required: false, default: 0.8,
-          constraints: [->(v) { v >= 0.0 && v <= 1.0 }],
+          constraints: [->(v) { v.between?(0.0, 1.0) }],
           description: "Minimum confidence threshold for verification")
 
         schema.field(:max_retry_attempts, type: :integer, required: false, default: 3,

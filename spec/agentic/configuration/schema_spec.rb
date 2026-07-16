@@ -29,7 +29,7 @@ RSpec.describe Agentic::Configuration::Schema do
 
     it "supports constraints" do
       schema.field(:score, type: :integer,
-        constraints: [->(v) { v >= 0 && v <= 100 }])
+        constraints: [->(v) { v.between?(0, 100) }])
 
       expect { schema.validate!({score: 50}) }.not_to raise_error
       expect { schema.validate!({score: -1}) }.to raise_error(described_class::ValidationError)
@@ -310,7 +310,7 @@ RSpec.describe Agentic::Configuration::ConfigurationInstance do
 
     it "converts to JSON" do
       json = instance.to_json
-      expect(JSON.parse(json)).to eq(config_data.stringify_keys)
+      expect(JSON.parse(json)).to eq(JSON.parse(config_data.to_json))
     end
   end
 
