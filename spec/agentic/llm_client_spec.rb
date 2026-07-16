@@ -14,6 +14,8 @@ RSpec.describe Agentic::LlmClient, :vcr do
     allow(config).to receive(:to_api_parameters).and_return(api_parameters)
     allow(Agentic.logger).to receive(:error)
     allow(Agentic.logger).to receive(:warn)
+    # Exercise retry logic without real backoff waits
+    allow_any_instance_of(Agentic::RetryHandler).to receive(:sleep)
   end
 
   describe ".new" do

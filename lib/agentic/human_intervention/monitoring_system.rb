@@ -655,11 +655,22 @@ module Agentic
             update_sla_metrics
             cleanup_old_alerts
 
-            sleep(30) # Check every 30 seconds
+            interruptible_sleep(30) # Check every 30 seconds
           rescue => e
             Agentic.logger&.error("Monitoring loop error: #{e.message}")
-            sleep(60) # Wait longer on error
+            interruptible_sleep(60) # Wait longer on error
           end
+        end
+      end
+
+      # Sleep in small increments so stop! is not delayed by long intervals
+      # @param duration [Numeric] Total time to sleep in seconds
+      def interruptible_sleep(duration)
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + duration
+        while @running
+          remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          break if remaining <= 0
+          sleep([0.1, remaining].min)
         end
       end
 

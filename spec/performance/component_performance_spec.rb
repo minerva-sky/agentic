@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe "Component Performance", type: :performance do
+RSpec.describe "Component Performance", :slow, type: :performance do
   describe "Startup Time Benchmarks" do
     it "loads core components efficiently" do
       start_time = Time.now
@@ -80,19 +80,19 @@ RSpec.describe "Component Performance", type: :performance do
         observer
       end
 
-      expect(engine.local_observer_count).to eq(100)
+      expect(engine.local_observers.size).to eq(100)
 
       # Remove all observers
       observers.each { |observer| engine.remove_local_observer(observer) }
 
-      expect(engine.local_observer_count).to eq(0)
+      expect(engine.local_observers.size).to eq(0)
 
       # Force garbage collection
       observers.clear
       GC.start
 
       # Memory should be recoverable
-      expect(engine.local_observer_count).to eq(0)
+      expect(engine.local_observers.size).to eq(0)
     end
   end
 

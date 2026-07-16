@@ -6,7 +6,7 @@
 require "benchmark"
 require "memory_profiler"
 
-RSpec.describe "v0.3.0 Performance Benchmarks", type: :performance do
+RSpec.describe "v0.3.0 Performance Benchmarks", :slow, type: :performance do
   let(:llm_client) { instance_double(Agentic::LlmClient) }
   let(:sample_size) { 100 }
 
@@ -28,11 +28,11 @@ RSpec.describe "v0.3.0 Performance Benchmarks", type: :performance do
       # Benchmark unified event processing
       unified_time = Benchmark.realtime do
         sample_size.times do |i|
-          unified_engine.notify(:benchmark_event, self, {
+          unified_engine.notify(:benchmark_event, data: {
             iteration: i,
             timestamp: Time.now.to_f,
             correlation_id: SecureRandom.uuid
-          })
+          }, source: self)
         end
       end
 
@@ -48,9 +48,10 @@ RSpec.describe "v0.3.0 Performance Benchmarks", type: :performance do
       puts "Memory Usage: #{unified_memory.total_allocated_memsize} bytes allocated"
       puts "Memory Objects: #{unified_memory.total_allocated} objects allocated"
 
-      # Validate performance targets
+      # Validate performance targets; count only the benchmark loop's events
+      # since the memory-profiling loop notifies the same observer
       expect(unified_time).to be < 0.1, "Event processing should be under 0.1s for #{sample_size} events"
-      expect(events_received.size).to eq(sample_size)
+      expect(events_received.count(:benchmark_event)).to eq(sample_size)
     end
 
     it "benchmarks event correlation performance" do
@@ -65,11 +66,11 @@ RSpec.describe "v0.3.0 Performance Benchmarks", type: :performance do
         10.times do |batch|
           correlation_id = SecureRandom.uuid
           10.times do |event|
-            engine.notify(:correlated_event, self, {
+            engine.notify(:correlated_event, data: {
               correlation_id: correlation_id,
               batch: batch,
               event: event
-            })
+            }, source: self)
           end
         end
       end
@@ -149,13 +150,11 @@ RSpec.describe "v0.3.0 Performance Benchmarks", type: :performance do
 
         # Process significant number of events
         500.times do |i|
-          engine.notify(:memory_benchmark, self, {
-            data: {
-              iteration: i,
-              timestamp: Time.now.to_f,
-              large_payload: "x" * 100  # 100 character payload
-            }
-          })
+          engine.notify(:memory_benchmark, data: {
+            iteration: i,
+            timestamp: Time.now.to_f,
+            large_payload: "x" * 100  # 100 character payload
+          }, source: self)
         end
       end
 
@@ -198,10 +197,10 @@ RSpec.describe "v0.3.0 Performance Benchmarks", type: :performance do
 
   describe "Error Handling Performance" do
     it "benchmarks error handling overhead" do
-      # Test error handling performance with LLM strategy
-      allow(llm_client).to receive(:complete).and_raise(StandardError.new("Benchmark error"))
-
+      # Test error handling performance with LLM strategy; the strategy's
+      # LLM call is stubbed to raise so the retry/error path is exercised
       error_strategy = Agentic::Verification::StrategyFactory.create(:llm, llm_client: llm_client)
+      allow(error_strategy).to receive(:perform_llm_verification).and_raise(StandardError.new("Benchmark error"))
       task = Agentic::Task.new(description: "Error benchmark", agent_spec: {"name" => "test"})
       result = Agentic::TaskResult.new(task_id: task.id, success: true, output: {})
 
