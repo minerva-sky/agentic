@@ -399,10 +399,9 @@ module Agentic
 
       # Check if eviction is needed
       def should_evict?
-        size_threshold = (@config[:max_size] * @config[:eviction_threshold]).to_i
         memory_threshold = (@config[:max_memory] * @config[:eviction_threshold]).to_i
 
-        @storage.size >= size_threshold || calculate_memory_usage >= memory_threshold
+        @storage.size >= @config[:max_size] || calculate_memory_usage >= memory_threshold
       end
 
       # Evict entries based on policy
@@ -410,17 +409,21 @@ module Agentic
         target_size = (@config[:max_size] * 0.7).to_i  # Evict to 70% capacity
         (@config[:max_memory] * 0.7).to_i
 
+        # Evict only the overflow (at least one entry); a fixed batch minimum
+        # would wipe out small caches entirely
+        eviction_count = [@storage.size - target_size, 1].max
+
         entries_to_evict = case @config[:eviction_policy]
         when EvictionPolicy::LRU
-          @storage.values.sort_by(&:accessed_at).first([@storage.size - target_size, 10].max)
+          @storage.values.sort_by(&:accessed_at).first(eviction_count)
         when EvictionPolicy::LFU
-          @storage.values.sort_by(&:access_count).first([@storage.size - target_size, 10].max)
+          @storage.values.sort_by(&:access_count).first(eviction_count)
         when EvictionPolicy::FIFO
-          @storage.values.sort_by(&:created_at).first([@storage.size - target_size, 10].max)
+          @storage.values.sort_by(&:created_at).first(eviction_count)
         when EvictionPolicy::LARGEST_FIRST
-          @storage.values.sort_by(&:size).reverse.first([@storage.size - target_size, 10].max)
+          @storage.values.sort_by(&:size).reverse.first(eviction_count)
         when EvictionPolicy::RANDOM
-          @storage.values.sample([@storage.size - target_size, 10].max)
+          @storage.values.sample(eviction_count)
         else
           []
         end

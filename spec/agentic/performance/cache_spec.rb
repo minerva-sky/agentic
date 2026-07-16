@@ -227,7 +227,7 @@ RSpec.describe Agentic::Performance::Cache do
       cache.set("key1", "value1", ttl: 3600, tags: ["debug"])
 
       entries = cache.inspect_entries
-      expect(entries).to have(1).item
+      expect(entries.size).to eq(1)
 
       entry = entries.first
       expect(entry[:key]).to eq("key1")
