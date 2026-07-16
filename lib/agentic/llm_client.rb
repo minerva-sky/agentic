@@ -364,6 +364,25 @@ module Agentic
         )
       )
 
+      # Fall back to the complete response body when no stream chunks arrived
+      # (e.g. a provider or test stub that returns a full JSON response
+      # despite the stream parameter)
+      if accumulated_content.empty? && response.is_a?(Hash)
+        fallback_content = response.dig("choices", 0, "message", "content")
+        accumulated_content = fallback_content if fallback_content
+      end
+
+      # If streaming delivered nothing at all, degrade gracefully to a
+      # non-streaming request rather than failing on empty content
+      if accumulated_content.empty?
+        fallback_response = client.chat(parameters: parameters)
+        if fallback_response.is_a?(Hash)
+          content = fallback_response.dig("choices", 0, "message", "content").to_s
+          stream_callback.call(:stream_complete, content)
+          return fallback_response
+        end
+      end
+
       # Notify callback of completion
       stream_callback.call(:stream_complete, accumulated_content)
 
