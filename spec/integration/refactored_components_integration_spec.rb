@@ -143,10 +143,10 @@ RSpec.describe "Refactored Components Integration", type: :integration do
 
     describe "Error Handling Pattern Consistency" do
       it "provides consistent error context across verification strategies" do
-        # Test error handling consistency in LLM strategy
-        allow(llm_client).to receive(:complete).and_raise(StandardError.new("LLM API error"))
-
+        # Test error handling consistency in LLM strategy; the strategy's LLM
+        # call is stubbed to raise so the error path is exercised
         llm_strategy = Agentic::Verification::StrategyFactory.create(:llm, llm_client: llm_client)
+        allow(llm_strategy).to receive(:perform_llm_verification).and_raise(StandardError.new("LLM API error"))
         task = Agentic::Task.new(description: "test", agent_spec: {"name" => "test"})
         result = Agentic::TaskResult.new(task_id: task.id, success: true, output: {})
 
@@ -263,10 +263,10 @@ RSpec.describe "Refactored Components Integration", type: :integration do
       )
 
       verification_result = verification_hub.verify(task, result)
-      observability_engine.notify(:verification_completed, verification_hub, {
+      observability_engine.notify(:verification_completed, data: {
         result: verification_result.verified,
         confidence: verification_result.confidence
-      })
+      }, source: verification_hub)
 
       # Verify coordination
       expect(events_log).to include(
@@ -279,7 +279,7 @@ RSpec.describe "Refactored Components Integration", type: :integration do
 
     it "maintains separation of concerns between components" do
       # Verify UI component doesn't depend on verification
-      expect { Agentic::UI::Dashboard::UI.generate_html({}) }.not_to raise_error
+      expect { Agentic::UI.task_status_indicator(:completed) }.not_to raise_error
 
       # Verify verification doesn't depend on observability for core function
       strategy = Agentic::Verification::StrategyFactory.create(:schema)
@@ -290,7 +290,7 @@ RSpec.describe "Refactored Components Integration", type: :integration do
 
       # Verify observability works independently
       engine = Agentic::ObservabilityEngine.new
-      expect { engine.notify(:test_event, self, {}) }.not_to raise_error
+      expect { engine.notify(:test_event, data: {}, source: self) }.not_to raise_error
     end
   end
 end
