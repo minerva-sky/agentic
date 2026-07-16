@@ -221,7 +221,7 @@ module Agentic
 
         # Create spinner for agent creation
         agent = UI.with_spinner("Creating agent: #{name}") do
-          # Create new agent
+          # Create new agent (Agent.build yields the configurable; Agent.new does not)
           agent = Agentic::Agent.build do |a|
             a.role = options[:role]
             a.purpose = options[:purpose]

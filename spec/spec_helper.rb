@@ -69,6 +69,15 @@ RSpec.configure do |config|
   # Filter out slow integration tests by default
   config.filter_run_excluding :slow unless ENV["RUN_SLOW_TESTS"]
 
+  # A stray Kernel#exit (e.g. Thor aborting on a missing required option)
+  # would otherwise abort the entire run mid-suite while still printing a
+  # normal-looking summary; surface it as a regular example failure instead
+  config.around(:each) do |example|
+    example.run
+  rescue SystemExit => e
+    raise "Spec attempted to exit the process (status #{e.status})"
+  end
+
   # VCR configuration
   config.around(:each, :vcr) do |example|
     name = example.metadata[:cassette_name] || example.full_description.downcase.gsub(/\W+/, "_")
