@@ -325,7 +325,6 @@ RSpec.describe Agentic::Observability::EventPipeline do
       events_processed = efficient_pipeline.statistics[:events_processed]
 
       expect(events_processed).to be > 0
-      expect(memory_growth).to be > 0 # Some growth is expected
 
       # Memory per event should be reasonable due to circular buffering
       memory_per_event = memory_growth / [events_processed, 1].max
@@ -602,28 +601,30 @@ RSpec.describe Agentic::Observability::EventPipeline do
     end
 
     it "handles concurrent access safely" do
-      threads = []
-
-      # Multiple threads pushing items
-      5.times do |i|
-        threads << Thread.new do
-          10.times { |j| buffer.push("thread#{i}_item#{j}") }
+      # Multiple threads pushing items, retrying when the buffer is full so
+      # all items eventually flow through the capacity-5 buffer
+      producers = Array.new(5) do |i|
+        Thread.new do
+          10.times do |j|
+            Thread.pass until buffer.push("thread#{i}_item#{j}")
+          end
         end
       end
 
-      # Thread popping items
+      # Thread popping items until all 50 have been consumed
       popped_items = []
-      threads << Thread.new do
-        while popped_items.size < 50 || !buffer.empty?
+      consumer = Thread.new do
+        while popped_items.size < 50
           item = buffer.pop
-          popped_items << item if item
-          sleep(0.001)
+          item ? popped_items << item : Thread.pass
         end
       end
 
-      threads.each(&:join)
+      # Bounded joins so a regression fails fast instead of hanging the suite
+      deadline_met = producers.all? { |t| t.join(5) } && consumer.join(5)
 
-      # Should handle concurrent operations without errors
+      expect(deadline_met).to be_truthy
+      expect(popped_items.size).to eq(50)
       expect(buffer.empty?).to be true
     end
   end

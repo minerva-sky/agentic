@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "async"
-require "async/queue"
 require "concurrent"
 
 module Agentic
@@ -64,6 +62,7 @@ module Agentic
         @config = DEFAULT_CONFIG.merge(config)
         @running = false
         @processors = []
+        @worker_threads = []
 
         # Circular buffer for memory efficiency
         @event_buffer = create_circular_buffer(@config[:buffer_size_max])
@@ -148,13 +147,13 @@ module Agentic
         @running = true
         @statistics[:started_at] = Time.now.to_f
 
-        # Start async processing tasks
-        Async do |task|
-          task.async { run_batch_formation_loop }
-          task.async { run_batch_processing_loop }
-          task.async { run_performance_monitoring_loop } if @config[:enable_performance_monitoring]
-          task.async { run_memory_optimization_loop } if @config[:enable_memory_optimization]
-        end
+        # Start background worker threads; start must not block the caller
+        @worker_threads = [
+          Thread.new { run_batch_formation_loop },
+          Thread.new { run_batch_processing_loop }
+        ]
+        @worker_threads << Thread.new { run_performance_monitoring_loop } if @config[:enable_performance_monitoring]
+        @worker_threads << Thread.new { run_memory_optimization_loop } if @config[:enable_memory_optimization]
 
         Agentic.logger&.info("EventPipeline started with #{@processors.size} processors")
       end
@@ -164,6 +163,11 @@ module Agentic
         @running = false
         @statistics[:stopped_at] = Time.now.to_f
         @statistics[:total_runtime] = @statistics[:stopped_at] - (@statistics[:started_at] || @statistics[:stopped_at])
+
+        # Wake any worker waiting on the buffer, then wait for workers to exit
+        @buffer_mutex.synchronize { @buffer_condition.broadcast }
+        @worker_threads.each { |thread| thread.join(2) || thread.kill }
+        @worker_threads = []
 
         # Process remaining events
         process_remaining_events
@@ -229,9 +233,9 @@ module Agentic
       # Create batch processing queues
       def create_batch_queues
         {
-          high_priority: Async::Queue.new,
-          normal_priority: Async::Queue.new,
-          low_priority: Async::Queue.new
+          high_priority: Thread::Queue.new,
+          normal_priority: Thread::Queue.new,
+          low_priority: Thread::Queue.new
         }
       end
 
@@ -334,7 +338,7 @@ module Agentic
 
             # Determine batch priority and route to appropriate queue
             batch_priority = determine_batch_priority(batch)
-            @batch_queues[batch_priority].enqueue(batch)
+            @batch_queues[batch_priority].push(batch)
 
             @statistics[:batches_formed] += 1
             update_stage_statistics(STAGE_BATCHING, 0.001) # Minimal time for batching
@@ -354,14 +358,21 @@ module Agentic
             batch_priority = nil
 
             [:high_priority, :normal_priority, :low_priority].each do |priority|
-              batch = @batch_queues[priority].dequeue(timeout: 0.01)
+              batch = begin
+                @batch_queues[priority].pop(true)
+              rescue ThreadError
+                nil
+              end
               if batch
                 batch_priority = priority
                 break
               end
             end
 
-            next unless batch
+            unless batch
+              sleep(0.005)
+              next
+            end
 
             # Process batch with appropriate processors
             process_batch(batch, batch_priority)
@@ -375,7 +386,8 @@ module Agentic
       # Performance monitoring loop
       def run_performance_monitoring_loop
         while @running
-          sleep(@performance_monitor[:check_interval])
+          interruptible_sleep(@performance_monitor[:check_interval])
+          break unless @running
 
           begin
             collect_performance_metrics
@@ -391,7 +403,8 @@ module Agentic
         gc_counter = 0
 
         while @running
-          sleep(1.0) # Check every second
+          interruptible_sleep(1.0) # Check every second
+          break unless @running
 
           begin
             gc_counter += 1
@@ -478,6 +491,17 @@ module Agentic
         end
 
         events
+      end
+
+      # Sleep in small increments so stop is not delayed by long intervals
+      # @param duration [Numeric] Total time to sleep in seconds
+      def interruptible_sleep(duration)
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + duration
+        while @running
+          remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          break if remaining <= 0
+          sleep([0.05, remaining].min)
+        end
       end
 
       # Extract event from buffer
@@ -689,6 +713,18 @@ module Agentic
 
       # Process any remaining events before shutdown
       def process_remaining_events
+        # Drain batches that were formed but not yet processed
+        @batch_queues.each do |priority, queue|
+          until queue.empty?
+            batch = begin
+              queue.pop(true)
+            rescue ThreadError
+              break
+            end
+            process_batch(batch, priority)
+          end
+        end
+
         # Process remaining events in buffer
         remaining_events = []
         while (event = extract_event_from_buffer(timeout: 0.001))
