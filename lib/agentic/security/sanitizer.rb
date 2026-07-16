@@ -31,7 +31,7 @@ module Agentic
         api_key: [
           /\b(?:api[_-]?key|token|secret|password|passwd|pwd)\s*[:=]\s*["']?([a-zA-Z0-9\-_]{8,})["']?/i,
           /\bBearer\s+([a-zA-Z0-9\-._~+\/]+={0,2})/i,
-          /\b(?:sk-|pk-|rk-)[a-zA-Z0-9]{20,}/i,
+          /\b(?:sk-|pk-|rk-)[a-zA-Z0-9]{4,}/i,
           /\b[a-zA-Z0-9]{32,}\b/ # Generic 32+ char strings that might be keys
         ],
 
@@ -96,6 +96,14 @@ module Agentic
         SECURITY_LEVEL_PARANOID => [:api_key, :email, :phone, :ssn, :credit_card, :ip_address, :file_path, :connection_string]
       }.freeze
 
+      # Order in which built-in pattern types are applied. More specific
+      # patterns (SSN, credit card) must run before the greedy phone pattern,
+      # which would otherwise mislabel or partially match them.
+      PATTERN_ORDER = [
+        :api_key, :credit_card, :ssn, :ip_address,
+        :connection_string, :email, :file_path, :phone
+      ].freeze
+
       attr_reader :security_level, :custom_patterns, :replacements
 
       def initialize(security_level: SECURITY_LEVEL_STANDARD, custom_patterns: {}, replacements: {})
@@ -149,18 +157,12 @@ module Agentic
       # @param response_data [Hash, String] API response data
       # @return [Hash, String] Sanitized response data
       def sanitize_api_response(response_data)
-        # More aggressive sanitization for API responses
+        # More aggressive sanitization for API responses. Sensitive fields are
+        # redacted in place (rather than dropped) so callers can still observe
+        # that a field was present while its value stays protected.
         case response_data
         when Hash
-          sanitized = sanitize_hash(response_data, :api_response)
-
-          # Additional API-specific sanitization
-          if sanitized.is_a?(Hash)
-            # Remove common sensitive API fields
-            sanitized.reject { |k, _| sensitive_api_field?(k) }
-          else
-            sanitized
-          end
+          sanitize_hash(response_data, :api_response)
         else
           sanitize_string(response_data.to_s, :api_response)
         end
@@ -359,19 +361,31 @@ module Agentic
           patterns[pattern_type] = Array(custom_patterns)
         end
 
-        # Then add built-in patterns
+        # Then add built-in patterns, ordered so specific patterns (SSN, credit
+        # card) precede the greedy phone pattern. Unknown types are appended.
         active_types = SECURITY_LEVEL_PATTERNS[@security_level] || []
-        active_types.each do |pattern_type|
-          if patterns[pattern_type]
+        ordered_types = (PATTERN_ORDER & active_types) + (active_types - PATTERN_ORDER)
+        ordered_types.each do |pattern_type|
+          builtin = PII_PATTERNS[pattern_type] || []
+          patterns[pattern_type] = if patterns[pattern_type]
             # Custom patterns exist for this type, append built-in after them
-            patterns[pattern_type] += PII_PATTERNS[pattern_type] || []
+            patterns[pattern_type] + builtin
           else
-            # No custom patterns, use built-in only
-            patterns[pattern_type] = PII_PATTERNS[pattern_type] || []
+            builtin
           end
         end
 
         patterns
+      end
+
+      # Resolve the pattern set for a given context. Backtraces always contain
+      # file paths, so path redaction is applied for the :backtrace context even
+      # when file_path is not part of the active security level.
+      def patterns_for(context)
+        return @active_patterns unless context == :backtrace
+        return @active_patterns if @active_patterns.key?(:file_path)
+
+        @active_patterns.merge(file_path: PII_PATTERNS[:file_path])
       end
 
       # Sanitize string content
@@ -385,7 +399,7 @@ module Agentic
 
         sanitized = content.dup
 
-        @active_patterns.each do |pattern_type, patterns|
+        patterns_for(context).each do |pattern_type, patterns|
           replacement = @replacements[pattern_type] || "[REDACTED]"
 
           patterns.each do |pattern|
@@ -408,17 +422,25 @@ module Agentic
         sanitized = {}
 
         hash.each do |key, value|
-          sanitized_key = sanitize_string(key.to_s, context)
+          # Preserve non-string key types (e.g. symbols) so callers can still
+          # index the sanitized hash the same way as the original.
+          sanitized_key = key.is_a?(String) ? sanitize_string(key, context) : key
 
-          sanitized[sanitized_key] = case value
-          when String
-            sanitize_string(value, context)
-          when Hash
-            sanitize_hash(value, context)
-          when Array
-            sanitize_array(value, context)
+          sanitized[sanitized_key] = if value.is_a?(String) && sensitive_api_field?(key)
+            # The key name marks this value as sensitive regardless of whether
+            # the value itself matches a PII pattern.
+            @replacements[:api_key] || "[REDACTED]"
           else
-            value
+            case value
+            when String
+              sanitize_string(value, context)
+            when Hash
+              sanitize_hash(value, context)
+            when Array
+              sanitize_array(value, context)
+            else
+              value
+            end
           end
         end
 

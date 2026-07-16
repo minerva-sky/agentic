@@ -156,6 +156,9 @@ RSpec.describe Agentic::Security::SecureErrorMixin do
 
     before do
       allow(Agentic).to receive(:logger).and_return(mock_logger)
+      # Config.configure emits an :info line; allow it so the specs can assert
+      # only on the :error/:debug output produced by log_securely.
+      allow(mock_logger).to receive(:info)
     end
 
     it "logs securely when security events are enabled" do
