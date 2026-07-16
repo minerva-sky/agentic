@@ -327,6 +327,7 @@ module Agentic
         "dependency_analysis", "testing", "performance_analysis", "code_metrics"
       ]
 
+
       known_capabilities.each do |capability|
         next unless description_mentions_capability?(description, capability)
 
