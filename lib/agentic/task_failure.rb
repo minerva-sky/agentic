@@ -132,7 +132,9 @@ module Agentic
       return context unless Security::Config.pii_detection_enabled?
       return {} if context.nil?
 
-      Security::Config.sanitizer.sanitize(context, context: :error)
+      sanitized = Security::Config.sanitizer.sanitize(context, context: :error)
+      # The sanitizer stringifies keys; restore symbol access expected by callers
+      sanitized.transform_keys(&:to_sym)
     end
   end
 end
