@@ -16,16 +16,22 @@ module Agentic
       # @return [Array<String>] Messages from the verification process
       attr_reader :messages
 
+      # @return [Hash, nil] Structured error context when verification failed
+      #   due to an error (e.g. :error_type, :timestamp)
+      attr_reader :error_details
+
       # Initializes a new VerificationResult
       # @param task_id [String] The ID of the task that was verified
       # @param verified [Boolean] Whether the verification passed
       # @param confidence [Float] The confidence score (0.0-1.0) of the verification
       # @param messages [Array<String>] Messages from the verification process
-      def initialize(task_id:, verified:, confidence:, messages: [])
+      # @param error_details [Hash, nil] Structured error context for failures
+      def initialize(task_id:, verified:, confidence:, messages: [], error_details: nil)
         @task_id = task_id
         @verified = verified
         @confidence = confidence
         @messages = messages
+        @error_details = error_details
       end
 
       # Checks if the verification passed with high confidence

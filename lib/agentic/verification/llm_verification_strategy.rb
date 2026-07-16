@@ -64,7 +64,11 @@ module Agentic
           task_id: task.id,
           verified: false,
           confidence: 0.0,
-          messages: ["LLM verification error: #{error.message}"]
+          messages: ["LLM verification error: #{error.message}"],
+          error_details: {
+            error_type: error.class.name,
+            timestamp: Time.now.iso8601
+          }
         )
       end
 
