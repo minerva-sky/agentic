@@ -21,3 +21,6 @@ gem "standard", "~> 1.3"
 gem "vcr"
 gem "webmock"
 gem "timecop"
+gem "simplecov", require: false
+gem "memory_profiler"
+gem "rgl", "~> 0.6"

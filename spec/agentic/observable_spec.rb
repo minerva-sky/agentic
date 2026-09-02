@@ -2,41 +2,48 @@
 
 require "spec_helper"
 
-class ObservableTest
-  include Agentic::Observable
-
-  attr_reader :value
-
-  def initialize
-    @value = 0
-  end
-
-  def increment
-    old_value = @value
-    @value += 1
-    notify_observers(:value_changed, old_value, @value)
-  end
-end
-
-class TestObserver
-  attr_reader :events
-
-  def initialize
-    @events = []
-  end
-
-  def update(event_type, observable, *args)
-    @events << {
-      type: event_type,
-      observable: observable,
-      args: args
-    }
-  end
-end
-
+# Helper classes are anonymous so they cannot collide with same-named
+# top-level classes defined in other spec files (class bodies merge when
+# reopened, silently corrupting whichever spec loads second)
 RSpec.describe Agentic::Observable do
-  let(:observable) { ObservableTest.new }
-  let(:observer) { TestObserver.new }
+  let(:observable_class) do
+    Class.new do
+      include Agentic::Observable
+
+      attr_reader :value
+
+      def initialize
+        @value = 0
+      end
+
+      def increment
+        old_value = @value
+        @value += 1
+        notify_observers(:value_changed, old_value, @value)
+      end
+    end
+  end
+
+  let(:observer_class) do
+    Class.new do
+      attr_reader :events
+
+      def initialize
+        @events = []
+      end
+
+      def update(event_type, observable, *args)
+        @events << {
+          type: event_type,
+          observable: observable,
+          args: args
+        }
+      end
+    end
+  end
+
+  let(:observable) { observable_class.new }
+  let(:observer) { observer_class.new }
 
   describe "#add_observer" do
     it "adds an observer" do
@@ -66,7 +73,7 @@ RSpec.describe Agentic::Observable do
   describe "#delete_observers" do
     it "removes all observers" do
       observable.add_observer(observer)
-      observable.add_observer(TestObserver.new)
+      observable.add_observer(observer_class.new)
       observable.delete_observers
       expect(observable.count_observers).to eq(0)
     end
@@ -87,7 +94,7 @@ RSpec.describe Agentic::Observable do
     end
 
     it "handles multiple observers" do
-      second_observer = TestObserver.new
+      second_observer = observer_class.new
       observable.add_observer(second_observer)
 
       observable.increment
@@ -125,7 +132,7 @@ RSpec.describe Agentic::Observable do
         def update(*)
           @observable.add_observer(@new_observer)
         end
-      end.new(observable, TestObserver.new)
+      end.new(observable, observer_class.new)
 
       observable.add_observer(self_removing_observer)
       observable.add_observer(observer_adding_observer)

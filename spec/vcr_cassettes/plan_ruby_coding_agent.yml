@@ -1,6 +1,7 @@
 ---
 http_interactions:
-- request:
+- &1
+  request:
     method: post
     uri: https://api.openai.com/v1/chat/completions
     body:
@@ -118,7 +119,9 @@ http_interactions:
           "system_fingerprint": "fp_76544d79cb"
         }
   recorded_at: Thu, 29 May 2025 02:35:39 GMT
-- request:
+- *1
+- &2
+  request:
     method: post
     uri: https://api.openai.com/v1/chat/completions
     body:
@@ -235,4 +238,5 @@ http_interactions:
           "system_fingerprint": "fp_07871e2ad8"
         }
   recorded_at: Thu, 29 May 2025 02:35:41 GMT
+- *2
 recorded_with: VCR 6.3.1

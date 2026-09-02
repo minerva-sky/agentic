@@ -123,10 +123,16 @@ RSpec.describe Agentic::CLI do
       allow(Agentic::UI).to receive(:with_spinner).and_yield
 
       # Create a mock execution plan
+      expected_answer = double(
+        "ExpectedAnswerFormat",
+        format: "Text",
+        sections: ["Test"],
+        length: "Short"
+      )
       execution_plan = double(
         "ExecutionPlan",
         tasks: [{"description" => "Test task", "agent" => {"name" => "TestAgent"}}],
-        expected_answer: {"format" => "Text", "sections" => ["Test"], "length" => "Short"},
+        expected_answer: expected_answer,
         to_h: {}
       )
 

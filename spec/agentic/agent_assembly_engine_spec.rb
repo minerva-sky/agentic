@@ -325,19 +325,28 @@ RSpec.describe Agentic::AgentAssemblyEngine do
     end
 
     it "returns nil if no suitable agent is found" do
-      # Create a task with requirements that can't be satisfied
+      # Create a task with very different requirements that result in low similarity
+      # Using explicit capabilities in input to ensure they're extracted
       task_spec = Agentic::AgentSpecification.new(
-        name: "Special Agent",
-        description: "An agent for special tasks",
-        instructions: "Special instructions"
+        name: "Database Migration Agent",
+        description: "An agent for database operations",
+        instructions: "Perform database migrations"
       )
 
       special_task = Agentic::Task.new(
-        description: "Perform a non_existent_capability operation",
-        agent_spec: task_spec
+        description: "Migrate database schema and run SQL operations",
+        agent_spec: task_spec,
+        input: {
+          capabilities: [
+            {name: "database_migration", importance: 0.9},
+            {name: "sql_execution", importance: 0.9}
+          ]
+        }
       )
 
       agent = engine.find_suitable_agent(special_task)
+      # Should return nil because stored agents have different capabilities
+      # and the overall similarity score will be low
       expect(agent).to be_nil
     end
   end

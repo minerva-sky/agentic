@@ -13,12 +13,14 @@ module Agentic
   # @attr_reader [Symbol] status Current status of the task (:pending, :in_progress, :completed, :failed)
   # @attr_reader [TaskFailure, nil] failure Failure information if the task failed, nil otherwise
   # @attr_reader [Boolean, nil] ready_to_execute Flag indicating if the task is ready to be executed
+  # @attr_reader [Workspace, nil] workspace Optional workspace for file generation
+  # @attr_reader [Boolean] artifact_mode Whether this task generates artifacts
   # @attr_accessor [Integer, nil] retry_count Number of times the task has been retried
   # @attr_accessor [Symbol, nil] output_schema_name Name of the output schema to use
   class Task
     include Agentic::Observable
 
-    attr_reader :id, :description, :agent_spec, :input, :output, :status, :failure, :ready_to_execute
+    attr_reader :id, :description, :agent_spec, :input, :output, :status, :failure, :ready_to_execute, :workspace, :artifact_mode
     attr_accessor :retry_count, :output_schema_name
 
     # @return [Object, nil] Arbitrary domain object carried by the task,
@@ -30,9 +32,11 @@ module Agentic
     # @param agent_spec [Hash, AgentSpecification] Requirements for the agent that will execute this task
     # @param input [Hash] Input data for the task
     # @param payload [Object, nil] Arbitrary domain data for the agent executing this task
+    # @param workspace [Workspace, nil] Optional workspace for file generation
     # @param output_schema_name [Symbol, nil] Name of the output schema to use for structured output
+    # @param artifact_mode [Boolean] Whether this task generates artifacts (default: false)
     # @return [Task] A new task instance
-    def initialize(description:, agent_spec:, input: {}, payload: nil, output_schema_name: nil)
+    def initialize(description:, agent_spec:, input: {}, payload: nil, workspace: nil, output_schema_name: nil, artifact_mode: false)
       @id = SecureRandom.uuid
       @description = description
 
@@ -49,12 +53,14 @@ module Agentic
 
       @input = input
       @payload = payload
+      @workspace = workspace
       @output = nil
       @failure = nil
       @status = :pending
       @ready_to_execute = nil
       @output_schema_name = output_schema_name
       @dependency_outputs = {}
+      @artifact_mode = artifact_mode
     end
 
     # Creates a task from a TaskDefinition
@@ -139,7 +145,15 @@ module Agentic
         notify_observers(:status_change, old_status, @status)
         notify_observers(:failure_occurred, @failure)
 
-        Agentic.logger.error("Task execution failed: #{e.message}")
+        # Use secure logging for task failure
+        if @failure.respond_to?(:to_secure_hash)
+          secure_data = @failure.to_secure_hash
+          Agentic.logger.error("Task execution failed: #{secure_data[:message]}")
+          Agentic.logger.debug("Task failure context: #{secure_data[:context]}") if secure_data[:context]
+        else
+          safe_message = Security::Config.sanitizer.sanitize_error("Task execution failed: #{e.message}")
+          Agentic.logger.error(safe_message)
+        end
 
         TaskResult.new(
           task_id: @id,
@@ -167,7 +181,7 @@ module Agentic
     # Returns a serializable representation of the task
     # @return [Hash] The task as a hash
     def to_h
-      {
+      hash = {
         id: @id,
         description: @description,
         agent_spec: @agent_spec.is_a?(AgentSpecification) ? @agent_spec.to_h : @agent_spec,
@@ -176,6 +190,18 @@ module Agentic
         status: @status,
         failure: @failure&.to_h
       }
+
+      # Include workspace info if present
+      if has_workspace?
+        hash[:workspace] = {
+          id: @workspace.id,
+          path: @workspace.path,
+          artifact_count: @workspace.artifact_count,
+          persistent: @workspace.metadata[:persistent]
+        }
+      end
+
+      hash
     end
 
     # Returns the output schema for this task
@@ -195,6 +221,39 @@ module Agentic
     # @param schema_name [Symbol] The name of the schema to use
     def set_output_schema(schema_name)
       @output_schema_name = schema_name
+    end
+
+    # Checks if this task has a workspace for file generation
+    # @return [Boolean] True if task has a workspace
+    def has_workspace?
+      !@workspace.nil?
+    end
+
+    # Checks if this task requires artifact generation
+    # @return [Boolean] True if artifact_mode is enabled or task has a workspace
+    def requires_artifacts?
+      @artifact_mode || has_workspace?
+    end
+
+    # Gets the workspace path for agent to use
+    # @return [String, nil] The workspace path or nil if no workspace
+    def workspace_path
+      @workspace&.path
+    end
+
+    # Cleans up the workspace if it's not persistent
+    # @return [Boolean] True if cleanup occurred, false if skipped
+    def cleanup_workspace
+      return false unless has_workspace?
+      return false if @workspace.metadata[:persistent]
+
+      @workspace.cleanup
+    end
+
+    # Determines if workspace should be automatically cleaned up
+    # @return [Boolean] True if workspace should be cleaned up
+    def should_cleanup_workspace?
+      has_workspace? && status == :completed && !@workspace.metadata[:persistent]
     end
 
     private

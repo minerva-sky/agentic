@@ -5,7 +5,8 @@ require "spec_helper"
 RSpec.describe Agentic::TaskFailure do
   let(:message) { "Test failure message" }
   let(:type) { "TestErrorType" }
-  let(:context) { {"key" => "value"} }
+  # Context keys are normalized to symbols by TaskFailure regardless of input
+  let(:context) { {key: "value"} }
 
   describe "#initialize" do
     it "sets the attributes correctly" do

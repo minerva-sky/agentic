@@ -7,6 +7,7 @@ module Agentic
     # @return [void]
     def self.register_standard_capabilities
       Examples.register_all
+      RegisterFileGeneration.register
     end
   end
 end

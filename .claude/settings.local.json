@@ -5,9 +5,38 @@
       "Bash(bundle exec rake:*)",
       "Bash(bundle exec:*)",
       "Bash(ls:*)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(ag:*)",
+      "Bash(chruby:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(ruby -c:*)",
+      "Bash(git add:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)",
+      "mcp__ai-software-architect__start_architecture_review",
+      "Bash(gh repo view:*)",
+      "Bash(gh api:*)",
+      "Bash(./exe/agentic agent list:*)",
+      "Bash(AGENTIC_LOG_LEVEL=debug bundle exec rspec:*)",
+      "Bash(bundle install:*)",
+      "Bash(claude-memory --version)",
+      "Bash(claude-memory doctor)",
+      "Bash(claude-memory init:*)",
+      "Bash(claude-memory stats:*)"
     ],
     "deny": []
   },
-  "enableAllProjectMcpServers": false
+  "enableAllProjectMcpServers": false,
+  "mcpServers": {
+    "ai-software-architect": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "ai-software-architect",
+        "mcp"
+      ]
+    }
+  }
 }

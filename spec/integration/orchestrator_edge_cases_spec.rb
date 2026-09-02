@@ -47,7 +47,7 @@ class EdgeCaseMockAgent
       end
     when :timeout
       if @execution_count == 1
-        sleep(2) # Simulate timeout
+        sleep(0.05) # Simulate a slow execution before the timeout error
         raise "Execution timed out"
       else
         {"result" => "Success after timeout"}
