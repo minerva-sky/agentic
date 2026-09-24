@@ -9,6 +9,11 @@ module Agentic
   # scoped to the plan document; the orchestrator assigns its own runtime
   # ids when definitions become tasks. All three fields are optional, so a
   # flat plan with none of them is unchanged in shape and behavior.
+  #
+  # A definition may also name the +capabilities+ the planner chose for the
+  # task from the registry's catalog. Assembly honors that choice first and
+  # infers only to fill gaps, so the plan document, not keyword matching,
+  # decides what a task runs with.
   class TaskDefinition
     # @return [String] A description of the task
     attr_reader :description
@@ -25,18 +30,23 @@ module Agentic
     # @return [Hash{String=>String}] Named inputs mapped to the plan-local id whose output supplies them
     attr_reader :needs
 
+    # @return [Array<String>] Capability names the planner chose for this task
+    attr_reader :capabilities
+
     # Initializes a new task definition
     # @param description [String] A description of the task
     # @param agent [AgentSpecification] The agent specification for this task
     # @param id [String, nil] Plan-local id other tasks may reference
     # @param depends_on [Array<String>] Plan-local ids this task runs after
     # @param needs [Hash{String=>String}] Named inputs mapped to upstream plan-local ids
-    def initialize(description:, agent:, id: nil, depends_on: [], needs: {})
+    # @param capabilities [Array<String>] Capability names chosen at plan time
+    def initialize(description:, agent:, id: nil, depends_on: [], needs: {}, capabilities: [])
       @description = description
       @agent = agent
       @id = id&.to_s
       @depends_on = Array(depends_on).map(&:to_s)
       @needs = (needs || {}).to_h { |name, dep| [name.to_s, dep.to_s] }
+      @capabilities = Array(capabilities).map(&:to_s).uniq
     end
 
     # Every upstream id this task references, whether by ordering or by wiring
@@ -50,7 +60,7 @@ module Agentic
     # @param payload [Object, nil] Arbitrary domain data for the executing agent
     # @return [Task] A new task ready for the orchestrator
     def to_task(input: {}, payload: nil)
-      Task.new(description: description, agent_spec: agent, input: input, payload: payload)
+      Task.new(description: description, agent_spec: agent, input: input, payload: payload, capabilities: capabilities)
     end
 
     # Returns a serializable representation of the task definition.
@@ -65,6 +75,7 @@ module Agentic
       hash["id"] = @id if @id
       hash["depends_on"] = @depends_on.dup unless @depends_on.empty?
       hash["needs"] = @needs.dup unless @needs.empty?
+      hash["capabilities"] = @capabilities.dup unless @capabilities.empty?
       hash
     end
 
@@ -79,7 +90,8 @@ module Agentic
         agent: AgentSpecification.from_hash(hash["agent"]),
         id: hash["id"],
         depends_on: hash["depends_on"] || [],
-        needs: hash["needs"] || {}
+        needs: hash["needs"] || {},
+        capabilities: hash["capabilities"] || []
       )
     end
   end
