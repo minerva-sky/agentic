@@ -1,18 +1,33 @@
+# Dependabot: grouped monthly batch, 7-day cooldown, security updates stay immediate
+# but arrive as one grouped PR per ecosystem (a version-updates group does not cover them).
+# Per https://github.blog/security/supply-chain-security/tame-dependabot-group-your-updates-slow-the-cadence-keep-security-fast/
 version: 2
 updates:
   - package-ecosystem: "bundler"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     labels: ["loop:deps"]
+    cooldown:
+      default-days: 7
     groups:
-      bundler:
+      monthly-batch:
+        applies-to: version-updates
+        patterns: ["*"]
+      security:
+        applies-to: security-updates
         patterns: ["*"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     labels: ["loop:deps"]
+    cooldown:
+      default-days: 7
     groups:
-      github-actions:
+      monthly-batch:
+        applies-to: version-updates
+        patterns: ["*"]
+      security:
+        applies-to: security-updates
         patterns: ["*"]
