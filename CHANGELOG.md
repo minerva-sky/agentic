@@ -3,6 +3,10 @@
 ### Changed
 - **Ruby floor raised to 3.2** (`required_ruby_version = ">= 3.2"`). The old `>= 3.0.0` claim was never true: the locked `async 2.24` (and `console`, `io-event` through it) already require Ruby 3.1, and Ruby 3.0/3.1 are EOL. CI now tests 3.2, 3.3, 3.4 and latest stable instead of a single pinned 3.2.4. Closes #15.
 
+### Fixed
+- Test suite loads on Ruby 4.0: `benchmark` is a bundled (not default) gem there, so it is now declared in the Gemfile
+- `EventDispatcher` slow-observer spec uses a monotonic clock and a looser bound so it no longer flakes on loaded hosts
+
 ## [0.3.0] - 2025-08-18
 
 ### Added
