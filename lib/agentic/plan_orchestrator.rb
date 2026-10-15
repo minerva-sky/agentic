@@ -215,13 +215,25 @@ module Agentic
     #   task execution (responds to #get_agent_for_task), or a callable
     #   factory (receives the task, returns an agent). Optional when every
     #   task was added with its own agent:, or when a block is given.
+    # @param resume_from [ExecutionJournal::ReplayedState, nil] A replayed
+    #   journal. Tasks it proves completed are restored before anything
+    #   runs - marked complete, their recorded outputs seeded for
+    #   dependents and needs: - so a rerun pays only for what the crash
+    #   left undone. Only the journal's unfinished run is resumable (a
+    #   journal whose last run completed has nothing to resume). Tasks
+    #   match by id, then by description (a rerun constructs tasks with
+    #   fresh ids); a description that repeats in the plan or the run is
+    #   ambiguous and those tasks run again, as do dependents of anything
+    #   that runs again. Failed tasks are not restored; re-running them
+    #   is the point.
     # @yield [task] Optional agent factory - called per task, returns an agent
     # @return [PlanExecutionResult] The structured execution results
     # @raise [ArgumentError] If any task has no way to obtain an agent, if a
     #   pending task depends on an id that names no task in the plan, or if
     #   pending tasks form a dependency cycle
-    def execute_plan(agent_provider = nil, &agent_factory)
+    def execute_plan(agent_provider = nil, resume_from: nil, &agent_factory)
       agent_provider ||= agent_factory
+      restore_completed_tasks(resume_from) if resume_from
       ensure_agents_resolvable!(agent_provider)
       ensure_dependencies_satisfiable!
 
@@ -405,12 +417,14 @@ module Agentic
       end
     end
 
-    # Finds tasks that are eligible for execution (have no dependencies)
+    # Finds tasks that are eligible for execution: pending, with every
+    # dependency already completed (trivially true for tasks with none;
+    # also true for dependents of tasks restored from a journal)
     # @return [Array<String>] IDs of eligible tasks
     def find_eligible_tasks
-      @dependencies.select do |task_id, deps|
-        deps.empty? && @execution_state[:pending].include?(task_id)
-      end.keys
+      @dependencies.keys.select do |task_id|
+        @execution_state[:pending].include?(task_id) && all_dependencies_met?(task_id)
+      end
     end
 
     # Determines the overall status of the plan
@@ -795,12 +809,13 @@ module Agentic
     end
 
     # Fails fast when execute_plan is called with no way to obtain agents
+    # for the tasks that will actually run
     # @param agent_provider [Object, nil] Plan-wide provider or factory
     # @return [void]
     def ensure_agents_resolvable!(agent_provider)
       return if agent_provider
 
-      missing = @tasks.keys.reject { |task_id| @task_agents.key?(task_id) }
+      missing = @execution_state[:pending].reject { |task_id| @task_agents.key?(task_id) }
       return if missing.empty?
 
       raise ArgumentError,
@@ -815,6 +830,72 @@ module Agentic
     def record_task_failure(task_id, failure)
       transition_task_state(task_id, from: :in_progress, to: :failed)
       @results[task_id] = TaskExecutionResult.failure(failure)
+    end
+
+    # Marks every pending task the journal's unfinished run proves
+    # completed as done, without running it, and seeds the recorded
+    # output so the dependency wiring in schedule_task sees a real value.
+    #
+    # Three rules keep a resume from ever handing a dependent someone
+    # else's data (a cost is recoverable, a wrong answer is not):
+    # - Only the journal's unfinished run counts: records after the last
+    #   plan_completed with status completed. A journal whose last run
+    #   finished has nothing to resume, and an earlier run appended to
+    #   the same file is never mined for look-alike tasks.
+    # - An id match claims the task's own record. Otherwise the
+    #   description is the key, and only when it IS a key: a description
+    #   that repeats among this plan's pending tasks, or among the run's
+    #   records (LLM planners emit "Summarize section" twice with
+    #   different inputs), cannot say which output is whose, so those
+    #   tasks run again.
+    # - A task is restored only if its dependencies were restored too;
+    #   a restored output built on a dependency that is about to re-run
+    #   would be stale.
+    #
+    # No lifecycle hooks fire for restored tasks: the journal already
+    # holds their events, and must not hold them twice.
+    # @param state [ExecutionJournal::ReplayedState] A replayed journal
+    # @return [void]
+    def restore_completed_tasks(state)
+      if state.damaged?
+        Agentic.logger.warn("Resuming from a damaged journal (#{state.damage.size} line(s) skipped)")
+      end
+
+      succeeded = unfinished_run_successes(state)
+      records = succeeded.group_by { |id| state.descriptions[id] }
+      pending_descriptions = @execution_state[:pending].map { |id| @tasks[id].description }.tally
+
+      restored = topological_order.count do |task_id|
+        next false unless @execution_state[:pending].include?(task_id) && all_dependencies_met?(task_id)
+
+        record_id = if succeeded.include?(task_id)
+          task_id
+        else
+          description = @tasks[task_id].description
+          records[description].first if pending_descriptions[description] == 1 && records[description]&.one?
+        end
+        next false unless record_id
+
+        output = state.outputs[record_id]
+        transition_task_state(task_id, from: :pending, to: :completed)
+        @results[task_id] = TaskExecutionResult.success(output)
+        @tasks[task_id].restore(output)
+        true
+      end
+
+      Agentic.logger.info("Resumed #{restored} completed task(s) from journal") if restored > 0
+    end
+
+    # Ids of the tasks that succeeded in the journal's unfinished run: the
+    # events after the last plan_completed whose status was completed. A
+    # partial_failure or canceled completion leaves the run open - that is
+    # exactly the "fix the input and resume the rest" case.
+    # @param state [ExecutionJournal::ReplayedState] A replayed journal
+    # @return [Array<String>] Task ids, in the order they succeeded
+    def unfinished_run_successes(state)
+      boundary = state.events.rindex { |e| e[:event] == "plan_completed" && e[:status].to_s == "completed" }
+      events = boundary ? state.events.drop(boundary + 1) : state.events
+      events.select { |e| e[:event] == "task_succeeded" }.map { |e| e[:task_id] }.uniq & state.completed_task_ids
     end
 
     # Durations are deltas of the monotonic clock, not wall time -

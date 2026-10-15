@@ -283,6 +283,25 @@ replays expose per-task `durations` keyed by description (performance
 baselines for free); and retry policies accept an injected `rng:` for
 reproducible jitter timing.
 
+A journaled plan can be resumed after a crash. Pass the replayed state to
+`execute_plan(resume_from: ...)` and every task the journal proves
+completed is restored without running, its recorded output seeded for
+dependents and `needs:`; only what the crash left undone (including tasks
+the journal records as failed) executes, and only that work is journaled
+again. Tasks match by id, then by description, so a rerun that rebuilds
+the plan in a fresh process still resumes. Only the journal's unfinished
+run is resumable: once a run completes, the next execution starts fresh
+even from the same file. A description that repeats can't say which
+output is whose, so those tasks (and their dependents) simply run again:
+
+```ruby
+journal = Agentic::ExecutionJournal.new(path: "orders.journal.jsonl")
+orchestrator = Agentic::PlanOrchestrator.new(lifecycle_hooks: journal.lifecycle_hooks)
+# ... add tasks, process dies at task 9 of 10, rerun:
+state = Agentic::ExecutionJournal.replay(path: "orders.journal.jsonl")
+orchestrator.execute_plan(provider, resume_from: state) # runs task 9 and 10 only
+```
+
 ### The concurrency contract
 
 Tasks run as fibers inside an [async](https://github.com/socketry/async)

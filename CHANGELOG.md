@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### Added
+- `PlanOrchestrator#execute_plan(resume_from:)` resumes a plan from a replayed `ExecutionJournal`: tasks the journal's unfinished run proves completed are restored without running (matched by id, then by description when the description is unique in both the plan and the run; dependents of anything that re-runs re-run too) and their recorded outputs are seeded for dependents and `needs:`; failed, unrecorded, and ambiguously-described tasks run as usual. `Task#restore(output)` is the per-task half.
+
+### Changed
+- `PlanOrchestrator#find_eligible_tasks` returns pending tasks whose dependencies are all completed, not only tasks with no dependencies. Identical on a fresh plan; on a resumed one it is what lets dependents of restored tasks run.
+- `ExecutionJournal.replay` keeps each task's `output` as JSON parsed it (String keys) instead of symbolizing it along with the event envelope, so a restored output has the same shape the task produced. Event fields (`:event`, `:task_id`, `:description`, ...) are still Symbols.
+
 ### Fixed
 - Test suite loads on Ruby 4.0: `benchmark` is a bundled (not default) gem there, so it is now declared in the Gemfile
 - `EventDispatcher` slow-observer spec uses a monotonic clock and a looser bound so it no longer flakes on loaded hosts

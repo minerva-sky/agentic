@@ -109,6 +109,22 @@ module Agentic
       @needs ||= NamedOutputs.new
     end
 
+    # Restores an output this task produced in an earlier run, marking it
+    # completed without executing it. Called by the orchestrator when
+    # resuming a plan from an ExecutionJournal; observers see the same
+    # status change a fresh completion would send.
+    # @param output [Object] The output the journal recorded for this task
+    # @return [void]
+    # @raise [ArgumentError] If the task is currently executing
+    def restore(output)
+      raise ArgumentError, "cannot restore task #{@id} while it is in progress" if @status == :in_progress
+
+      old_status = @status
+      @output = output
+      @status = :completed
+      notify_observers(:status_change, old_status, @status)
+    end
+
     # Executes the task using the given agent
     # @param agent [Agent] The agent that will execute this task
     # @return [TaskResult] The result of the task execution

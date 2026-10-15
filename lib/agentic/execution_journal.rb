@@ -21,6 +21,7 @@ module Agentic
   #   state = Agentic::ExecutionJournal.replay(path: "orders.journal.jsonl")
   #   state.completed_task_ids # => tasks you already paid for
   #   state.outputs["task-1"]  # => their outputs, ready to reuse
+  #   orchestrator.execute_plan(provider, resume_from: state) # runs only what's left
   class ExecutionJournal
     # Replayed journal state: everything a resuming process needs to know
     ReplayedState = Struct.new(
@@ -166,7 +167,9 @@ module Agentic
     #
     # @param path [String] The journal file to replay
     # @param mode [Symbol] :tolerant (salvage + report) or :strict (raise)
-    # @return [ReplayedState] What completed, what failed, and what it produced
+    # @return [ReplayedState] What completed, what failed, and what it
+    #   produced. Outputs come back as JSON parsed them: Hash keys are
+    #   Strings, matching what a task produced in the first place.
     # @raise [Errors::JournalDamagedError] In :strict mode, on the first damaged line
     def self.replay(path:, mode: :tolerant)
       state = ReplayedState.new(
@@ -192,7 +195,10 @@ module Agentic
           stripped = line.scrub("�").strip
           next if stripped.empty?
 
-          JSON.parse(stripped, symbolize_names: true)
+          # Symbolize the envelope only: a task's output is kept exactly as
+          # JSON gives it back (String keys), so a resumed dependent reads
+          # the same shape a fresh run would have handed it
+          JSON.parse(stripped).transform_keys(&:to_sym)
         rescue JSON::ParserError, EncodingError => e
           if mode == :strict
             raise Errors::JournalDamagedError.new("unparseable journal line: #{e.message[0, 60]}", line_number: line_number)

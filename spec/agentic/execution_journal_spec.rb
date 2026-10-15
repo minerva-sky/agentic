@@ -90,7 +90,7 @@ RSpec.describe Agentic::ExecutionJournal do
       expect(state.plan_id).to eq("p-1")
       expect(state.status).to eq(:partial)
       expect(state.completed?("t-1")).to be true
-      expect(state.outputs["t-1"]).to eq(answer: 42)
+      expect(state.outputs["t-1"]).to eq("answer" => 42)
       expect(state.failed_task_ids).to eq(["t-2"])
       expect(state.failures["t-2"][:message]).to eq("boom")
     end
