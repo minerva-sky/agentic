@@ -16,6 +16,9 @@ module Agentic
     # What happens downstream when a task fails for good
     FAILURE_POLICIES = %i[skip_dependents continue].freeze
 
+    # Journal events that speak for one task; resume reads the last of each
+    TASK_EVENTS = %w[task_started task_succeeded task_failed].freeze
+
     attr_reader :plan_id, :tasks, :execution_state, :results, :retry_policy, :lifecycle_hooks
 
     # Initializes a new plan orchestrator
@@ -917,23 +920,25 @@ module Agentic
         Agentic.logger.warn("Resuming from a damaged journal (#{state.damage.size} line(s) skipped)")
       end
 
-      succeeded = unfinished_run_successes(state)
-      records = succeeded.group_by { |id| state.descriptions[id] }
+      latest = latest_task_events(state)
+      ids_by_description = latest.keys.group_by { |id| latest[id][:description] }
       pending_descriptions = @execution_state[:pending].map { |id| @tasks[id].description }.tally
 
       restored = topological_order.count do |task_id|
         next false if task_id == redo_id
         next false unless @execution_state[:pending].include?(task_id) && all_dependencies_met?(task_id)
 
-        record_id = if succeeded.include?(task_id)
+        record_id = if latest.key?(task_id)
           task_id
         else
           description = @tasks[task_id].description
-          records[description].first if pending_descriptions[description] == 1 && records[description]&.one?
+          ids = ids_by_description[description]
+          ids.first if pending_descriptions[description] == 1 && ids&.one?
         end
-        next false unless record_id
+        record = record_id && latest[record_id]
+        next false unless record && record[:event] == "task_succeeded"
 
-        output = state.outputs[record_id]
+        output = record[:output]
         transition_task_state(task_id, from: :pending, to: :completed)
         @results[task_id] = TaskExecutionResult.success(output)
         @tasks[task_id].restore(output)
@@ -961,16 +966,24 @@ module Agentic
       end
     end
 
-    # Ids of the tasks that succeeded in the journal's unfinished run: the
+    # The last task event per task id in the journal's unfinished run: the
     # events after the last plan_completed whose status was completed. A
     # partial_failure or canceled completion leaves the run open - that is
     # exactly the "fix the input and resume the rest" case.
+    #
+    # Last one wins, so only a task whose latest word is task_succeeded
+    # counts as done: a later start (a redo that crashed mid-flight, or a
+    # fresh attempt after the fix) or failure cancels an earlier success.
+    # Started-only and failed ids also count toward a description's
+    # owners, so a description a later attempt reused is ambiguous.
     # @param state [ExecutionJournal::ReplayedState] A replayed journal
-    # @return [Array<String>] Task ids, in the order they succeeded
-    def unfinished_run_successes(state)
+    # @return [Hash{String => Hash}] Task id => its latest task event
+    def latest_task_events(state)
       boundary = state.events.rindex { |e| e[:event] == "plan_completed" && e[:status].to_s == "completed" }
       events = boundary ? state.events.drop(boundary + 1) : state.events
-      events.select { |e| e[:event] == "task_succeeded" }.map { |e| e[:task_id] }.uniq & state.completed_task_ids
+      events.each_with_object({}) do |event, latest|
+        latest[event[:task_id]] = event if TASK_EVENTS.include?(event[:event])
+      end
     end
 
     # Durations are deltas of the monotonic clock, not wall time -

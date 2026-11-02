@@ -13,7 +13,7 @@
 - Lockfile moved to ruby-openai 8.3.0 so CI tests what new consumers actually resolve.
 - Dropped the Ruby 3.2 caps (`async`, `console`, `dry-configurable`, `io-event`, `parallel`, `simplecov`) from the `Gemfile`, so the lockfile and the 3.3/3.4/latest CI legs track current releases (`async` 2.37 → 2.46). The 3.2 leg loads `gemfiles/ruby-3.2/Gemfile`, which has its own committed lockfile (resolved on 3.2 to the versions the caps used to force) and its own Dependabot entry. Closes #42.
 - `PlanOrchestrator#find_eligible_tasks` returns pending tasks whose dependencies are all completed, not only tasks with no dependencies. Identical on a fresh plan; on a resumed one it is what lets dependents of restored tasks run.
-- `ExecutionJournal.replay` keeps each task's `output` as JSON parsed it (String keys) instead of symbolizing it along with the event envelope, so a restored output has the same shape the task produced. Event fields (`:event`, `:task_id`, `:description`, ...) are still Symbols.
+- `ExecutionJournal.replay` keeps each task's `output` as JSON parsed it (String keys) instead of symbolizing it along with the event envelope, so a restored output has the same shape the task produced. Event fields (`:event`, `:task_id`, `:description`, ...) are still Symbols. `ExecutionJournal` itself is new in this unreleased cycle, so no released `replay` shape changes.
 
 ### Fixed
 - Test suite loads on Ruby 4.0: `benchmark` is a bundled (not default) gem there, so it is now declared in the Gemfile

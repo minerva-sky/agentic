@@ -184,6 +184,20 @@ RSpec.describe Agentic::PlanOrchestrator, "resuming from an ExecutionJournal" do
     expect(runs).to eq("Dup" => 4, "Task B" => 2, "Task C" => 2)
   end
 
+  it "treats a description as ambiguous when the run also holds a failed task carrying it" do
+    first = orchestrator
+    first.add_task(task("Summarize section"), agent: worker)
+    first.add_task(task("Summarize section"), agent: worker)
+    failing << "Summarize section"
+    expect(first.execute_plan.status).to eq(:partial_failure)
+
+    second = orchestrator
+    second.add_task(task("Summarize section"), agent: worker)
+    second.execute_plan(resume_from: replayed)
+
+    expect(runs["Summarize section"]).to eq(3)
+  end
+
   it "needs no agent for tasks it restores" do
     failing << "Task C"
     build_plan.first.execute_plan
@@ -247,6 +261,32 @@ RSpec.describe Agentic::PlanOrchestrator, "resuming from an ExecutionJournal" do
       expect { third.execute_plan(resume_from: replayed, from: "Dup") }
         .to raise_error(ArgumentError, /matches 2 tasks/)
       expect(runs).to eq("Task A" => 1, "Task B" => 1, "Task C" => 1)
+    end
+
+    it "does not bring the invalidated outputs back if the redo dies mid-flight" do
+      # The redo got as far as starting a fresh "Task A", then the process died
+      File.open(@path, "a") do |f|
+        f.puts(JSON.generate(event: "task_started", task_id: "t-redo", description: "Task A"))
+      end
+
+      third, * = build_plan
+      third.execute_plan(resume_from: replayed)
+
+      expect(runs).to eq("Task A" => 2, "Task B" => 2, "Task C" => 2)
+    end
+
+    it "does not restore a reused task whose redo failed" do
+      second, a, b, c = build_plan
+      failing << "Task A"
+      second.execute_plan(resume_from: replayed, from: a.id)
+
+      third = orchestrator
+      third.add_task(a, agent: worker)
+      third.add_task(b, [a], agent: worker)
+      third.add_task(c, needs: {report: b}, agent: worker)
+      expect(third.execute_plan(resume_from: replayed).status).to eq(:completed)
+
+      expect(runs).to eq("Task A" => 3, "Task B" => 2, "Task C" => 2)
     end
 
     it "refuses from: without resume_from:" do
