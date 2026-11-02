@@ -923,6 +923,7 @@ module Agentic
       latest = latest_task_events(state)
       ids_by_description = latest.keys.group_by { |id| latest[id][:description] }
       pending_descriptions = @execution_state[:pending].map { |id| @tasks[id].description }.tally
+      restored_at = Hash.new(-1)
 
       restored = topological_order.count do |task_id|
         next false if task_id == redo_id
@@ -937,7 +938,11 @@ module Agentic
         end
         record = record_id && latest[record_id]
         next false unless record && record[:event] == "task_succeeded"
+        # A success older than a restored dependency's was built on that
+        # dependency's earlier output (a redo finished it, then died)
+        next false if @dependencies[task_id].any? { |dep_id| restored_at[dep_id] > record[:journal_index] }
 
+        restored_at[task_id] = record[:journal_index]
         output = record[:output]
         transition_task_state(task_id, from: :pending, to: :completed)
         @results[task_id] = TaskExecutionResult.success(output)
@@ -981,8 +986,8 @@ module Agentic
     def latest_task_events(state)
       boundary = state.events.rindex { |e| e[:event] == "plan_completed" && e[:status].to_s == "completed" }
       events = boundary ? state.events.drop(boundary + 1) : state.events
-      events.each_with_object({}) do |event, latest|
-        latest[event[:task_id]] = event if TASK_EVENTS.include?(event[:event])
+      events.each_with_index.with_object({}) do |(event, index), latest|
+        latest[event[:task_id]] = event.merge(journal_index: index) if TASK_EVENTS.include?(event[:event])
       end
     end
 

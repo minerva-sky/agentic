@@ -275,6 +275,22 @@ RSpec.describe Agentic::PlanOrchestrator, "resuming from an ExecutionJournal" do
       expect(runs).to eq("Task A" => 2, "Task B" => 2, "Task C" => 2)
     end
 
+    it "does not restore a dependent whose success predates its redone dependency" do
+      _second, a, b, c = build_plan
+      # The redo of A finished and was journaled, then the process died
+      File.open(@path, "a") do |f|
+        f.puts(JSON.generate(event: "task_succeeded", task_id: a.id, description: "Task A", output: {"text" => "fixed"}))
+      end
+
+      third = orchestrator
+      third.add_task(a, agent: worker)
+      third.add_task(b, [a], agent: worker)
+      third.add_task(c, needs: {report: b}, agent: worker)
+      third.execute_plan(resume_from: replayed)
+
+      expect(runs).to eq("Task A" => 1, "Task B" => 2, "Task C" => 2)
+    end
+
     it "does not restore a reused task whose redo failed" do
       second, a, b, c = build_plan
       failing << "Task A"
