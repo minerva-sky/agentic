@@ -302,6 +302,16 @@ state = Agentic::ExecutionJournal.replay(path: "orders.journal.jsonl")
 orchestrator.execute_plan(provider, resume_from: state) # runs task 9 and 10 only
 ```
 
+The journal can't know you changed a task's input between runs, so it
+never second-guesses a recorded success. When you fix a task and want it
+redone, say so with `from:` (a task id or a description unique in the
+plan); that task and everything downstream of it run again, everything
+upstream is still restored:
+
+```ruby
+orchestrator.execute_plan(provider, resume_from: state, from: "Extract order")
+```
+
 ### The concurrency contract
 
 Tasks run as fibers inside an [async](https://github.com/socketry/async)

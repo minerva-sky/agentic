@@ -212,6 +212,49 @@ RSpec.describe Agentic::PlanOrchestrator, "resuming from an ExecutionJournal" do
     expect(runs).to eq("Task A" => 1, "Task B" => 1, "Task C" => 2)
   end
 
+  describe "redoing from a task (from:)" do
+    before do
+      failing << "Task C"
+      build_plan.first.execute_plan
+    end
+
+    # The input was fixed between runs; the journal can't tell, the caller can
+    it "re-runs the named task and everything downstream despite recorded successes" do
+      second, a, b, c = build_plan
+      result = second.execute_plan(resume_from: replayed, from: "Task A")
+
+      expect(result.status).to eq(:completed)
+      expect(runs).to eq("Task A" => 2, "Task B" => 2, "Task C" => 2)
+      expect(result.task_result(a.id).output).to eq("text" => "Task A output 2")
+      expect(c.needs.report).to eq(result.task_result(b.id).output)
+    end
+
+    it "still restores what lies upstream of the named task" do
+      second, _a, b, * = build_plan
+      second.execute_plan(resume_from: replayed, from: b.id)
+
+      expect(runs).to eq("Task A" => 1, "Task B" => 2, "Task C" => 2)
+    end
+
+    it "refuses a description that names no task, or several" do
+      second, * = build_plan
+      expect { second.execute_plan(resume_from: replayed, from: "Task Z") }
+        .to raise_error(ArgumentError, /names no task/)
+
+      third = orchestrator
+      third.add_task(task("Dup"), agent: worker)
+      third.add_task(task("Dup"), agent: worker)
+      expect { third.execute_plan(resume_from: replayed, from: "Dup") }
+        .to raise_error(ArgumentError, /matches 2 tasks/)
+      expect(runs).to eq("Task A" => 1, "Task B" => 1, "Task C" => 1)
+    end
+
+    it "refuses from: without resume_from:" do
+      second, * = build_plan
+      expect { second.execute_plan(from: "Task A") }.to raise_error(ArgumentError, /resume_from:/)
+    end
+  end
+
   describe Agentic::Task, "#restore" do
     it "marks the task completed with the output and tells observers" do
       t = task("Restored")

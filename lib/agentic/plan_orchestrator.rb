@@ -241,14 +241,22 @@ module Agentic
     #   ambiguous and those tasks run again, as do dependents of anything
     #   that runs again. Failed tasks are not restored; re-running them
     #   is the point.
+    # @param from [String, nil] Redo from here: a task id or a description
+    #   unique in the plan. That task and everything downstream of it run
+    #   again even if the journal recorded them as succeeded - the way to
+    #   say "I fixed this task's input, don't hand me its old output".
+    #   Requires resume_from:.
     # @yield [task] Optional agent factory - called per task, returns an agent
     # @return [PlanExecutionResult] The structured execution results
     # @raise [ArgumentError] If any task has no way to obtain an agent, if a
-    #   pending task depends on an id that names no task in the plan, or if
-    #   pending tasks form a dependency cycle
-    def execute_plan(agent_provider = nil, resume_from: nil, &agent_factory)
+    #   pending task depends on an id that names no task in the plan, if
+    #   pending tasks form a dependency cycle, or if from: is given without
+    #   resume_from: or names no single task
+    def execute_plan(agent_provider = nil, resume_from: nil, from: nil, &agent_factory)
+      raise ArgumentError, "from: only applies when resuming (pass resume_from:)" if from && !resume_from
+
       agent_provider ||= agent_factory
-      restore_completed_tasks(resume_from) if resume_from
+      restore_completed_tasks(resume_from, from: from) if resume_from
       ensure_agents_resolvable!(agent_provider)
       ensure_dependencies_satisfiable!
 
@@ -893,11 +901,18 @@ module Agentic
     #   a restored output built on a dependency that is about to re-run
     #   would be stale.
     #
+    # The journal never decides that a recorded output went stale (it
+    # does not know the input changed); the caller says so with from:,
+    # and the dependency rule above carries that to everything downstream.
+    #
     # No lifecycle hooks fire for restored tasks: the journal already
     # holds their events, and must not hold them twice.
     # @param state [ExecutionJournal::ReplayedState] A replayed journal
+    # @param from [String, nil] Task id or unique description to redo from
     # @return [void]
-    def restore_completed_tasks(state)
+    def restore_completed_tasks(state, from: nil)
+      redo_id = from && resolve_task_reference(from)
+
       if state.damaged?
         Agentic.logger.warn("Resuming from a damaged journal (#{state.damage.size} line(s) skipped)")
       end
@@ -907,6 +922,7 @@ module Agentic
       pending_descriptions = @execution_state[:pending].map { |id| @tasks[id].description }.tally
 
       restored = topological_order.count do |task_id|
+        next false if task_id == redo_id
         next false unless @execution_state[:pending].include?(task_id) && all_dependencies_met?(task_id)
 
         record_id = if succeeded.include?(task_id)
@@ -925,6 +941,24 @@ module Agentic
       end
 
       Agentic.logger.info("Resumed #{restored} completed task(s) from journal") if restored > 0
+    end
+
+    # The id of the one task a reference names: an id in this plan, or a
+    # description exactly one task in this plan carries
+    # @param reference [String] Task id or description
+    # @return [String] Task id
+    # @raise [ArgumentError] If the reference names no task, or several
+    def resolve_task_reference(reference)
+      return reference if @tasks.key?(reference)
+
+      matches = @tasks.select { |_, task| task.description == reference }.keys
+      return matches.first if matches.one?
+
+      raise ArgumentError, if matches.empty?
+        "from: #{reference.inspect} names no task in this plan"
+      else
+        "from: #{reference.inspect} matches #{matches.size} tasks; pass a task id"
+      end
     end
 
     # Ids of the tasks that succeeded in the journal's unfinished run: the
