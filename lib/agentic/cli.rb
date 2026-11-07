@@ -768,9 +768,18 @@ module Agentic
         adjust_plan_via_llm(execution_plan, user_input, config)
       end
 
+      if adjusted_plan.equal?(execution_plan)
+        puts UI.colorize("Could not apply that adjustment; keeping the original plan.", :yellow)
+        return execution_plan
+      end
+
       # Show the adjusted plan
       puts UI.colorize("\nAdjusted Plan:", :green)
       puts format_plan(adjusted_plan)
+      dropped = dependency_edges(execution_plan) - dependency_edges(adjusted_plan)
+      if dropped.any?
+        puts UI.colorize("Note: the adjustment removed #{dropped.size} dependency edge(s): #{dropped.map { |from, to| "#{from} after #{to}" }.join(", ")}", :yellow)
+      end
       puts
 
       adjusted_plan
@@ -854,11 +863,17 @@ module Agentic
       end
 
       begin
+        raise ArgumentError, "the adjustment is not a plan object" unless response.content.is_a?(Hash)
+
         tasks = Array(response.content["tasks"]).map { |task_data| adjusted_task_definition(task_data) }
         raise ArgumentError, "the adjustment returned no tasks" if tasks.empty?
 
         answer = response.content["expected_answer"]
-        answer = answer.is_a?(Hash) ? ExpectedAnswerFormat.from_hash(answer) : execution_plan.expected_answer
+        answer = if answer.is_a?(Hash) && answer["sections"].is_a?(Array)
+          ExpectedAnswerFormat.from_hash(answer)
+        else
+          execution_plan.expected_answer
+        end
         ExecutionPlan.new(tasks, answer).validate!
       rescue ArgumentError => e
         Agentic.logger.warn("Discarding plan adjustment, keeping the original plan: #{e.message}")
@@ -866,21 +881,35 @@ module Agentic
       end
     end
 
+    # The plan's dependency edges as [task id, upstream id] pairs, so an
+    # adjustment that drops one can say so before anything executes
+    # @param execution_plan [ExecutionPlan]
+    # @return [Array<Array(String, String)>]
+    def dependency_edges(execution_plan)
+      execution_plan.tasks.select(&:id).flat_map { |task| task.dependencies.map { |dep| [task.id, dep] } }
+    end
+
     # Reads one task of an adjusted plan from the LLM's wire shape into a
     # TaskDefinition: blank ids become nil (so a flat plan stays flat) and
     # the needs list of {name, task} pairs becomes the {name => id} hash
-    # the plan format stores.
+    # the plan format stores. A needs hash (the plan's own shape, which the
+    # LLM may echo back from the prompt) is read as-is.
     # @param task_data [Hash] One task as the LLM returned it
     # @return [TaskDefinition]
     # @raise [ArgumentError] If the task is not an object with an agent object
     def adjusted_task_definition(task_data)
-      unless task_data.is_a?(Hash) && task_data["agent"].is_a?(Hash)
-        raise ArgumentError, "adjusted task is not a task object with an agent: #{task_data.inspect}"
+      agent = task_data["agent"] if task_data.is_a?(Hash)
+      unless agent.is_a?(Hash) && %w[name description instructions].all? { |key| agent[key].is_a?(String) }
+        raise ArgumentError, "adjusted task is not a task object with a complete agent: #{task_data.inspect}"
       end
 
-      needs = Array(task_data["needs"])
-        .select { |entry| entry.is_a?(Hash) && !entry["name"].to_s.strip.empty? && !entry["task"].to_s.strip.empty? }
-        .to_h { |entry| [entry["name"], entry["task"]] }
+      needs = task_data["needs"]
+      needs = needs.map { |name, task| {"name" => name, "task" => task} } if needs.is_a?(Hash)
+      needs = Array(needs).select { |entry| entry.is_a?(Hash) && !entry["name"].to_s.strip.empty? && !entry["task"].to_s.strip.empty? }
+      duplicates = needs.map { |entry| entry["name"] }.tally.select { |_, count| count > 1 }.keys
+      raise ArgumentError, "adjusted task wires needs name(s) #{duplicates.join(", ")} more than once" if duplicates.any?
+
+      needs = needs.to_h { |entry| [entry["name"], entry["task"]] }
       id = task_data["id"].to_s.strip
       TaskDefinition.from_hash(task_data.merge(
         "id" => (id unless id.empty?),

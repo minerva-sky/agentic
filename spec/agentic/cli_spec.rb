@@ -264,6 +264,45 @@ RSpec.describe Agentic::CLI do
     end
   end
 
+  describe "#adjust_plan_with_user_input" do
+    subject(:cli) { described_class.new }
+
+    let(:agent) { Agentic::AgentSpecification.new(name: "Agent", description: "does", instructions: "do it") }
+    let(:answer) { Agentic::ExpectedAnswerFormat.new(format: "report", sections: ["Intro"], length: "short") }
+    let(:plan) do
+      Agentic::ExecutionPlan.new([
+        Agentic::TaskDefinition.new(description: "Research", agent: agent, id: "research"),
+        Agentic::TaskDefinition.new(description: "Write", agent: agent, id: "write", depends_on: ["research"])
+      ], answer)
+    end
+
+    before do
+      allow($stdin).to receive(:gets).and_return("make it shorter\n")
+      allow(Agentic::UI).to receive(:with_spinner) { |_message, &block| block.call }
+      allow(cli).to receive(:format_plan).and_return("formatted plan")
+    end
+
+    it "says so when the adjustment was discarded" do
+      allow(cli).to receive(:adjust_plan_via_llm).and_return(plan)
+
+      expect(cli.send(:adjust_plan_with_user_input, plan, Agentic::LlmConfig.new)).to equal(plan)
+      expect(output.string).to include("keeping the original plan")
+      expect(output.string).not_to include("Adjusted Plan:")
+    end
+
+    it "names the dependency edges an adjustment removed" do
+      flattened = Agentic::ExecutionPlan.new([
+        Agentic::TaskDefinition.new(description: "Research", agent: agent, id: "research"),
+        Agentic::TaskDefinition.new(description: "Write", agent: agent, id: "write")
+      ], answer)
+      allow(cli).to receive(:adjust_plan_via_llm).and_return(flattened)
+
+      cli.send(:adjust_plan_with_user_input, plan, Agentic::LlmConfig.new)
+
+      expect(output.string).to include("removed 1 dependency edge(s): write after research")
+    end
+  end
+
   describe "#build_task_graph" do
     subject(:cli) { described_class.new }
 
@@ -401,6 +440,47 @@ RSpec.describe Agentic::CLI do
       respond_with([wire_task("write", "Write", depends_on: ["reserch"])])
 
       expect(adjust(graph_plan)).to equal(graph_plan)
+    end
+
+    it "reads needs echoed back in the plan's own hash shape" do
+      respond_with([
+        wire_task("research", "Research", on_failure: "continue"),
+        wire_task("write", "Write", depends_on: ["research"], needs: {"findings" => "research"})
+      ])
+
+      expect(adjust(graph_plan).tasks.last.needs).to eq({"findings" => "research"})
+    end
+
+    it "keeps the original plan when the reply is not a plan object" do
+      allow(Agentic).to receive(:client).and_return(client)
+      allow(client).to receive(:complete).and_return(Agentic::LlmResponse.success({}, "not a plan"))
+
+      expect(adjust(graph_plan)).to equal(graph_plan)
+    end
+
+    it "keeps the original plan when a task's agent is incomplete" do
+      respond_with([wire_task("research", "Research").merge("agent" => {})])
+
+      expect(adjust(graph_plan)).to equal(graph_plan)
+    end
+
+    it "keeps the original plan when a needs name is wired twice" do
+      respond_with([
+        wire_task("research", "Research"),
+        wire_task("write", "Write", needs: [{"name" => "findings", "task" => "research"}, {"name" => "findings", "task" => "write"}])
+      ])
+
+      expect(adjust(graph_plan)).to equal(graph_plan)
+    end
+
+    it "keeps the original expected answer when sections is not a list" do
+      allow(Agentic).to receive(:client).and_return(client)
+      allow(client).to receive(:complete).and_return(Agentic::LlmResponse.success({}, {
+        "tasks" => [wire_task("research", "Research")],
+        "expected_answer" => answer_hash.merge("sections" => "Intro")
+      }))
+
+      expect(adjust(graph_plan).expected_answer).to equal(answer)
     end
 
     it "keeps the original plan when the adjustment returns no tasks" do
