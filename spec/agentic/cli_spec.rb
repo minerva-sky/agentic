@@ -312,6 +312,111 @@ RSpec.describe Agentic::CLI do
     end
   end
 
+  describe "#adjust_plan_via_llm" do
+    subject(:cli) { described_class.new }
+
+    let(:client) { instance_double(Agentic::LlmClient) }
+    let(:agent) { Agentic::AgentSpecification.new(name: "Agent", description: "does", instructions: "do it") }
+    let(:answer) { Agentic::ExpectedAnswerFormat.new(format: "report", sections: ["Intro"], length: "short") }
+    let(:agent_hash) { {"name" => "Agent", "description" => "does", "instructions" => "do it"} }
+    let(:answer_hash) { {"format" => "report", "sections" => ["Intro"], "length" => "short"} }
+
+    let(:graph_plan) do
+      Agentic::ExecutionPlan.new([
+        Agentic::TaskDefinition.new(description: "Research", agent: agent, id: "research", on_failure: "continue"),
+        Agentic::TaskDefinition.new(description: "Write", agent: agent, id: "write",
+          depends_on: ["research"], needs: {"findings" => "research"})
+      ], answer)
+    end
+
+    def wire_task(id, description, depends_on: [], needs: [], on_failure: "skip_dependents", **extra)
+      {"id" => id, "description" => description, "agent" => agent_hash, "depends_on" => depends_on,
+       "needs" => needs, "on_failure" => on_failure}.merge(extra.transform_keys(&:to_s))
+    end
+
+    def respond_with(tasks)
+      allow(Agentic).to receive(:client).and_return(client)
+      allow(client).to receive(:complete).and_return(
+        Agentic::LlmResponse.success({}, {"tasks" => tasks, "expected_answer" => answer_hash})
+      )
+    end
+
+    def adjust(plan)
+      cli.send(:adjust_plan_via_llm, plan, "tweak it", Agentic::LlmConfig.new)
+    end
+
+    it "sends the plan's graph to the LLM and keeps it in the adjusted plan" do
+      respond_with([
+        wire_task("research", "Research deeper", on_failure: "continue"),
+        wire_task("write", "Write", depends_on: ["research"], needs: [{"name" => "findings", "task" => "research"}])
+      ])
+
+      adjusted = adjust(graph_plan)
+
+      expect(client).to have_received(:complete) do |messages, output_schema:|
+        expect(messages.last[:content]).to include('"depends_on"', '"needs"', '"on_failure"')
+        properties = output_schema.to_hash[:schema][:properties][:tasks][:items][:properties]
+        expect(properties.keys).to include(:id, :depends_on, :needs, :on_failure)
+        expect(properties).not_to have_key(:capabilities)
+      end
+
+      research, write = adjusted.tasks
+      expect(research.description).to eq("Research deeper")
+      expect(research.on_failure).to eq("continue")
+      expect(write.id).to eq("write")
+      expect(write.depends_on).to eq(["research"])
+      expect(write.needs).to eq({"findings" => "research"})
+    end
+
+    it "keeps a flat plan flat when the LLM returns blank ids" do
+      flat = Agentic::ExecutionPlan.new([
+        Agentic::TaskDefinition.new(description: "One", agent: agent),
+        Agentic::TaskDefinition.new(description: "Two", agent: agent)
+      ], answer)
+      respond_with([wire_task("", "One"), wire_task(" ", "Two", depends_on: [""], needs: [{"name" => "", "task" => ""}])])
+
+      adjusted = adjust(flat)
+
+      expect(adjusted).not_to equal(flat)
+      expect(adjusted.tasks.map(&:id)).to eq([nil, nil])
+      expect(adjusted.tasks.flat_map(&:dependencies)).to be_empty
+    end
+
+    it "round-trips capabilities when the plan carries them" do
+      plan = Agentic::ExecutionPlan.new([
+        Agentic::TaskDefinition.new(description: "Generate", agent: agent, id: "gen", capabilities: ["file_generation"])
+      ], answer)
+      respond_with([wire_task("gen", "Generate", capabilities: ["file_generation"])])
+
+      adjusted = adjust(plan)
+
+      expect(client).to have_received(:complete) do |_messages, output_schema:|
+        properties = output_schema.to_hash[:schema][:properties][:tasks][:items][:properties]
+        expect(properties).to have_key(:capabilities)
+      end
+      expect(adjusted.tasks.first.capabilities).to eq(["file_generation"])
+    end
+
+    it "keeps the original plan when the adjustment's graph cannot run" do
+      respond_with([wire_task("write", "Write", depends_on: ["reserch"])])
+
+      expect(adjust(graph_plan)).to equal(graph_plan)
+    end
+
+    it "keeps the original plan when the adjustment returns no tasks" do
+      respond_with([])
+
+      expect(adjust(graph_plan)).to equal(graph_plan)
+    end
+
+    it "keeps the original plan when the LLM call fails" do
+      allow(Agentic).to receive(:client).and_return(client)
+      allow(client).to receive(:complete).and_return(Agentic::LlmResponse.error(Agentic::Errors::LlmError.new("boom")))
+
+      expect(adjust(graph_plan)).to equal(graph_plan)
+    end
+  end
+
   describe "#execute with a dependency graph" do
     let(:orchestrator) { instance_double(Agentic::PlanOrchestrator) }
     let(:result) { double("ExecutionResult", status: :completed, to_h: {}, tasks: {}, execution_time: 1.0, successful?: true) }

@@ -776,58 +776,62 @@ module Agentic
       adjusted_plan
     end
 
-    # Uses LLM to adjust the plan based on user feedback
+    # Uses LLM to adjust the plan based on user feedback. The plan goes to
+    # the LLM in its own wire format (ExecutionPlan#to_h) and comes back
+    # through TaskDefinition.from_hash, so ids, depends_on, needs, on_failure
+    # and capabilities survive the round trip instead of being flattened.
+    # An adjustment that fails, or that returns a graph the plan cannot run,
+    # leaves the original plan in place.
     # @param execution_plan [ExecutionPlan] The original execution plan
     # @param user_feedback [String] The user's feedback for adjustments
     # @param config [LlmConfig] The LLM configuration
-    # @return [ExecutionPlan] The adjusted execution plan
+    # @return [ExecutionPlan] The adjusted execution plan, or the original
     def adjust_plan_via_llm(execution_plan, user_feedback, config)
       system_message = "You are an expert project planner. Your task is to adjust an existing execution plan based on user feedback."
-
-      current_plan = {
-        tasks: execution_plan.tasks.map do |task|
-          {
-            description: task.description,
-            agent: {
-              name: task.agent.name,
-              description: task.agent.description,
-              instructions: task.agent.instructions
-            }
-          }
-        end,
-        expected_answer: {
-          format: execution_plan.expected_answer.format,
-          sections: execution_plan.expected_answer.sections,
-          length: execution_plan.expected_answer.length
-        }
-      }
+      with_capabilities = execution_plan.tasks.any? { |task| task.capabilities.any? }
 
       user_message = <<~MSG
         Current Plan:
-        #{JSON.pretty_generate(current_plan)}
+        #{JSON.pretty_generate(execution_plan.to_h)}
 
         User Feedback:
         #{user_feedback}
 
         Please adjust the plan based on the user's feedback. Maintain the same structure but modify tasks as requested.
+        Keep each task's id, depends_on, needs and on_failure unless the feedback changes them; a new task gets a short, unique snake_case id, and a task with no id gets an empty one. Every id in depends_on and needs must belong to a task in the adjusted plan. In the adjusted plan, needs is a list of {name, task} pairs.
       MSG
+
+      task_properties = {
+        id: {type: "string"},
+        description: {type: "string"},
+        agent: {
+          type: "object",
+          properties: {
+            name: {type: "string"},
+            description: {type: "string"},
+            instructions: {type: "string"}
+          },
+          required: %w[name description instructions]
+        },
+        depends_on: {type: "array", items: {type: "string"}},
+        needs: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {name: {type: "string"}, task: {type: "string"}},
+            required: %w[name task],
+            additionalProperties: false
+          }
+        },
+        on_failure: {type: "string", enum: TaskDefinition::ON_FAILURE_POLICIES}
+      }
+      task_properties[:capabilities] = {type: "array", items: {type: "string"}} if with_capabilities
 
       schema = StructuredOutputs::Schema.new("adjusted_plan") do |s|
         s.array :tasks, items: {
           type: "object",
-          properties: {
-            description: {type: "string"},
-            agent: {
-              type: "object",
-              properties: {
-                name: {type: "string"},
-                description: {type: "string"},
-                instructions: {type: "string"}
-              },
-              required: %w[name description instructions]
-            }
-          },
-          required: %w[description agent]
+          properties: task_properties,
+          required: task_properties.keys.map(&:to_s)
         }
         s.object :expected_answer do |o|
           o.string :format
@@ -844,29 +848,45 @@ module Agentic
       llm_client = Agentic.client(config)
       response = llm_client.complete(messages, output_schema: schema)
 
-      if response.successful?
-        tasks = response.content["tasks"].map do |task_data|
-          TaskDefinition.new(
-            description: task_data["description"],
-            agent: AgentSpecification.new(
-              name: task_data["agent"]["name"],
-              description: task_data["agent"]["description"],
-              instructions: task_data["agent"]["instructions"]
-            )
-          )
-        end
-
-        expected_answer = ExpectedAnswerFormat.new(
-          format: response.content["expected_answer"]["format"],
-          sections: response.content["expected_answer"]["sections"],
-          length: response.content["expected_answer"]["length"]
-        )
-
-        ExecutionPlan.new(tasks, expected_answer)
-      else
+      unless response.successful?
         Agentic.logger.error("Failed to adjust plan: #{response.error&.message || response.refusal}")
-        execution_plan # Return original plan if adjustment fails
+        return execution_plan
       end
+
+      begin
+        tasks = Array(response.content["tasks"]).map { |task_data| adjusted_task_definition(task_data) }
+        raise ArgumentError, "the adjustment returned no tasks" if tasks.empty?
+
+        answer = response.content["expected_answer"]
+        answer = answer.is_a?(Hash) ? ExpectedAnswerFormat.from_hash(answer) : execution_plan.expected_answer
+        ExecutionPlan.new(tasks, answer).validate!
+      rescue ArgumentError => e
+        Agentic.logger.warn("Discarding plan adjustment, keeping the original plan: #{e.message}")
+        execution_plan
+      end
+    end
+
+    # Reads one task of an adjusted plan from the LLM's wire shape into a
+    # TaskDefinition: blank ids become nil (so a flat plan stays flat) and
+    # the needs list of {name, task} pairs becomes the {name => id} hash
+    # the plan format stores.
+    # @param task_data [Hash] One task as the LLM returned it
+    # @return [TaskDefinition]
+    # @raise [ArgumentError] If the task is not an object with an agent object
+    def adjusted_task_definition(task_data)
+      unless task_data.is_a?(Hash) && task_data["agent"].is_a?(Hash)
+        raise ArgumentError, "adjusted task is not a task object with an agent: #{task_data.inspect}"
+      end
+
+      needs = Array(task_data["needs"])
+        .select { |entry| entry.is_a?(Hash) && !entry["name"].to_s.strip.empty? && !entry["task"].to_s.strip.empty? }
+        .to_h { |entry| [entry["name"], entry["task"]] }
+      id = task_data["id"].to_s.strip
+      TaskDefinition.from_hash(task_data.merge(
+        "id" => (id unless id.empty?),
+        "depends_on" => Array(task_data["depends_on"]).reject { |dep| dep.to_s.strip.empty? },
+        "needs" => needs
+      ))
     end
 
     # Configures logging based on command options
