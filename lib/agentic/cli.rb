@@ -670,10 +670,17 @@ module Agentic
       state.awaiting_human.each do |task_id, pause|
         description = state.descriptions[task_id]
         say "  #{task_id}#{" (#{description})" if description}"
-        say "    #{pause[:question]}" if pause[:question]
+        if pause[:questions]
+          pause[:questions].each { |question| say format_tool_question(question) }
+        elsif pause[:question]
+          say "    #{pause[:question]}"
+        end
       end
       say ""
       say "Resume with: agentic execute --plan PLAN --journal #{journal} --resume --answer TASK_ID=ANSWER"
+      if state.awaiting_human.values.any? { |pause| pause[:questions] }
+        say "  (a tool question: --answer TASK_ID:QUESTION_ID=ANSWER; approvals take yes or no)"
+      end
     end
 
     desc "portal", "Manage human intervention portal"
@@ -780,12 +787,15 @@ module Agentic
       return nil if pairs.nil? || pairs.empty?
       raise Thor::Error, "--answer needs --resume --journal PATH (answers go to a paused run)" unless state
 
-      pairs.each_with_object({}) do |pair, answers|
-        task_id, answer = pair.split("=", 2)
-        if task_id.to_s.empty? || answer.nil? || answer.strip.empty?
-          raise Thor::Error, "--answer must look like TASK_ID=ANSWER, got #{pair.inspect}"
+      answers = pairs.each_with_object({}) do |pair, answers|
+        key, answer = pair.split("=", 2)
+        task_id, question_id = key.to_s.split(":", 2)
+        if task_id.to_s.empty? || answer.nil? || answer.strip.empty? || question_id&.empty?
+          raise Thor::Error, "--answer must look like TASK_ID=ANSWER or TASK_ID:QUESTION_ID=ANSWER, got #{pair.inspect}"
         end
-        raise Thor::Error, "--answer given twice for #{task_id}" if answers.key?(task_id)
+        if answers.key?(task_id) && (question_id.nil? || !answers[task_id].is_a?(Hash) || answers[task_id].key?(question_id))
+          raise Thor::Error, "--answer given twice for #{key}"
+        end
         if state.answered?(task_id)
           raise Thor::Error, "Task #{task_id} was already answered; a second answer needs a fresh pause"
         end
@@ -793,8 +803,44 @@ module Agentic
           raise Thor::Error, "No task awaiting a human with id #{task_id} (see 'agentic pending #{state.path}')"
         end
 
-        answers[task_id] = answer
+        if question_id
+          (answers[task_id] ||= {})[question_id] = answer
+        else
+          answers[task_id] = answer
+        end
       end
+      check_tool_answers(state, answers)
+    end
+
+    # Fails fast on answers a tool-level pause can't take (unknown question
+    # id, a value outside its choices), before anything runs
+    # @return [Hash] The answers, unchanged
+    def check_tool_answers(state, answers)
+      answers.each do |task_id, answer|
+        pause = state.awaiting_human[task_id]
+        if pause[:questions]
+          ToolAnswers.resolve(pause, answer)
+        elsif answer.is_a?(Hash)
+          raise Thor::Error, "Task #{task_id} paused without tool questions; answer it as #{task_id}=ANSWER"
+        end
+      rescue ArgumentError => e
+        raise Thor::Error, "Task #{task_id}: #{e.message} (see 'agentic pending #{state.path}')"
+      end
+    end
+
+    # One recorded tool question for 'agentic pending': its id and kind,
+    # then the choices or fields it takes
+    # @param question [Hash] Replayed question (symbol-keyed)
+    # @return [String]
+    def format_tool_question(question)
+      kind = (question[:kind] == "approval") ? "approval, yes/no" : question[:kind]
+      line = "    [#{question[:id]}] (#{kind}) #{question[:message]}"
+      line += "\n      choices: #{question[:choices].join(", ")}" if question[:choices]
+      Array(question[:fields]).each do |field|
+        extra = field[:choices] ? " (#{field[:choices].join(", ")})" : ""
+        line += "\n      field #{field[:name]}#{" (required)" if field[:required]}#{extra}"
+      end
+      line
     end
 
     # Tells the user how to answer when the run paused for a human

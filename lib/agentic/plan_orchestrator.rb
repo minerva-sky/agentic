@@ -482,13 +482,25 @@ module Agentic
         task = @tasks[recorded_id] || pending_task_described(state.descriptions[recorded_id])
         raise ArgumentError, "task #{recorded_id} awaits a human but is not pending in this plan" unless task
 
-        [task, answer, recorded_id]
+        [task, answer, recorded_id, tool_resume(state, recorded_id, answer)]
       end
 
-      targets.each do |task, answer, recorded_id|
-        task.receive_human_answer(answer)
+      targets.each do |task, answer, recorded_id, resume|
+        answer = resume["answers"] if resume
+        task.receive_human_answer(answer, tool_resume: resume)
         @lifecycle_hooks[:task_human_answered].call(task_id: task.id, task: task, answer: answer, recorded_task_id: recorded_id)
       end
+    end
+
+    # For a tool-level pause, the checked answers and the chat state with
+    # approvals recorded (ADR-023 point 7); nil for a task-level pause.
+    def tool_resume(state, recorded_id, answer)
+      pause = state.awaiting_human[recorded_id]
+      return nil unless pause && pause[:questions]
+
+      ToolAnswers.resolve(pause, answer)
+    rescue ArgumentError => e
+      raise ArgumentError, "task #{recorded_id}: #{e.message}"
     end
 
     def pending_task_described(description)

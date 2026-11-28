@@ -572,6 +572,76 @@ RSpec.describe Agentic::CLI do
       expect { cli.send(:parse_answers, state) }.to raise_error(Thor::Error, /given twice/)
     end
 
+    context "when a tool inside the task asks (ADR-023 point 7)" do
+      let(:questions) do
+        [{"id" => "q_colour", "kind" => "input", "message" => "Which colour?", "choices" => %w[red blue]},
+          {"id" => "call_w", "kind" => "approval", "message" => "Allow write_file to run?"}]
+      end
+      let(:provider) do
+        inputs = seen_inputs
+        failing = fail_fetch
+        asked = questions
+        double("AgentProvider").tap do |p|
+          allow(p).to receive(:get_agent_for_task) do |task|
+            double("Agent").tap do |agent|
+              allow(agent).to receive(:execute) do |_prompt|
+                inputs[task.description] = task.input
+                if failing.first && task.description == "Fetch"
+                  raise Agentic::Errors::ToolInputRequiredError.new(asked,
+                    chat_state: {"messages" => [], "tool_call_state" => Agentic::JournalToolCallState.new.to_h})
+                end
+                {"text" => "#{task.description} done"}
+              end
+            end
+          end
+        end
+      end
+
+      it "lists each question with its id, kind, and choices" do
+        described_class.start(["execute", "--plan=p.json", "--journal=#{journal_path}"])
+        described_class.start(["pending", journal_path])
+
+        expect(output.string).to include("[q_colour] (input) Which colour?", "choices: red, blue",
+          "[call_w] (approval, yes/no) Allow write_file to run?", "TASK_ID:QUESTION_ID=ANSWER")
+      end
+
+      it "resumes with per-question answers and hands the task its tool_resume" do
+        described_class.start(["execute", "--plan=p.json", "--journal=#{journal_path}"])
+        recorded = paused_id
+        fail_fetch[0] = false
+
+        described_class.start(["execute", "--plan=p.json", "--journal=#{journal_path}", "--resume",
+          "--answer", "#{recorded}:q_colour=blue", "#{recorded}:call_w=yes"])
+
+        resume = seen_inputs["Fetch"][:tool_resume]
+        expect(resume["answers"]).to eq("q_colour" => "blue", "call_w" => true)
+        expect(resume["chat_state"]["tool_call_state"]["decisions"]).to eq("call_w" => true)
+        expect(Agentic::ExecutionJournal.replay(path: journal_path).completed_descriptions).to include("Fetch", "Report")
+      end
+
+      it "refuses a value outside the choices, an unknown question, and a bare answer, before running" do
+        described_class.start(["execute", "--plan=p.json", "--journal=#{journal_path}"])
+        recorded = paused_id
+        seen_inputs.clear
+
+        {"#{recorded}:q_colour=green" => /takes one of red, blue/,
+         "#{recorded}:q_size=s" => /no open question q_size/,
+         "#{recorded}=blue" => /2 questions are open/}.each do |pair, message|
+          cli = described_class.new([], {resume: true, journal: journal_path, answer: [pair], quiet: true})
+          expect { cli.execute }.to raise_error(Thor::Error, message)
+        end
+        expect(seen_inputs).to be_empty
+      end
+
+      it "refuses the same question twice and a question id on a task-level pause" do
+        state = Agentic::ExecutionJournal::ReplayedState.new(awaiting_human: {"a" => {}}, human_answers: {}, path: journal_path)
+        cli = described_class.new([], {answer: ["a:q=x", "a:q=y"]})
+        expect { cli.send(:parse_answers, state) }.to raise_error(Thor::Error, /given twice for a:q/)
+        cli = described_class.new([], {answer: ["a:q=x"]})
+        expect { cli.send(:parse_answers, state) }.to raise_error(Thor::Error, /paused without tool questions/)
+      end
+    end
+
     it "says so when nothing is pending" do
       File.write(journal_path, "")
       described_class.start(["pending", journal_path])

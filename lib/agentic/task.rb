@@ -153,10 +153,14 @@ module Agentic
 
     # Adds a human's answer to the task's input (as :human_answer) so the
     # re-run after a pause can act on it. Used when resuming with answers:.
+    # A tool-level pause also gets :tool_resume, the checked answers and
+    # chat state the adapter rebuilds the paused chat from (ADR-023 pt 7).
     # @param answer [Object] The human's answer
+    # @param tool_resume [Hash, nil] "answers" and "chat_state" from ToolAnswers.resolve
     # @return [void]
-    def receive_human_answer(answer)
+    def receive_human_answer(answer, tool_resume: nil)
       @input = input.merge(human_answer: answer)
+      @input = input.merge(tool_resume: tool_resume) if tool_resume
     end
 
     # Executes the task using the given agent
