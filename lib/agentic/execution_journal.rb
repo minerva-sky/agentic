@@ -147,7 +147,7 @@ module Agentic
         end,
         task_awaiting_human: chain(hooks[:task_awaiting_human]) do |task_id:, task:, failure:|
           record(:task_awaiting_human, task_id: task_id, description: task.description,
-            error_type: failure.type, message: failure.message)
+            error_type: failure.type, message: failure.message, **tool_pause_fields(failure))
         end,
         task_human_answered: chain(hooks[:task_human_answered]) do |task_id:, task:, answer:, recorded_task_id:|
           record(:task_human_answered, task_id: task_id, recorded_task_id: recorded_task_id,
@@ -313,6 +313,10 @@ module Agentic
               message: entry[:message],
               at: entry[:at]
             }
+            if entry[:questions]
+              state.awaiting_human[task_id][:questions] = entry[:questions]
+              state.awaiting_human[task_id][:chat_state] = entry[:chat_state]
+            end
             # A fresh pause reopens the question: an answer from an
             # earlier round no longer counts as the claim for this one.
             state.human_answers.delete(task_id)
@@ -343,6 +347,19 @@ module Agentic
       return {} unless stats
 
       {prompt_tokens: stats.prompt_tokens, completion_tokens: stats.completion_tokens, total_tokens: stats.total_tokens}
+    end
+
+    # The questions and chat state of a tool-level pause (ADR-023 point 7),
+    # or nothing for a task-level one, so old pause events keep their shape.
+    # Replay parses with symbolize_names, so both come back symbol-keyed;
+    # JournalToolCallState.from_h accepts either.
+    # @param failure [TaskFailure] The failure that paused the task
+    # @return [Hash] questions:/chat_state:, or empty
+    def tool_pause_fields(failure)
+      pause = failure.respond_to?(:pause) ? failure.pause : nil
+      return {} unless pause
+
+      {questions: pause[:questions], chat_state: pause[:chat_state]}
     end
 
     # Wraps a journaling block so an existing hook still runs afterwards

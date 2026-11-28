@@ -29,6 +29,70 @@ module Agentic
       end
     end
 
+    # Raised when an agent's chat ends with tool calls waiting on a person:
+    # a tool declared with requires_approval, or one that called Tool#ask
+    # (ADR-023 point 7). The orchestrator pauses the task instead of failing
+    # it, and the journal records #questions and #chat_state in the
+    # task_awaiting_human event so another process can answer and resume.
+    class ToolInputRequiredError < StandardError
+      # @return [Array<Hash>] One JSON-safe hash per pending question
+      #   ("id", "kind", "message", and "choices" or "fields" when present)
+      attr_reader :questions
+
+      # @return [Hash] The chat's messages and tool-call state as JSON
+      attr_reader :chat_state
+
+      # Builds the error from a chat's pending questions.
+      # @param questions [Array<RubyLLM::Question>] chat.pending_questions
+      # @param chat_state [Hash] What a resumed run needs to rebuild the chat
+      # @return [ToolInputRequiredError]
+      def self.from_questions(questions, chat_state:)
+        new(questions.map { |question| serialize_question(question) }, chat_state: chat_state)
+      end
+
+      # A RubyLLM::Question as the journal's JSON shape. A question with a
+      # single field that offers choices lists them as "choices"; one with
+      # several fields lists them as "fields". An approval has neither.
+      # @param question [RubyLLM::Question]
+      # @return [Hash]
+      def self.serialize_question(question)
+        entry = {
+          "id" => question.id,
+          "kind" => question.approval? ? "approval" : "input",
+          "message" => question.message || approval_message(question)
+        }
+        entry["url"] = question.url if question.url?
+        fields = Array(question.fields)
+        if fields.size == 1 && fields.first.choices
+          entry["choices"] = fields.first.choices
+        elsif fields.size > 1
+          entry["fields"] = fields.map { |field| field.to_h.transform_keys(&:to_s).compact }
+        end
+        entry
+      end
+
+      def self.approval_message(question)
+        call = question.tool_call
+        call ? "Allow #{call.name} to run?" : "Allow this tool call to run?"
+      end
+      private_class_method :approval_message
+
+      # @param questions [Array<Hash>] Serialized questions
+      # @param chat_state [Hash] Serialized chat state
+      def initialize(questions, chat_state:)
+        @questions = questions
+        @chat_state = chat_state
+        summary = questions.map { |q| q["message"] }.compact.join("; ")
+        super("tool needs input from a person: #{summary}")
+      end
+
+      # A pause, not a fault: retrying asks the same questions again.
+      # @return [Boolean]
+      def retryable?
+        false
+      end
+    end
+
     # Raised when a resume finds another process already holding the
     # journal's claim (<journal>.lock). Two resumers of one journal would
     # both run every pending task and both append to the same file; the

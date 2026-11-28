@@ -388,7 +388,9 @@ module Agentic
       # TaskFailure#type is the full class name, so compare the last segment:
       # Agentic::Errors::LlmAuthenticationError has to pause, not just a bare
       # AuthenticationError.
-      %w[AuthenticationError LlmAuthenticationError PermissionDeniedError ConfigurationError]
+      # ToolInputRequiredError is a tool inside the agent's chat asking a
+      # person something (ADR-023 point 7).
+      %w[AuthenticationError LlmAuthenticationError PermissionDeniedError ConfigurationError ToolInputRequiredError]
         .include?(failure.type.to_s.split("::").last)
     end
 

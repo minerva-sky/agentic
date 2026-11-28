@@ -15,18 +15,26 @@ module Agentic
     #   retryable (nil when the error expressed no opinion)
     attr_reader :retryable
 
+    # @return [Hash, nil] {questions:, chat_state:} when a tool inside the
+    #   agent's chat paused for a person (Errors::ToolInputRequiredError).
+    #   Kept out of context so the PII sanitizer can't rewrite the chat
+    #   state a resumed run has to rebuild; the journal holds it in plain
+    #   text, like task outputs (ADR-023, Negative).
+    attr_reader :pause
+
     # Initializes a new task failure
     # @param message [String] The failure message
     # @param type [String] The type of failure
     # @param context [Hash] Additional context about the failure
     # @param retryable [Boolean, nil] The originating error's own retryability verdict
     # @return [TaskFailure] A new task failure instance
-    def initialize(message:, type:, context: {}, retryable: nil)
+    def initialize(message:, type:, context: {}, retryable: nil, pause: nil)
       @message = sanitize_message(message)
       @type = type
       @timestamp = Time.now
       @context = sanitize_context(context)
       @retryable = retryable
+      @pause = pause
     end
 
     # Whether the originating error declared itself retryable
@@ -79,11 +87,21 @@ module Agentic
         message: exception.message,
         type: exception.class.name,
         retryable: exception.respond_to?(:retryable?) ? exception.retryable? : nil,
+        pause: pause_from(exception),
         context: context.merge(
           backtrace: safe_backtrace
         )
       )
     end
+
+    # @param exception [Exception]
+    # @return [Hash, nil] The tool-level pause the exception carries
+    def self.pause_from(exception)
+      return unless exception.is_a?(Errors::ToolInputRequiredError)
+
+      {questions: exception.questions, chat_state: exception.chat_state}
+    end
+    private_class_method :pause_from
 
     # Creates a task failure from a hash
     # @param hash [Hash] The hash representation of a task failure
