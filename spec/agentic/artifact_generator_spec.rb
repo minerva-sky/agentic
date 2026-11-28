@@ -195,6 +195,42 @@ RSpec.describe Agentic::ArtifactGenerator do
       expect(result.workspace_id).to eq(workspace.id)
       expect(result.workspace_path).to eq(workspace.path)
     end
+
+    context "when a tool pauses the chat for a person (agentic#101)" do
+      let(:pause) do
+        Agentic::Errors::ToolInputRequiredError.new(
+          [{"id" => "call_1", "kind" => "approval", "message" => "Allow approval_demo to run?"}],
+          chat_state: {"messages" => []}
+        )
+      end
+
+      it "lets the pause through instead of reporting a failed generation" do
+        allow(agent).to receive(:execute_with_workspace).and_raise(pause)
+
+        generator = described_class.new(agent, workspace)
+
+        expect { generator.generate("Write a note") }
+          .to raise_error(Agentic::Errors::ToolInputRequiredError)
+      end
+
+      it "hands tool_resume to the agent and keeps it out of the prompt" do
+        resume = {"answers" => {"call_1" => "yes"}, "chat_state" => {"messages" => []}}
+        expect(agent).to receive(:execute_with_workspace)
+          .with(satisfy { |prompt| !prompt.include?("chat_state") && prompt.include?("topic") }, workspace, tool_resume: resume)
+          .and_return(llm_response)
+
+        generator = described_class.new(agent, workspace)
+        result = generator.generate("Write a note", input: {topic: "owls", tool_resume: resume})
+
+        expect(result).to be_successful
+      end
+
+      it "calls the agent without tool_resume on a fresh turn" do
+        expect(agent).to receive(:execute_with_workspace).with(kind_of(String), workspace).and_return(llm_response)
+
+        described_class.new(agent, workspace).generate("Write a note")
+      end
+    end
   end
 
   describe "#generate_with_context" do

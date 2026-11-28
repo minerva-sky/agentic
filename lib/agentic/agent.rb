@@ -71,12 +71,14 @@ module Agentic
     # Executes a prompt with workspace context for file generation
     # @param prompt [String] The prompt to execute
     # @param workspace [Workspace] The workspace for file generation
+    # @param tool_resume [Hash, nil] answers and chat_state that resume a
+    #   paused tool turn instead of starting a fresh one
     # @return [String] The response with artifact descriptions
-    def execute_with_workspace(prompt, workspace)
+    def execute_with_workspace(prompt, workspace, tool_resume: nil)
       workspace_context = build_workspace_context(workspace)
       full_prompt = "#{workspace_context}\n\n#{prompt}"
 
-      execute_prompt(full_prompt)
+      execute_prompt(full_prompt, tool_resume: tool_resume)
     end
 
     # Adds a capability to the agent

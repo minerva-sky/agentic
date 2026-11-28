@@ -74,14 +74,23 @@ module Agentic
     def generate(task_description, input: {}, constraints: {})
       merged_constraints = @config[:default_constraints].merge(constraints)
 
+      # A paused tool turn's answers resume the chat; they are not prompt
+      # context (agentic#101)
+      tool_resume = input[:tool_resume]
+      input = input.except(:tool_resume)
+
       # Build full task description with input context
       full_description = build_task_description(task_description, input)
 
       # Execute file generation capability
-      capability_result = execute_file_generation(full_description, merged_constraints)
+      capability_result = execute_file_generation(full_description, merged_constraints, tool_resume)
 
       # Convert capability result to ArtifactGenerationResult
       build_result(capability_result)
+    rescue Errors::ToolInputRequiredError
+      # A tool paused the chat for a person. That is not a failed generation:
+      # the task journals the questions and a later process resumes it.
+      raise
     rescue SecurityError, StandardError => e
       Agentic.logger.error("Artifact generation failed: #{e.message}")
       ArtifactGenerationResult.failure(
@@ -132,16 +141,16 @@ module Agentic
     #
     # @param task_description [String] Task description
     # @param constraints [Hash] Generation constraints
+    # @param tool_resume [Hash, nil] answers and chat_state for a paused tool turn
     # @return [Hash] Capability execution result
-    def execute_file_generation(task_description, constraints)
-      Capabilities::FileGenerationCapability.execute(
-        agent: @agent,
-        inputs: {
-          task_description: task_description,
-          workspace: @workspace,
-          constraints: constraints
-        }
-      )
+    def execute_file_generation(task_description, constraints, tool_resume = nil)
+      inputs = {
+        task_description: task_description,
+        workspace: @workspace,
+        constraints: constraints
+      }
+      inputs[:tool_resume] = tool_resume if tool_resume
+      Capabilities::FileGenerationCapability.execute(agent: @agent, inputs: inputs)
     end
 
     # Build ArtifactGenerationResult from capability result

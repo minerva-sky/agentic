@@ -114,7 +114,9 @@ module Agentic
 
         # Execute agent with workspace context. Agent errors propagate
         # unwrapped so callers can report the original exception class.
-        response = agent.execute_with_workspace(prompt, workspace)
+        # A paused tool turn resumes from its chat_state (agentic#101).
+        resume = inputs[:tool_resume] ? {tool_resume: inputs[:tool_resume]} : {}
+        response = agent.execute_with_workspace(prompt, workspace, **resume)
 
         # Parse artifact descriptions from response
         artifact_descriptions = parse_artifact_descriptions(response)
