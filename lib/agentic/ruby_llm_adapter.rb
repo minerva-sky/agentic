@@ -52,12 +52,19 @@ module Agentic
     end
 
     # @param parameters [Hash] OpenAI chat-completions parameters
+    # @param tool_resume [Hash, nil] "answers" and "chat_state" from
+    #   ToolAnswers.resolve. When given, the chat is the paused one rebuilt
+    #   from chat_state (its messages replace parameters[:messages]), the
+    #   answers settle its open questions, and the turn carries on
     # @return [Hash] OpenAI chat-completions response shape
     # @raise [Errors::LlmError] typed error for any RubyLLM/Faraday failure
-    def chat(parameters:)
+    # @raise [Errors::ToolInputRequiredError] when the turn (again) waits on a person
+    # @raise [ArgumentError] for a tool_resume on an adapter with no tools
+    def chat(parameters:, tool_resume: nil)
       params = parameters.transform_keys(&:to_sym)
-      state = JournalToolCallState.new unless @tools.empty?
-      chat = build_chat(params, state)
+      resume = resume_hash(tool_resume)
+      state = tool_call_state(resume)
+      chat = build_chat(params, state, resume)
       stream = params[:stream]
 
       message = if stream.respond_to?(:call)
@@ -68,7 +75,7 @@ module Agentic
 
       raise_if_waiting_on_person(chat, state)
       to_openai_response(message)
-    rescue Errors::LlmError, Errors::ToolInputRequiredError
+    rescue Errors::LlmError, Errors::ToolInputRequiredError, ArgumentError
       raise
     rescue => e
       typed = RubyLlmErrorMap.translate(e)
@@ -77,16 +84,40 @@ module Agentic
 
     private
 
-    def build_chat(params, state)
+    def resume_hash(tool_resume)
+      return nil unless tool_resume
+
+      raise ArgumentError, "a tool-level pause can't resume on an adapter with no tools" if @tools.empty?
+
+      tool_resume.to_h { |k, v| [k.to_s, v] }
+    end
+
+    def tool_call_state(resume)
+      return nil if @tools.empty?
+      return JournalToolCallState.new unless resume
+
+      JournalToolCallState.from_h(chat_state_part(resume, "tool_call_state"))
+    end
+
+    def chat_state_part(resume, key)
+      chat_state = resume["chat_state"] || {}
+      chat_state[key] || chat_state[key.to_sym]
+    end
+
+    def build_chat(params, state, resume)
       chat = @context.chat(
         model: params[:model],
         provider: @provider,
         assume_model_exists: @assume_model_exists
       )
 
-      Array(params[:messages]).each do |msg|
-        msg = msg.transform_keys(&:to_sym)
-        chat.add_message(role: msg[:role].to_sym, content: msg[:content])
+      if resume
+        restore_messages(chat, resume)
+      else
+        Array(params[:messages]).each do |msg|
+          msg = msg.transform_keys(&:to_sym)
+          chat.add_message(role: msg[:role].to_sym, content: msg[:content])
+        end
       end
 
       chat.with_temperature(params[:temperature]) unless params[:temperature].nil?
@@ -99,7 +130,24 @@ module Agentic
       chat.with_provider_options(extra) unless extra.empty?
 
       attach_tools(chat, state)
+      apply_answers(chat, resume) if resume
       chat
+    end
+
+    # The paused conversation, tool calls and results included, as
+    # Message#to_h wrote it (string keys after the journal's JSON trip).
+    def restore_messages(chat, resume)
+      messages = Array(chat_state_part(resume, "messages"))
+      raise ArgumentError, "tool_resume has no chat_state messages to resume from" if messages.empty?
+
+      messages.each { |msg| chat.add_message(msg.transform_keys(&:to_sym)) }
+    end
+
+    # Approvals are already decisions in the restored tool-call state
+    # (ToolAnswers records them), so Chat#answer leaves those alone; input
+    # answers settle the questions tools asked with Tool#ask.
+    def apply_answers(chat, resume)
+      (resume["answers"] || {}).each { |id, value| chat.answer(id.to_s, value) }
     end
 
     # Tools get a journal-backed tool-call state, so a pause can carry it
