@@ -131,4 +131,57 @@ RSpec.describe Agentic::RubyLlmAdapter do
       expect { adapter.chat(parameters: parameters) }.to raise_error(ArgumentError, "nope")
     end
   end
+
+  describe "tools that pause for a person (ADR-023 point 7)" do
+    # JournalToolCallState subclasses RubyLLM's state, so these load it
+    before(:all) { require "ruby_llm" }
+
+    let(:tool) { Class.new }
+    let(:message) { Struct.new(:role, :content).new(:user, "paint it") }
+    let(:tool_chat) do
+      msg = message
+      fake_chat_class.new(reply).tap do |c|
+        c.define_singleton_method(:with_tools) { |*tools| (@tools = tools) && self }
+        c.define_singleton_method(:tools) { @tools }
+        c.define_singleton_method(:tool_call_state=) { |s| @state = s }
+        c.define_singleton_method(:state) { @state }
+        c.define_singleton_method(:pending_questions) { @pending || [] }
+        c.define_singleton_method(:pending=) { |q| @pending = q }
+        c.define_singleton_method(:messages) { [msg] }
+        message.define_singleton_method(:to_h) { {role: role, content: content} }
+      end
+    end
+    let(:tool_context) { double("RubyLLM::Context", chat: tool_chat) }
+    let(:tool_adapter) { described_class.new(context: tool_context, tools: [tool]) }
+
+    it "registers the tools and swaps in a journal-backed tool-call state" do
+      tool_adapter.chat(parameters: parameters)
+
+      expect(tool_chat.tools).to eq([tool])
+      expect(tool_chat.state).to be_a(Agentic::JournalToolCallState)
+    end
+
+    it "returns the reply when nothing waits on a person" do
+      result = tool_adapter.chat(parameters: parameters)
+
+      expect(result.dig("choices", 0, "message", "content")).to eq("hi there")
+    end
+
+    it "raises ToolInputRequiredError with the questions and chat_state when the turn pauses" do
+      tool_chat.pending = [RubyLLM::Question.asked(0, "Which colour?", choices: %w[red blue])]
+
+      expect { tool_adapter.chat(parameters: parameters) }.to raise_error(Agentic::Errors::ToolInputRequiredError) { |error|
+        expect(error.questions.first).to include("kind" => "input", "message" => "Which colour?", "choices" => %w[red blue])
+        expect(error.chat_state["messages"]).to eq([{"role" => "user", "content" => "paint it"}])
+        expect(error.chat_state["tool_call_state"]).to include("version" => 1)
+        expect(JSON.parse(JSON.generate(error.chat_state))).to eq(error.chat_state)
+      }
+    end
+
+    it "leaves chats without tools alone" do
+      adapter.chat(parameters: parameters)
+
+      expect(chat).not_to respond_to(:with_tools)
+    end
+  end
 end

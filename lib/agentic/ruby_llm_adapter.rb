@@ -41,10 +41,14 @@ module Agentic
     # @param provider [Symbol, nil] force a provider (e.g. :ollama, :openai)
     # @param assume_model_exists [Boolean] skip RubyLLM's model registry
     #   lookup, needed for local and custom model names
-    def initialize(context:, provider: nil, assume_model_exists: false)
+    # @param tools [Array<RubyLLM::Tool, Class>] tools the chat may call. A
+    #   tool declared with requires_approval, or one that calls Tool#ask,
+    #   can pause the chat for a person (ADR-023 point 7)
+    def initialize(context:, provider: nil, assume_model_exists: false, tools: [])
       @context = context
       @provider = provider
       @assume_model_exists = assume_model_exists
+      @tools = Array(tools)
     end
 
     # @param parameters [Hash] OpenAI chat-completions parameters
@@ -52,7 +56,8 @@ module Agentic
     # @raise [Errors::LlmError] typed error for any RubyLLM/Faraday failure
     def chat(parameters:)
       params = parameters.transform_keys(&:to_sym)
-      chat = build_chat(params)
+      state = JournalToolCallState.new unless @tools.empty?
+      chat = build_chat(params, state)
       stream = params[:stream]
 
       message = if stream.respond_to?(:call)
@@ -61,8 +66,9 @@ module Agentic
         chat.complete
       end
 
+      raise_if_waiting_on_person(chat, state)
       to_openai_response(message)
-    rescue Errors::LlmError
+    rescue Errors::LlmError, Errors::ToolInputRequiredError
       raise
     rescue => e
       typed = RubyLlmErrorMap.translate(e)
@@ -71,7 +77,7 @@ module Agentic
 
     private
 
-    def build_chat(params)
+    def build_chat(params, state)
       chat = @context.chat(
         model: params[:model],
         provider: @provider,
@@ -92,7 +98,36 @@ module Agentic
       extra = params.except(*HANDLED).compact
       chat.with_provider_options(extra) unless extra.empty?
 
+      attach_tools(chat, state)
       chat
+    end
+
+    # Tools get a journal-backed tool-call state, so a pause can carry it
+    # out in the task_awaiting_human event and a resumed run can rebuild it.
+    def attach_tools(chat, state)
+      return unless state
+
+      chat.with_tools(*@tools)
+      chat.send(:tool_call_state=, state)
+    end
+
+    # A chat whose turn ended on tool calls that wait for an approval or an
+    # answer has no final reply yet. Raise so the orchestrator pauses the
+    # task instead of parsing a half-finished turn.
+    def raise_if_waiting_on_person(chat, state)
+      return unless state
+
+      questions = chat.pending_questions
+      return if questions.empty?
+
+      raise Errors::ToolInputRequiredError.from_questions(questions, chat_state: chat_state(chat, state))
+    end
+
+    def chat_state(chat, state)
+      {
+        "messages" => chat.messages.map { |m| JSON.parse(JSON.generate(m.to_h)) },
+        "tool_call_state" => state.to_h
+      }
     end
 
     def json_schema(response_format)
