@@ -36,6 +36,10 @@ module Agentic
   class LegacyConfiguration
     attr_accessor :access_token, :agent_store_path, :api_base_url
 
+    # @return [Array<Class>] RubyLLM tools every chat may call; AGENTIC_TOOLS
+    #   (comma-separated Agentic::Tools::REGISTRY names) sets the default
+    attr_accessor :tools
+
     # @return [Symbol] LLM transport: :ruby_llm (RubyLlmAdapter, the default) or
     #   :openai (deprecated alias that also builds RubyLlmAdapter and warns).
     #   The alias goes away in a later release.
@@ -48,6 +52,7 @@ module Agentic
       @agent_store_path = ENV["AGENTIC_AGENT_STORE_PATH"] || File.join(Dir.home, ".agentic", "agents")
       @api_base_url = ENV["AGENTIC_API_BASE_URL"] || ENV["OPENAI_BASE_URL"]
       self.llm_backend = ENV["AGENTIC_LLM_BACKEND"] || :ruby_llm
+      @tools = Tools.resolve(ENV["AGENTIC_TOOLS"])
     end
 
     # @param value [Symbol, String] one of LLM_BACKENDS

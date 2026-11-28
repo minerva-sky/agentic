@@ -33,7 +33,8 @@ module Agentic
         c.openai_api_base = base_url if base_url
       end
 
-      new(context: context, provider: :openai, assume_model_exists: !base_url.nil?)
+      new(context: context, provider: :openai, assume_model_exists: !base_url.nil?,
+        tools: Array(configuration.respond_to?(:tools) ? configuration.tools : nil))
     end
 
     # @param context [RubyLLM::Context, #chat] where chats are built; a
