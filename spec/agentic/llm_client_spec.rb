@@ -92,6 +92,43 @@ RSpec.describe Agentic::LlmClient, :vcr do
       end
     end
 
+    context "when a tool pauses or resumes the chat (ADR-023 point 7)" do
+      let(:adapter) { double("RubyLlmAdapter") }
+      let(:llm_client) { described_class.new(config).tap { |c| allow(c).to receive(:client).and_return(adapter) } }
+      let(:pause) do
+        Agentic::Errors::ToolInputRequiredError.new(
+          [{"id" => "q1", "kind" => "approval", "message" => "Run it?"}],
+          chat_state: {"messages" => []}
+        )
+      end
+      let(:ok) { {"choices" => [{"message" => {"content" => "done"}}]} }
+
+      it "hands tool_resume to the transport" do
+        resume = {"answers" => {"q1" => true}, "chat_state" => {"messages" => []}}
+        expect(adapter).to receive(:chat).with(parameters: kind_of(Hash), tool_resume: resume).and_return(ok)
+
+        expect(llm_client.complete(messages, tool_resume: resume).content).to eq("done")
+      end
+
+      it "leaves tool_resume off the call when there is none" do
+        expect(adapter).to receive(:chat).with(parameters: kind_of(Hash)).and_return(ok)
+
+        llm_client.complete(messages)
+      end
+
+      it "lets the pause through the retry path untouched, with no retry" do
+        expect(adapter).to receive(:chat).once.and_raise(pause)
+
+        expect { llm_client.complete(messages) }.to raise_error(pause)
+      end
+
+      it "raises the pause even when fail_on_error is false" do
+        allow(adapter).to receive(:chat).and_raise(pause)
+
+        expect { llm_client.complete(messages, use_retries: false) }.to raise_error(Agentic::Errors::ToolInputRequiredError)
+      end
+    end
+
     context "with retry configuration" do
       let(:retry_config) { {max_retries: 5, backoff_factor: 2.0} }
 

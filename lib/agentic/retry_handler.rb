@@ -56,6 +56,9 @@ module Agentic
       begin
         attempt += 1
         block.call
+      rescue Errors::ToolInputRequiredError
+        # Waiting on a person, not a failure: never retry or rewrap it
+        raise
       rescue => e
         error = e.is_a?(Errors::LlmError) ? e : Errors::LlmError.new(e.message, context: {original_error: e.class.name})
 

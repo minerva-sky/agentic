@@ -44,8 +44,13 @@ module Agentic
     # @param use_retries [Boolean] Whether to retry on transient errors
     # @param stream_callback [Proc] Optional callback for streaming tokens/progress
     # @param options [Hash] Additional options to override the config
+    # @param tool_resume [Hash, nil] "answers" and "chat_state" from
+    #   ToolAnswers.resolve, handed to the transport so a chat a tool paused
+    #   (ADR-023 point 7) carries on instead of starting over
     # @return [LlmResponse] The structured response from the LLM
-    def complete(messages, output_schema: nil, fail_on_error: false, use_retries: true, stream_callback: nil, options: {})
+    # @raise [Errors::ToolInputRequiredError] when a tool pauses the chat for
+    #   a person; never wrapped, retried, or turned into an error response
+    def complete(messages, output_schema: nil, fail_on_error: false, use_retries: true, stream_callback: nil, options: {}, tool_resume: nil)
       # Start with base parameters from the config
       parameters = @config.to_api_parameters({messages: messages})
 
@@ -63,9 +68,9 @@ module Agentic
       execution_method = use_retries ? method(:with_retry) : method(:without_retry)
 
       if @limiter
-        @limiter.acquire { execution_method.call(messages, parameters, output_schema, fail_on_error, stream_callback) }
+        @limiter.acquire { execution_method.call(messages, parameters, output_schema, fail_on_error, stream_callback, tool_resume: tool_resume) }
       else
-        execution_method.call(messages, parameters, output_schema, fail_on_error, stream_callback)
+        execution_method.call(messages, parameters, output_schema, fail_on_error, stream_callback, tool_resume: tool_resume)
       end
     end
 
@@ -76,9 +81,9 @@ module Agentic
     # @param fail_on_error [Boolean] Whether to raise errors or return them as part of the response
     # @param stream_callback [Proc] Optional callback for streaming tokens/progress
     # @return [LlmResponse] The structured response from the LLM
-    def with_retry(messages, parameters, output_schema, fail_on_error, stream_callback)
+    def with_retry(messages, parameters, output_schema, fail_on_error, stream_callback, tool_resume: nil)
       retry_handler.with_retry do
-        without_retry(messages, parameters, output_schema, fail_on_error, stream_callback)
+        without_retry(messages, parameters, output_schema, fail_on_error, stream_callback, tool_resume: tool_resume)
       end
     rescue Errors::LlmError => e
       # If we get here, we've exhausted retries or hit a non-retryable error
@@ -98,9 +103,11 @@ module Agentic
     # @param fail_on_error [Boolean] Whether to raise errors or return them as part of the response
     # @param stream_callback [Proc] Optional callback for streaming tokens/progress
     # @return [LlmResponse] The structured response from the LLM
-    def without_retry(messages, parameters, output_schema, fail_on_error, stream_callback)
+    def without_retry(messages, parameters, output_schema, fail_on_error, stream_callback, tool_resume: nil)
       @last_response = if stream_callback && output_schema
         stream_structured_response(parameters, output_schema, stream_callback)
+      elsif tool_resume
+        client.chat(parameters: parameters, tool_resume: tool_resume)
       else
         client.chat(parameters: parameters)
       end
@@ -153,6 +160,10 @@ module Agentic
         content = @last_response.dig("choices", 0, "message", "content")
         LlmResponse.success(@last_response, content)
       end
+    rescue Errors::ToolInputRequiredError
+      # A person has to answer before the chat can go on; the orchestrator
+      # pauses the task on this, so it must reach it untouched
+      raise
     rescue Faraday::Error => e
       error = map_http_error(e)
       Agentic.logger.error("LLM API error: #{error.safe_message}")

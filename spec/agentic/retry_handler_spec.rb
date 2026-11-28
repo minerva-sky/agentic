@@ -26,6 +26,19 @@ RSpec.describe Agentic::RetryHandler do
   describe "#with_retry" do
     let(:handler) { described_class.new(backoff_options: {base_delay: 0.001}) }
 
+    it "re-raises a tool pause as-is and never retries it (ADR-023 point 7)" do
+      pause = Agentic::Errors::ToolInputRequiredError.new([], chat_state: {})
+      attempts = 0
+
+      expect {
+        handler.with_retry do
+          attempts += 1
+          raise pause
+        end
+      }.to raise_error(pause)
+      expect(attempts).to eq(1)
+    end
+
     it "executes the block successfully" do
       result = handler.with_retry { 42 }
       expect(result).to eq(42)
