@@ -11,6 +11,27 @@ module Agentic
       USER_CONFIG_PATH = File.join(Dir.home, CONFIG_FILE_NAME)
       PROJECT_CONFIG_PATH = File.join(Dir.pwd, CONFIG_FILE_NAME)
 
+      # Every environment variable LegacyConfiguration reads for the LLM
+      # connection (token pair, then base URL pair)
+      CONNECTION_ENV_VARS = %w[
+        AGENTIC_API_TOKEN OPENAI_ACCESS_TOKEN AGENTIC_API_BASE_URL OPENAI_BASE_URL
+      ].freeze
+
+      # @yieldparam set [Boolean] whether the variable is set
+      # @yieldreturn [String] status label for display
+      # @return [Array<String>] one indented "NAME: status" line per variable
+      def self.env_var_lines
+        CONNECTION_ENV_VARS.map do |name|
+          set = !ENV[name].to_s.empty?
+          label = if block_given?
+            yield(set)
+          else
+            set ? "[SET]" : "[NOT SET]"
+          end
+          "  #{name}: #{label}"
+        end
+      end
+
       desc "list", "List configuration settings"
       def list
         user_config = load_config(USER_CONFIG_PATH)
@@ -26,7 +47,7 @@ module Agentic
         print_config(active_config)
 
         puts "\nEnvironment variables:"
-        puts "  OPENAI_ACCESS_TOKEN: #{ENV["OPENAI_ACCESS_TOKEN"] ? "[SET]" : "[NOT SET]"}"
+        puts self.class.env_var_lines
       end
 
       desc "get KEY", "Get a configuration setting"

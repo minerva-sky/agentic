@@ -55,6 +55,14 @@ RSpec.describe Agentic::CLI::ConfigCommands do
       expect(output.string).to include("Active configuration")
       expect(output.string).to include("Environment variables")
     end
+
+    it "reports every connection variable, not only OPENAI_ACCESS_TOKEN" do
+      config_commands.list
+
+      Agentic::CLI::Config::CONNECTION_ENV_VARS.each do |name|
+        expect(output.string).to include("#{name}:")
+      end
+    end
   end
 
   describe "#get" do

@@ -458,10 +458,9 @@ module Agentic
 
         # Format environment variables
         env_vars_str = "Environment variables:\n"
-        token_status = ENV["OPENAI_ACCESS_TOKEN"] ?
-                      UI.colorize("[SET]", :green) :
-                      UI.colorize("[NOT SET]", :red)
-        env_vars_str += "  OPENAI_ACCESS_TOKEN: #{token_status}"
+        env_vars_str += Config.env_var_lines { |set|
+          set ? UI.colorize("[SET]", :green) : UI.colorize("[NOT SET]", :red)
+        }.join("\n")
 
         # Display in a box
         config_info = [
@@ -532,7 +531,8 @@ module Agentic
             "Refusing to store a credential",
             "'#{key}' looks like a secret, and #{CONFIG_FILE_NAME} is a plain-text file " \
             "that nothing reads credentials from.\n\n" \
-            "Set OPENAI_ACCESS_TOKEN in the environment instead, or use\n" \
+            "Set AGENTIC_API_TOKEN (or OPENAI_ACCESS_TOKEN) in the environment\n" \
+            "instead, or use " \
             "Agentic.configure { |c| c.access_token = \"...\" } in code.",
             padding: [1, 2, 1, 2],
             style: {border: {fg: :red}}
@@ -1049,9 +1049,10 @@ module Agentic
       unless Agentic.configuration.access_token || Agentic.configuration.api_base_url
         error_box = UI.box(
           "Configuration Error",
-          "No OpenAI API token configured.\n\n" \
-          "You can set it using one of these methods:\n" \
-          "- Environment variable: OPENAI_ACCESS_TOKEN (or AGENTIC_API_TOKEN)\n" \
+          "No LLM credentials configured.\n\n" \
+          "agentic speaks the OpenAI-compatible chat API. Set one of:\n" \
+          "- Environment variable: AGENTIC_API_TOKEN (or OPENAI_ACCESS_TOKEN)\n" \
+          "- Another provider (e.g. OpenRouter): the token plus AGENTIC_API_BASE_URL\n" \
           "- In code: Agentic.configure { |c| c.access_token = \"...\" }\n" \
           "- Local endpoint: AGENTIC_API_BASE_URL, which needs no token",
           style: {border: {fg: :red}},

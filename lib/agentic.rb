@@ -77,9 +77,10 @@ module Agentic
       return self if access_token || api_base_url
 
       raise Errors::ConfigurationError,
-        "No LLM credentials configured. Set OPENAI_ACCESS_TOKEN (or " \
-        "AGENTIC_API_TOKEN), configure an api_base_url for a local " \
-        "endpoint, or use Agentic.configure { |c| c.access_token = ... }"
+        "No LLM credentials configured. Set AGENTIC_API_TOKEN (or " \
+        "OPENAI_ACCESS_TOKEN) for any OpenAI-compatible API, add " \
+        "AGENTIC_API_BASE_URL for a provider other than OpenAI or a " \
+        "local endpoint, or use Agentic.configure { |c| c.access_token = ... }"
     end
   end
 
