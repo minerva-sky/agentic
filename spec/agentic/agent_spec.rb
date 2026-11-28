@@ -38,6 +38,25 @@ RSpec.describe Agentic::Agent do
     end
   end
 
+  describe "#execute with tool_resume" do
+    let(:response) { instance_double(Agentic::LlmResponse, successful?: true, content: "done", stats: nil) }
+    let(:llm_client) { instance_double(Agentic::LlmClient) }
+    let(:agent) { Agentic::Agent.build { |a| a.llm_client = llm_client } }
+
+    it "hands the resume to the LLM client" do
+      resume = {"answers" => {"q1" => "yes"}, "chat_state" => "{}"}
+      expect(llm_client).to receive(:complete).with(kind_of(Array), tool_resume: resume).and_return(response)
+
+      expect(agent.execute("go on", tool_resume: resume)).to eq("done")
+    end
+
+    it "calls the client without tool_resume on a fresh turn" do
+      expect(llm_client).to receive(:complete).with(kind_of(Array)).and_return(response)
+
+      expect(agent.execute("start")).to eq("done")
+    end
+  end
+
   describe "#execute_with_schema" do
     let(:schema) { instance_double(Agentic::StructuredOutputs::Schema) }
 

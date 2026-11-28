@@ -21,11 +21,13 @@ module Agentic
 
     # Executes a task using this agent
     # @param task [String, Task] The task to execute, either a task object or a prompt
+    # @param tool_resume [Hash, nil] answers and chat_state for a paused
+    #   tool turn (Task#receive_human_answer); only string prompts use it
     # @return [Object] The result of the task execution
-    def execute(task)
+    def execute(task, tool_resume: nil)
       if task.is_a?(String)
         # Simple string prompt
-        execute_prompt(task)
+        execute_prompt(task, tool_resume: tool_resume)
       elsif task.respond_to?(:requires_artifacts?) && task.requires_artifacts? && task.has_workspace?
         # Artifact generation task
         execute_artifact_task(task)
@@ -183,15 +185,18 @@ module Agentic
 
     # Executes a simple string prompt
     # @param prompt [String] The prompt to execute
+    # @param tool_resume [Hash, nil] answers and chat_state that resume a
+    #   paused tool turn instead of starting a fresh one
     # @return [String] The response
-    def execute_prompt(prompt)
+    def execute_prompt(prompt, tool_resume: nil)
       @last_stats = nil
       # If the agent has a text_generation capability, use it
       if has_capability?("text_generation")
         execute_capability("text_generation", {prompt: prompt})[:response]
       elsif @llm_client
         # Use the configured LLM client
-        response = remember_stats(@llm_client.complete(build_messages(prompt)))
+        options = tool_resume ? {tool_resume: tool_resume} : {}
+        response = remember_stats(@llm_client.complete(build_messages(prompt), **options))
         if response.successful?
           response.content
         else

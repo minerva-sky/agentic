@@ -21,6 +21,24 @@ RSpec.describe Agentic::Task do
     end
   end
 
+  describe "#perform after a tool pause" do
+    it "passes the task's tool_resume to the agent" do
+      resume = {"answers" => {"q1" => "yes"}, "chat_state" => "{}"}
+      task.receive_human_answer("yes", tool_resume: resume)
+      agent = double("Agent")
+      expect(agent).to receive(:execute).with(kind_of(String), tool_resume: resume).and_return("ok")
+
+      expect(task.perform(agent).output).to eq("ok")
+    end
+
+    it "calls the agent with the prompt alone when nothing is paused" do
+      agent = double("Agent")
+      expect(agent).to receive(:execute).with(kind_of(String)).and_return("ok")
+
+      expect(task.perform(agent).output).to eq("ok")
+    end
+  end
+
   describe "#perform" do
     let(:agent) { double("Agent") }
     let(:output) { {"result" => "test_result"} }

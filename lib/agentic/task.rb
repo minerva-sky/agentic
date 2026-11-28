@@ -180,6 +180,9 @@ module Agentic
           # (ArtifactGenerator -> Workspace). Passing the prompt String here
           # meant --workspace runs never wrote a file.
           artifact_output(agent.execute(self))
+        elsif (resume = input[:tool_resume])
+          # A paused tool turn picks up where it stopped (agentic#101)
+          agent.execute(build_prompt, tool_resume: resume)
         else
           agent.execute(build_prompt)
         end
